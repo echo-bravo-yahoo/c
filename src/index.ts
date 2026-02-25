@@ -15,6 +15,7 @@ import { archiveCommand } from './commands/archive.js';
 import { linkCommand } from './commands/link.js';
 import { unlinkCommand } from './commands/unlink.js';
 import { tagCommand } from './commands/tag.js';
+import { untagCommand } from './commands/untag.js';
 import { titleCommand } from './commands/title.js';
 import { metaCommand } from './commands/meta.js';
 import { findCommand } from './commands/find.js';
@@ -147,10 +148,17 @@ program
 // Tag
 program
   .command('tag <tag> [id]')
-  .description('Add or remove tag from session')
-  .option('-d, --remove', 'Remove the tag instead of adding')
-  .action((tag, id, options) => {
-    tagCommand(tag, id, { remove: options.remove });
+  .description('Add tag to session')
+  .action((tag, id) => {
+    tagCommand(tag, id);
+  });
+
+// Untag
+program
+  .command('untag <tag> [id]')
+  .description('Remove tag from session')
+  .action((tag, id) => {
+    untagCommand(tag, id);
   });
 
 // Title

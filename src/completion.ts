@@ -33,6 +33,7 @@ const SUBCOMMANDS = [
   'link',
   'unlink',
   'tag',
+  'untag',
   'title',
   'meta',
   'find',
@@ -136,15 +137,15 @@ export function initCompletion(): void {
       return getSessionCompletions();
     }
 
-    // tag takes tag name first
-    if (subcommand === 'tag') {
+    // tag/untag take tag name first
+    if (subcommand === 'tag' || subcommand === 'untag') {
       return getTagCompletions();
     }
 
     return [];
   }} ${({ line }: { line: string }) => {
-    // Third position: tag command takes session ID
-    if (line.match(/^c\s+tag\s+\S+\s/)) {
+    // Third position: tag/untag commands take session ID
+    if (line.match(/^c\s+(tag|untag)\s+\S+\s/)) {
       return getSessionCompletions();
     }
     return [];
