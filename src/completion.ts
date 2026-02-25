@@ -102,6 +102,15 @@ function getDirCompletions(): string[] {
 }
 
 /**
+ * Extract the subcommand from a completion line
+ * e.g., "c show a" -> "show", "c list --all" -> "list"
+ */
+function getSubcommand(line: string): string | null {
+  const words = line.trim().split(/\s+/);
+  return words.length >= 2 ? words[1] : null;
+}
+
+/**
  * Initialize completion handler
  * Called on every CLI invocation - omelette checks if it's a completion request
  */
@@ -113,26 +122,25 @@ export function initCompletion(): void {
     before: string;
     line: string;
   }) => {
+    const subcommand = getSubcommand(line);
+
     // Handle --dir flag value
     if (before === '--dir') {
       return getDirCompletions();
     }
 
     // Handle flags for list command
-    if (line.match(/^c\s+list\s/) && before.startsWith('-')) {
-      return LIST_FLAGS;
-    }
-    if (before === 'list') {
+    if (subcommand === 'list') {
       return LIST_FLAGS;
     }
 
     // Commands that take session ID as second arg
-    if (SESSION_COMMANDS.includes(before)) {
+    if (subcommand && SESSION_COMMANDS.includes(subcommand)) {
       return getSessionCompletions();
     }
 
     // tag/untag take tag name first
-    if (before === 'tag' || before === 'untag') {
+    if (subcommand === 'tag' || subcommand === 'untag') {
       return getTagCompletions();
     }
 
