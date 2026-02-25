@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { getSession } from '../store/index.js';
 import { getClaudeSession } from '../claude/sessions.js';
 import { execReplace } from '../util/exec.js';
+import { getDisplayName } from '../util/format.js';
 
 export function resumeCommand(idOrPrefix: string): void {
   const session = getSession(idOrPrefix);
@@ -23,6 +24,6 @@ export function resumeCommand(idOrPrefix: string): void {
   }
 
   // Use claude -r to resume the session from its original directory
-  console.log(chalk.dim(`Resuming session ${session.humanhash} in ${session.directory}...`));
+  console.log(chalk.dim(`Resuming session ${getDisplayName(session)} in ${session.directory}...`));
   execReplace('claude', ['-r', session.id], { cwd: session.directory });
 }
