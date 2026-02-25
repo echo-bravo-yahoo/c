@@ -8,20 +8,15 @@ import { Command } from 'commander';
 import { initCompletion, installCompletion, uninstallCompletion } from './completion.js';
 import { listCommand } from './commands/list.js';
 import { newCommand } from './commands/new.js';
-import { waitingCommand } from './commands/waiting.js';
 import { showCommand } from './commands/show.js';
 import { resumeCommand } from './commands/resume.js';
 import { doneCommand } from './commands/done.js';
 import { archiveCommand } from './commands/archive.js';
-import { reopenCommand } from './commands/reopen.js';
 import { linkCommand } from './commands/link.js';
 import { unlinkCommand } from './commands/unlink.js';
 import { tagCommand } from './commands/tag.js';
-import { untagCommand } from './commands/untag.js';
 import { titleCommand } from './commands/title.js';
 import { metaCommand } from './commands/meta.js';
-import { prsCommand } from './commands/prs.js';
-import { jiraCommand } from './commands/jira.js';
 import { findCommand } from './commands/find.js';
 import { cleanCommand } from './commands/clean.js';
 import { tmuxStatusCommand } from './commands/tmux/status.js';
@@ -42,12 +37,18 @@ program
   .option('-a, --all', 'Show all sessions including done/archived')
   .option('-d, --done', 'Show only done sessions')
   .option('--archived', 'Show only archived sessions')
+  .option('-w, --waiting', 'Show only sessions waiting for input')
+  .option('--prs', 'Show sessions with linked PRs')
+  .option('--jira', 'Show sessions with linked JIRA tickets')
   .option('--dir <directory>', 'Filter by directory')
   .action(async (options) => {
     await listCommand({
       all: options.all,
       done: options.done,
       archived: options.archived,
+      waiting: options.waiting,
+      prs: options.prs,
+      jira: options.jira,
       directory: options.dir,
     });
   });
@@ -66,13 +67,12 @@ program
     await newCommand(name, options);
   });
 
-// Waiting
+// Waiting (alias for list --waiting)
 program
   .command('waiting')
-  .alias('w')
   .description('List sessions waiting for input')
-  .action(() => {
-    waitingCommand();
+  .action(async () => {
+    await listCommand({ waiting: true });
   });
 
 // Show
@@ -106,14 +106,6 @@ program
   .description('Mark session as archived')
   .action((id) => {
     archiveCommand(id);
-  });
-
-// Reopen
-program
-  .command('reopen <id>')
-  .description('Reopen a done/archived session')
-  .action((id) => {
-    reopenCommand(id);
   });
 
 // Link
@@ -155,17 +147,10 @@ program
 // Tag
 program
   .command('tag <tag> [id]')
-  .description('Add tag to session')
-  .action((tag, id) => {
-    tagCommand(tag, id);
-  });
-
-// Untag
-program
-  .command('untag <tag> [id]')
-  .description('Remove tag from session')
-  .action((tag, id) => {
-    untagCommand(tag, id);
+  .description('Add or remove tag from session')
+  .option('-d, --remove', 'Remove the tag instead of adding')
+  .action((tag, id, options) => {
+    tagCommand(tag, id, { remove: options.remove });
   });
 
 // Title
@@ -182,22 +167,6 @@ program
   .description('Set session metadata (key=value)')
   .action((keyvalue, id) => {
     metaCommand(keyvalue, id);
-  });
-
-// PRs
-program
-  .command('prs')
-  .description('List PRs across sessions')
-  .action(() => {
-    prsCommand();
-  });
-
-// JIRA
-program
-  .command('jira')
-  .description('List JIRA tickets across sessions')
-  .action(() => {
-    jiraCommand();
   });
 
 // Find

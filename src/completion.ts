@@ -14,9 +14,9 @@ const SESSION_COMMANDS = [
   'resume',
   'done',
   'archive',
-  'reopen',
   'link',
   'unlink',
+  'tag',
   'title',
   'meta',
 ];
@@ -30,15 +30,11 @@ const SUBCOMMANDS = [
   'resume',
   'done',
   'archive',
-  'reopen',
   'link',
   'unlink',
   'tag',
-  'untag',
   'title',
   'meta',
-  'prs',
-  'jira',
   'find',
   'clean',
   'completion',
@@ -140,15 +136,15 @@ export function initCompletion(): void {
       return getSessionCompletions();
     }
 
-    // tag/untag take tag name first
-    if (subcommand === 'tag' || subcommand === 'untag') {
+    // tag takes tag name first
+    if (subcommand === 'tag') {
       return getTagCompletions();
     }
 
     return [];
   }} ${({ line }: { line: string }) => {
-    // Third position: tag/untag commands take session ID
-    if (line.match(/^c\s+(tag|untag)\s+\S+\s/)) {
+    // Third position: tag command takes session ID
+    if (line.match(/^c\s+tag\s+\S+\s/)) {
       return getSessionCompletions();
     }
     return [];
