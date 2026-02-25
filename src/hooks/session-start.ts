@@ -71,7 +71,7 @@ export async function handleSessionStart(
 
   // Create new session
   const now = new Date();
-  const humanhash = generateHumanhash(now);
+  const humanhash = generateHumanhash(sessionId);
   const projectKey = encodeProjectKey(cwd);
 
   const session = createSession(sessionId, cwd, projectKey, humanhash, now);

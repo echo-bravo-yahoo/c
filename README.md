@@ -75,7 +75,7 @@ c tmux-pick           fzf picker to select and resume a session
 ## Session ID Formats
 
 - `125bb1df` — UUID prefix (any unique prefix works)
-- `terra-phoenix-15` — Humanhash (auto-generated from timestamp)
+- `three-georgia-xray-jig` — Humanhash (auto-generated from session ID)
 - `"Fix scrolling"` — User-provided title (set via `c title`)
 
 ## Hooks
