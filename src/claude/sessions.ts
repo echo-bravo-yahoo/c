@@ -137,9 +137,41 @@ export function readClaudeSessionIndex(projectKey: string): ClaudeSessionIndex |
 }
 
 /**
+ * Get custom title from transcript file by finding the last custom-title entry
+ * Claude writes these immediately on /rename, before updating sessions-index.json
+ */
+function getCustomTitleFromTranscript(transcriptPath: string): string | null {
+  if (!fs.existsSync(transcriptPath)) {
+    return null;
+  }
+
+  try {
+    const content = fs.readFileSync(transcriptPath, 'utf-8');
+    const lines = content.trim().split('\n');
+
+    // Search from end to find the most recent custom-title entry
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const entry = JSON.parse(lines[i]);
+        if (entry.type === 'custom-title' && entry.customTitle) {
+          return entry.customTitle;
+        }
+      } catch {
+        // Skip malformed lines
+      }
+    }
+  } catch {
+    // File read error
+  }
+
+  return null;
+}
+
+/**
  * Get session titles from Claude's index
  * Returns { customTitle, summary } so caller can decide priority
  * Searches all project directories since project_key encoding may vary
+ * Falls back to reading custom-title from transcript if not in index
  */
 export function getClaudeSessionTitles(
   sessionId: string,
@@ -149,18 +181,39 @@ export function getClaudeSessionTitles(
     return { customTitle: null, summary: null };
   }
 
+  let transcriptPath: string | null = null;
+
   // Search all project directories for the session
   for (const projectDir of fs.readdirSync(PROJECTS_DIR)) {
+    // Check if transcript file exists for this session
+    const possibleTranscript = path.join(PROJECTS_DIR, projectDir, `${sessionId}.jsonl`);
+    if (fs.existsSync(possibleTranscript)) {
+      transcriptPath = possibleTranscript;
+    }
+
     const index = readClaudeSessionIndex(projectDir);
     if (!index) continue;
 
     const entry = index.entries.find((e) => e.sessionId === sessionId);
     if (entry) {
+      // If index has customTitle, use it; otherwise check transcript
+      let customTitle = entry.customTitle || null;
+      if (!customTitle && transcriptPath) {
+        customTitle = getCustomTitleFromTranscript(transcriptPath);
+      }
       return {
-        customTitle: entry.customTitle || null,
+        customTitle,
         summary: entry.summary || null,
       };
     }
+  }
+
+  // Session not in index - check transcript directly for custom title
+  if (transcriptPath) {
+    return {
+      customTitle: getCustomTitleFromTranscript(transcriptPath),
+      summary: null,
+    };
   }
 
   return { customTitle: null, summary: null };
