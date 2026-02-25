@@ -166,4 +166,47 @@ export function getClaudeSessionTitles(
   return { customTitle: null, summary: null };
 }
 
+/**
+ * Check if a session ended with ExitPlanMode (plan execution)
+ * Returns the plan slug if found, null otherwise
+ */
+export function getPlanExecutionInfo(sessionId: string): { slug: string } | null {
+  const session = getClaudeSession(sessionId);
+  if (!session) return null;
+
+  try {
+    const content = fs.readFileSync(session.transcriptPath, 'utf-8');
+    const lines = content.trim().split('\n');
+
+    // Check the last ~10 lines for ExitPlanMode
+    const tailLines = lines.slice(-10);
+    for (const line of tailLines.reverse()) {
+      try {
+        const entry = JSON.parse(line);
+        // Look for assistant message with ExitPlanMode tool use
+        if (
+          entry.type === 'assistant' &&
+          entry.message?.content &&
+          Array.isArray(entry.message.content)
+        ) {
+          for (const block of entry.message.content) {
+            if (block.type === 'tool_use' && block.name === 'ExitPlanMode') {
+              // Found it - return the slug from the entry
+              if (entry.slug) {
+                return { slug: entry.slug };
+              }
+            }
+          }
+        }
+      } catch {
+        // Skip malformed lines
+      }
+    }
+  } catch {
+    // File read error
+  }
+
+  return null;
+}
+
 export { CLAUDE_DIR, PROJECTS_DIR };

@@ -38,6 +38,8 @@ export interface Session {
   servers: SessionServers;
   tags: SessionTags;
   meta: SessionMeta;
+  /** Parent session ID if this session was spawned from plan execution */
+  parent_session_id?: string;
 }
 
 export interface IndexFile {

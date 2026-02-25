@@ -80,9 +80,12 @@ export function formatStatus(session: Session): string {
 export function formatSessionLine(session: Session): string {
   const parts: string[] = [];
 
-  // ID and name
+  // ID and name (prefix with indicator if child of plan execution)
   const name = getDisplayName(session);
-  parts.push(chalk.cyan(shortId(session.id)));
+  const idDisplay = session.parent_session_id
+    ? chalk.dim('└ ') + chalk.cyan(shortId(session.id))
+    : chalk.cyan(shortId(session.id));
+  parts.push(idDisplay);
   parts.push(chalk.bold(name.padEnd(20)));
 
   // Status
@@ -119,6 +122,9 @@ export function formatSessionDetails(session: Session): string {
   lines.push(chalk.bold('Session: ') + getDisplayName(session));
   lines.push(chalk.dim('ID: ') + session.id);
   lines.push(chalk.dim('Humanhash: ') + session.humanhash);
+  if (session.parent_session_id) {
+    lines.push(chalk.dim('Parent: ') + chalk.cyan(session.parent_session_id.slice(0, 8)));
+  }
   lines.push('');
   lines.push(chalk.bold('Status: ') + formatStatus(session));
   lines.push(chalk.dim('Directory: ') + session.directory);

@@ -79,7 +79,7 @@ function parseDate(value: unknown): Date {
  * Convert raw TOML data to typed Session
  */
 function parseSession(raw: Record<string, unknown>): Session {
-  return {
+  const session: Session = {
     id: String(raw.id ?? ''),
     name: String(raw.name ?? ''),
     humanhash: String(raw.humanhash ?? ''),
@@ -94,6 +94,12 @@ function parseSession(raw: Record<string, unknown>): Session {
     tags: (raw.tags as Session['tags']) ?? { values: [] },
     meta: (raw.meta as Session['meta']) ?? {},
   };
+
+  if (raw.parent_session_id) {
+    session.parent_session_id = String(raw.parent_session_id);
+  }
+
+  return session;
 }
 
 /**
