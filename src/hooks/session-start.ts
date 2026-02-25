@@ -2,7 +2,7 @@
  * SessionStart hook - register new session
  */
 
-import { updateIndex, getSession } from '../store/index.js';
+import { updateIndex, getSession, getSessions } from '../store/index.js';
 import { createSession } from '../store/schema.js';
 import { generateHumanhash } from '../util/humanhash.js';
 import { getCurrentBranch, getWorktreeInfo } from '../detection/git.js';
@@ -18,6 +18,21 @@ export async function handleSessionStart(
   if (!sessionId) {
     // Cannot register without session ID
     return;
+  }
+
+  // Close any stale "live" sessions in the same directory
+  // This handles cases where SessionEnd didn't fire (e.g., Ctrl-C, crash)
+  const staleSessions = getSessions({ status: ['live'], directory: cwd }).filter(
+    (s) => s.id !== sessionId
+  );
+  if (staleSessions.length > 0) {
+    await updateIndex((index) => {
+      for (const stale of staleSessions) {
+        if (index.sessions[stale.id]) {
+          index.sessions[stale.id].status = 'closed';
+        }
+      }
+    });
   }
 
   // Check if session already exists

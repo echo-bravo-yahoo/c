@@ -234,4 +234,36 @@ export function getCurrentSession(directory: string = process.cwd()): Session | 
   return sessions[0];
 }
 
+/**
+ * Reconcile stale sessions by closing "live" sessions that no longer exist in Claude's storage.
+ * This handles cases where SessionEnd hook didn't fire (Ctrl-C, crash, etc).
+ */
+export async function reconcileStaleSessions(): Promise<number> {
+  // Import here to avoid circular dependency
+  const { getClaudeSession } = await import('../claude/sessions.js');
+
+  const index = readIndex();
+  const liveSessions = Object.values(index.sessions).filter((s) => s.status === 'live');
+
+  const staleIds: string[] = [];
+  for (const session of liveSessions) {
+    const claudeSession = getClaudeSession(session.id);
+    if (!claudeSession) {
+      staleIds.push(session.id);
+    }
+  }
+
+  if (staleIds.length > 0) {
+    await updateIndex((idx) => {
+      for (const id of staleIds) {
+        if (idx.sessions[id]) {
+          idx.sessions[id].status = 'closed';
+        }
+      }
+    });
+  }
+
+  return staleIds.length;
+}
+
 export { INDEX_DIR, INDEX_PATH };

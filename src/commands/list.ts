@@ -2,7 +2,7 @@
  * c list - list sessions
  */
 
-import { getSessions } from '../store/index.js';
+import { getSessions, reconcileStaleSessions } from '../store/index.js';
 import { printSessionTable } from '../util/format.js';
 import type { Session } from '../store/schema.js';
 
@@ -13,7 +13,10 @@ export interface ListOptions {
   directory?: string;
 }
 
-export function listCommand(options: ListOptions): void {
+export async function listCommand(options: ListOptions): Promise<void> {
+  // Reconcile stale sessions before listing
+  await reconcileStaleSessions();
+
   let statusFilter: Session['status'][] = ['live', 'closed'];
 
   if (options.all) {

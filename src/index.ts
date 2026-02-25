@@ -41,8 +41,8 @@ program
   .option('-d, --done', 'Show only done sessions')
   .option('--archived', 'Show only archived sessions')
   .option('--dir <directory>', 'Filter by directory')
-  .action((options) => {
-    listCommand({
+  .action(async (options) => {
+    await listCommand({
       all: options.all,
       done: options.done,
       archived: options.archived,
