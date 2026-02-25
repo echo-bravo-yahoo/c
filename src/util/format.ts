@@ -93,16 +93,18 @@ const COL_RESOURCES = 40;
 /**
  * Format a session as a single line for list views
  */
-export function formatSessionLine(session: Session): string {
+export function formatSessionLine(session: Session, depth = 0): string {
   // ID column (with optional tree prefix for child sessions)
   const id = shortId(session.id);
-  const idCol = session.parent_session_id
-    ? chalk.dim('└ ') + chalk.cyan(id) + '  '
+  const indent = '  '.repeat(depth);
+  const idCol = depth > 0
+    ? indent + chalk.dim('└ ') + chalk.cyan(id) + '  '
     : '  ' + chalk.cyan(id) + '  ';
 
-  // Name column
+  // Name column (shrink by indent to maintain alignment)
   const name = getDisplayName(session);
-  const nameCol = chalk.bold(fixedWidth(name, COL_NAME));
+  const nameWidth = COL_NAME - (depth * 2);
+  const nameCol = chalk.bold(fixedWidth(name, nameWidth));
 
   // Status column
   const statusText = session.waiting ? 'waiting' : session.status;
@@ -203,6 +205,65 @@ export function formatSessionDetails(session: Session): string {
   return lines.join('\n');
 }
 
+interface SessionWithDepth {
+  session: Session;
+  depth: number;
+}
+
+/**
+ * Order sessions so children appear under their parents.
+ * Root sessions sorted by last_active_at, children grouped under parents.
+ * Returns sessions with their nesting depth for indentation.
+ */
+function orderSessionsWithChildren(sessions: Session[]): SessionWithDepth[] {
+  // Build parent -> children map
+  const childrenMap = new Map<string, Session[]>();
+  const roots: Session[] = [];
+
+  for (const session of sessions) {
+    if (session.parent_session_id) {
+      const siblings = childrenMap.get(session.parent_session_id) || [];
+      siblings.push(session);
+      childrenMap.set(session.parent_session_id, siblings);
+    } else {
+      roots.push(session);
+    }
+  }
+
+  // Sort children by last_active_at descending
+  for (const children of childrenMap.values()) {
+    children.sort((a, b) => b.last_active_at.getTime() - a.last_active_at.getTime());
+  }
+
+  // Build result: each root followed by its children (recursively)
+  const result: SessionWithDepth[] = [];
+
+  function addWithChildren(session: Session, depth: number): void {
+    result.push({ session, depth });
+    const children = childrenMap.get(session.id);
+    if (children) {
+      for (const child of children) {
+        addWithChildren(child, depth + 1);
+      }
+    }
+  }
+
+  // roots already sorted by getSessions()
+  for (const root of roots) {
+    addWithChildren(root, 0);
+  }
+
+  // Append orphan children (parent not in filtered results)
+  const addedIds = new Set(result.map(s => s.session.id));
+  for (const session of sessions) {
+    if (!addedIds.has(session.id)) {
+      result.push({ session, depth: 0 });
+    }
+  }
+
+  return result;
+}
+
 /**
  * Print a table of sessions
  */
@@ -211,6 +272,9 @@ export function printSessionTable(sessions: Session[]): void {
     console.log(chalk.dim('No sessions found.'));
     return;
   }
+
+  // Reorder so children appear under their parents
+  const ordered = orderSessionsWithChildren(sessions);
 
   const totalWidth = COL_ID + COL_NAME + COL_STATUS + COL_RESOURCES + 10;
 
@@ -227,7 +291,7 @@ export function printSessionTable(sessions: Session[]): void {
   );
   console.log(chalk.dim('─'.repeat(totalWidth)));
 
-  for (const session of sessions) {
-    console.log(formatSessionLine(session));
+  for (const { session, depth } of ordered) {
+    console.log(formatSessionLine(session, depth));
   }
 }
