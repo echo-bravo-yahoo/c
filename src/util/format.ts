@@ -53,6 +53,16 @@ export function shortId(id: string): string {
 }
 
 /**
+ * Truncate or pad a string to exact width (for column alignment)
+ */
+function fixedWidth(str: string, width: number): string {
+  if (str.length > width) {
+    return str.slice(0, width - 1) + '…';
+  }
+  return str.padEnd(width);
+}
+
+/**
  * Format session status with color
  */
 export function formatStatus(session: Session): string {
@@ -74,43 +84,59 @@ export function formatStatus(session: Session): string {
   }
 }
 
+// Column widths (including trailing space)
+const COL_ID = 12;
+const COL_NAME = 34;
+const COL_STATUS = 10;
+const COL_RESOURCES = 40;
+
 /**
  * Format a session as a single line for list views
  */
 export function formatSessionLine(session: Session): string {
-  const parts: string[] = [];
+  // ID column (with optional tree prefix for child sessions)
+  const id = shortId(session.id);
+  const idCol = session.parent_session_id
+    ? chalk.dim('└ ') + chalk.cyan(id) + '  '
+    : '  ' + chalk.cyan(id) + '  ';
 
-  // ID and name (prefix with indicator if child of plan execution)
+  // Name column
   const name = getDisplayName(session);
-  const idDisplay = session.parent_session_id
-    ? chalk.dim('└ ') + chalk.cyan(shortId(session.id))
-    : chalk.cyan(shortId(session.id));
-  parts.push(idDisplay);
-  parts.push(chalk.bold(name.padEnd(20)));
+  const nameCol = chalk.bold(fixedWidth(name, COL_NAME));
 
-  // Status
-  parts.push(formatStatus(session).padEnd(12));
+  // Status column
+  const statusText = session.waiting ? 'waiting' : session.status;
+  const statusPad = ' '.repeat(Math.max(1, COL_STATUS - statusText.length));
+  const statusCol = formatStatus(session) + statusPad;
 
-  // Resources
-  const resources: string[] = [];
+  // Resources column
+  const resourceParts: string[] = [];
   if (session.resources.branch) {
-    resources.push(chalk.magenta(session.resources.branch));
+    resourceParts.push(session.resources.branch);
   }
   if (session.resources.pr) {
     const prNum = session.resources.pr.match(/\/pull\/(\d+)/)?.[1];
     if (prNum) {
-      resources.push(chalk.green(`#${prNum}`));
+      resourceParts.push(`#${prNum}`);
     }
   }
   if (session.resources.jira) {
-    resources.push(chalk.yellow(session.resources.jira));
+    resourceParts.push(session.resources.jira);
   }
-  parts.push(resources.join(' ') || chalk.dim('-'));
+  const resourceText = resourceParts.join(' ') || '-';
+  const resourceColored = resourceParts.length > 0
+    ? [
+        session.resources.branch ? chalk.magenta(session.resources.branch) : '',
+        session.resources.pr ? chalk.green(`#${session.resources.pr.match(/\/pull\/(\d+)/)?.[1]}`) : '',
+        session.resources.jira ? chalk.yellow(session.resources.jira) : '',
+      ].filter(Boolean).join(' ')
+    : chalk.dim('-');
+  const resourceCol = resourceColored + ' '.repeat(Math.max(0, COL_RESOURCES - resourceText.length));
 
-  // Time
-  parts.push(chalk.dim(relativeTime(session.last_active_at)));
+  // Time column
+  const timeCol = chalk.dim(relativeTime(session.last_active_at));
 
-  return parts.join('  ');
+  return `${idCol}${nameCol}${statusCol}${resourceCol}${timeCol}`;
 }
 
 /**
@@ -186,17 +212,20 @@ export function printSessionTable(sessions: Session[]): void {
     return;
   }
 
-  // Header
+  const totalWidth = COL_ID + COL_NAME + COL_STATUS + COL_RESOURCES + 10;
+
+  // Header (2-space indent to match data rows)
   console.log(
     chalk.dim(
-      'ID'.padEnd(10) +
-        'Name'.padEnd(22) +
-        'Status'.padEnd(14) +
-        'Resources'.padEnd(30) +
+      '  ' +
+        fixedWidth('ID', COL_ID - 2) +
+        fixedWidth('Name', COL_NAME) +
+        fixedWidth('Status', COL_STATUS) +
+        fixedWidth('Resources', COL_RESOURCES) +
         'Last Active'
     )
   );
-  console.log(chalk.dim('─'.repeat(90)));
+  console.log(chalk.dim('─'.repeat(totalWidth)));
 
   for (const session of sessions) {
     console.log(formatSessionLine(session));
