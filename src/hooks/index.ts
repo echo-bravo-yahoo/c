@@ -12,6 +12,7 @@ export interface HookInput {
   session_id: string;
   cwd: string;
   type?: string;
+  prompt?: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   tool_output?: string;
