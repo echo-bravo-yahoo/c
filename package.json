@@ -16,7 +16,8 @@
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "human-readable-ids": "^1.0.4",
-    "humanhash": "^1.0.4"
+    "humanhash": "^1.0.4",
+    "omelette": "^0.4.17"
   },
   "devDependencies": {
     "@types/iarna__toml": "^2.0.5",

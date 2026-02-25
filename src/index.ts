@@ -5,6 +5,7 @@
  */
 
 import { Command } from 'commander';
+import { initCompletion, installCompletion, uninstallCompletion } from './completion.js';
 import { listCommand } from './commands/list.js';
 import { waitingCommand } from './commands/waiting.js';
 import { showCommand } from './commands/show.js';
@@ -224,5 +225,22 @@ program
   .action(async (event) => {
     await handleHook(event);
   });
+
+// Completion
+program
+  .command('completion [action]')
+  .description('Manage shell tab completion (install/uninstall)')
+  .action((action) => {
+    if (action === 'install') {
+      installCompletion();
+    } else if (action === 'uninstall') {
+      uninstallCompletion();
+    } else {
+      console.log('Usage: c completion install|uninstall');
+    }
+  });
+
+// Initialize completion (handles --compgen flags from shell)
+initCompletion();
 
 program.parse();

@@ -1,0 +1,165 @@
+/**
+ * Shell tab completion using omelette
+ */
+
+import { createRequire } from 'node:module';
+import { readIndex } from './store/index.js';
+
+const require = createRequire(import.meta.url);
+const omelette = require('omelette');
+
+// Subcommands that take a session ID
+const SESSION_COMMANDS = [
+  'show',
+  'resume',
+  'done',
+  'archive',
+  'reopen',
+  'link',
+  'unlink',
+  'title',
+  'meta',
+];
+
+// All subcommands
+const SUBCOMMANDS = [
+  'list',
+  'waiting',
+  'show',
+  'resume',
+  'done',
+  'archive',
+  'reopen',
+  'link',
+  'unlink',
+  'tag',
+  'untag',
+  'title',
+  'meta',
+  'prs',
+  'jira',
+  'find',
+  'clean',
+  'completion',
+  'tmux-status',
+  'tmux-pick',
+];
+
+// Flags for list command
+const LIST_FLAGS = ['--all', '--done', '--archived', '--dir'];
+
+/**
+ * Get session completions (short IDs + humanhashes)
+ */
+function getSessionCompletions(): string[] {
+  try {
+    const index = readIndex();
+    const completions: string[] = [];
+    for (const session of Object.values(index.sessions)) {
+      completions.push(session.id.slice(0, 8));
+      if (session.humanhash) {
+        completions.push(session.humanhash);
+      }
+    }
+    return completions;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get tag completions from all sessions
+ */
+function getTagCompletions(): string[] {
+  try {
+    const index = readIndex();
+    const tags = new Set<string>();
+    for (const session of Object.values(index.sessions)) {
+      for (const tag of session.tags?.values ?? []) {
+        tags.add(tag);
+      }
+    }
+    return [...tags];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get directory completions from sessions
+ */
+function getDirCompletions(): string[] {
+  try {
+    const index = readIndex();
+    const dirs = new Set<string>();
+    for (const session of Object.values(index.sessions)) {
+      dirs.add(session.directory);
+    }
+    return [...dirs];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Initialize completion handler
+ * Called on every CLI invocation - omelette checks if it's a completion request
+ */
+export function initCompletion(): void {
+  const completion = omelette`c ${SUBCOMMANDS} ${({
+    before,
+    line,
+  }: {
+    before: string;
+    line: string;
+  }) => {
+    // Handle --dir flag value
+    if (before === '--dir') {
+      return getDirCompletions();
+    }
+
+    // Handle flags for list command
+    if (line.match(/^c\s+list\s/) && before.startsWith('-')) {
+      return LIST_FLAGS;
+    }
+    if (before === 'list') {
+      return LIST_FLAGS;
+    }
+
+    // Commands that take session ID as second arg
+    if (SESSION_COMMANDS.includes(before)) {
+      return getSessionCompletions();
+    }
+
+    // tag/untag take tag name first
+    if (before === 'tag' || before === 'untag') {
+      return getTagCompletions();
+    }
+
+    return [];
+  }} ${({ line }: { line: string }) => {
+    // Third position: tag/untag commands take session ID
+    if (line.match(/^c\s+(tag|untag)\s+\S+\s/)) {
+      return getSessionCompletions();
+    }
+    return [];
+  }}`;
+
+  completion.init();
+}
+
+/**
+ * Install shell completion
+ */
+export function installCompletion(): void {
+  const completion = omelette('c');
+  completion.setupShellInitFile();
+}
+
+/**
+ * Uninstall shell completion
+ */
+export function uninstallCompletion(): void {
+  const completion = omelette('c');
+  completion.cleanupShellInitFile();
+}
