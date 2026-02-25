@@ -24,6 +24,7 @@ const SESSION_COMMANDS = [
 // All subcommands
 const SUBCOMMANDS = [
   'list',
+  'new',
   'waiting',
   'show',
   'resume',

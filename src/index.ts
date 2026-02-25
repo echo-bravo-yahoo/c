@@ -7,6 +7,7 @@
 import { Command } from 'commander';
 import { initCompletion, installCompletion, uninstallCompletion } from './completion.js';
 import { listCommand } from './commands/list.js';
+import { newCommand } from './commands/new.js';
 import { waitingCommand } from './commands/waiting.js';
 import { showCommand } from './commands/show.js';
 import { resumeCommand } from './commands/resume.js';
@@ -49,6 +50,20 @@ program
       archived: options.archived,
       directory: options.dir,
     });
+  });
+
+// New session
+program
+  .command('new [name]')
+  .alias('n')
+  .description('Create a new session with optional name and metadata')
+  .option('--jira <ticket>', 'Link JIRA ticket')
+  .option('--pr <url>', 'Link PR URL')
+  .option('--branch <name>', 'Link branch name')
+  .option('--note <text>', 'Add a note')
+  .option('--meta <key=value...>', 'Set metadata (repeatable)')
+  .action(async (name, options) => {
+    await newCommand(name, options);
   });
 
 // Waiting

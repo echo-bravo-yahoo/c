@@ -56,14 +56,29 @@ export async function handleSessionStart(
     });
   }
 
-  // Check if session already exists
+  // Check if session already exists (e.g., created by `c new`)
   const existing = getSession(sessionId);
   if (existing) {
-    // Session already registered, just update last_active
     await updateIndex((index) => {
-      if (index.sessions[sessionId]) {
-        index.sessions[sessionId].last_active_at = new Date();
-        index.sessions[sessionId].status = 'live';
+      const s = index.sessions[sessionId];
+      if (!s) return;
+
+      s.last_active_at = new Date();
+      s.status = 'live';
+
+      // Merge git info if not already set by user
+      const branch = getCurrentBranch(cwd);
+      if (branch && !s.resources.branch) {
+        s.resources.branch = branch;
+        if (!s.resources.jira) {
+          const jira = extractJiraFromBranch(branch);
+          if (jira) s.resources.jira = jira;
+        }
+      }
+
+      const worktree = getWorktreeInfo(cwd);
+      if (worktree && !s.resources.worktree) {
+        s.resources.worktree = worktree.name;
       }
     });
     return;
