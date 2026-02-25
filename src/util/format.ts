@@ -4,6 +4,7 @@
 
 import chalk from 'chalk';
 import { Session } from '../store/schema.js';
+import { getClaudeSessionTitles } from '../claude/sessions.js';
 
 /**
  * Format a relative time string
@@ -25,9 +26,23 @@ export function relativeTime(date: Date): string {
 
 /**
  * Get display name for a session
+ * Priority: Claude's customTitle > c's name > Claude's summary > humanhash
  */
 export function getDisplayName(session: Session): string {
-  return session.name || session.humanhash;
+  // Check Claude's session index for titles
+  const { customTitle, summary } = getClaudeSessionTitles(session.id, session.project_key);
+
+  // customTitle = user explicitly renamed via /rename (highest priority)
+  if (customTitle) return customTitle;
+
+  // c's name = user explicitly renamed via `c title`
+  if (session.name) return session.name;
+
+  // summary = Claude-generated summary
+  if (summary) return summary;
+
+  // fallback to humanhash
+  return session.humanhash;
 }
 
 /**

@@ -98,4 +98,72 @@ export function getClaudeSessionsForDirectory(directory: string): ClaudeSession[
   return sessions.filter((s) => s.directory === directory);
 }
 
+export interface ClaudeSessionIndex {
+  version: number;
+  entries: ClaudeSessionIndexEntry[];
+  originalPath: string;
+}
+
+export interface ClaudeSessionIndexEntry {
+  sessionId: string;
+  fullPath: string;
+  fileMtime: number;
+  firstPrompt: string;
+  customTitle?: string;
+  summary?: string;
+  messageCount: number;
+  created: string;
+  modified: string;
+  gitBranch?: string;
+  projectPath: string;
+  isSidechain: boolean;
+}
+
+/**
+ * Read Claude's sessions-index.json for a project
+ */
+export function readClaudeSessionIndex(projectKey: string): ClaudeSessionIndex | null {
+  const indexPath = path.join(PROJECTS_DIR, projectKey, 'sessions-index.json');
+  if (!fs.existsSync(indexPath)) {
+    return null;
+  }
+
+  try {
+    const content = fs.readFileSync(indexPath, 'utf-8');
+    return JSON.parse(content) as ClaudeSessionIndex;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get session titles from Claude's index
+ * Returns { customTitle, summary } so caller can decide priority
+ * Searches all project directories since project_key encoding may vary
+ */
+export function getClaudeSessionTitles(
+  sessionId: string,
+  _projectKey: string
+): { customTitle: string | null; summary: string | null } {
+  if (!fs.existsSync(PROJECTS_DIR)) {
+    return { customTitle: null, summary: null };
+  }
+
+  // Search all project directories for the session
+  for (const projectDir of fs.readdirSync(PROJECTS_DIR)) {
+    const index = readClaudeSessionIndex(projectDir);
+    if (!index) continue;
+
+    const entry = index.entries.find((e) => e.sessionId === sessionId);
+    if (entry) {
+      return {
+        customTitle: entry.customTitle || null,
+        summary: entry.summary || null,
+      };
+    }
+  }
+
+  return { customTitle: null, summary: null };
+}
+
 export { CLAUDE_DIR, PROJECTS_DIR };
