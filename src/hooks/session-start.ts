@@ -22,7 +22,6 @@ export async function handleSessionStart(
 
   // Close any stale "live" sessions in the same directory
   // This handles cases where SessionEnd didn't fire (e.g., Ctrl-C, crash)
-  // Also detect plan execution (ExitPlanMode) to link parent/child sessions
   const staleSessions = getSessions({ status: ['live'], directory: cwd }).filter(
     (s) => s.id !== sessionId
   );
@@ -30,17 +29,24 @@ export async function handleSessionStart(
   let parentSessionId: string | undefined;
   let planSlug: string | undefined;
 
-  if (staleSessions.length > 0) {
-    // Check if any stale session ended with ExitPlanMode (plan execution)
-    for (const stale of staleSessions) {
-      const planInfo = getPlanExecutionInfo(stale.id);
-      if (planInfo) {
-        parentSessionId = stale.id;
-        planSlug = planInfo.slug;
-        break;
-      }
-    }
+  // Check recently closed sessions for plan execution (ExitPlanMode)
+  // SessionEnd may have already marked the planning session as closed
+  const recentThreshold = 30 * 1000; // 30 seconds
+  const recentSessions = getSessions({ status: ['closed'], directory: cwd }).filter(
+    (s) =>
+      s.id !== sessionId && Date.now() - new Date(s.last_active_at).getTime() < recentThreshold
+  );
 
+  for (const session of [...staleSessions, ...recentSessions]) {
+    const planInfo = getPlanExecutionInfo(session.id);
+    if (planInfo) {
+      parentSessionId = session.id;
+      planSlug = planInfo.slug;
+      break;
+    }
+  }
+
+  if (staleSessions.length > 0) {
     await updateIndex((index) => {
       for (const stale of staleSessions) {
         if (index.sessions[stale.id]) {
