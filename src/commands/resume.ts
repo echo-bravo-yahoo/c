@@ -4,6 +4,7 @@
 
 import chalk from 'chalk';
 import { getSession } from '../store/index.js';
+import { getClaudeSession } from '../claude/sessions.js';
 import { execReplace } from '../util/exec.js';
 
 export function resumeCommand(idOrPrefix: string): void {
@@ -14,7 +15,14 @@ export function resumeCommand(idOrPrefix: string): void {
     process.exit(1);
   }
 
-  // Use claude -r to resume the session
-  console.log(chalk.dim(`Resuming session ${session.humanhash}...`));
-  execReplace('claude', ['-r', session.id]);
+  // Verify session exists in Claude's storage
+  const claudeSession = getClaudeSession(session.id);
+  if (!claudeSession) {
+    console.error(chalk.red(`Session ${session.humanhash} no longer exists in Claude's storage`));
+    process.exit(1);
+  }
+
+  // Use claude -r to resume the session from its original directory
+  console.log(chalk.dim(`Resuming session ${session.humanhash} in ${session.directory}...`));
+  execReplace('claude', ['-r', session.id], { cwd: session.directory });
 }

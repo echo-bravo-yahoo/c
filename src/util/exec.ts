@@ -22,9 +22,10 @@ export function exec(command: string, options?: { cwd?: string }): string {
 /**
  * Execute a command and replace the current process
  */
-export function execReplace(command: string, args: string[]): never {
+export function execReplace(command: string, args: string[], options?: { cwd?: string }): never {
   const child = spawn(command, args, {
     stdio: 'inherit',
+    cwd: options?.cwd,
   });
 
   child.on('close', (code) => {
