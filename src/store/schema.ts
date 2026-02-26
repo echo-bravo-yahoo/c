@@ -2,7 +2,7 @@
  * Schema types for the session index stored in ~/.c/index.toml
  */
 
-export type SessionStatus = 'live' | 'closed' | 'done' | 'archived';
+export type SessionStatus = 'live' | 'closed' | 'archived';
 
 export interface SessionResources {
   branch?: string;

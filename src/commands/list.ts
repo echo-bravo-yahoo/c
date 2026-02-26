@@ -9,7 +9,6 @@ import type { Session } from '../store/schema.js';
 
 export interface ListOptions {
   all?: boolean;
-  done?: boolean;
   archived?: boolean;
   waiting?: boolean;
   prs?: boolean;
@@ -35,9 +34,7 @@ export async function listCommand(options: ListOptions): Promise<void> {
   let waitingFilter: boolean | undefined;
 
   if (options.all) {
-    statusFilter = ['live', 'closed', 'done', 'archived'];
-  } else if (options.done) {
-    statusFilter = ['done'];
+    statusFilter = ['live', 'closed', 'archived'];
   } else if (options.archived) {
     statusFilter = ['archived'];
   } else if (options.waiting) {
@@ -56,7 +53,7 @@ export async function listCommand(options: ListOptions): Promise<void> {
 
 function listPRs(): void {
   const sessions = getSessions({
-    status: ['live', 'closed', 'done'],
+    status: ['live', 'closed', 'archived'],
   });
 
   const withPRs = sessions.filter((s) => s.resources.pr);
@@ -88,7 +85,7 @@ function listPRs(): void {
 
 function listJira(): void {
   const sessions = getSessions({
-    status: ['live', 'closed', 'done'],
+    status: ['live', 'closed', 'archived'],
   });
 
   const withJira = sessions.filter((s) => s.resources.jira);

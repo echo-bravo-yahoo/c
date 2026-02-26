@@ -10,7 +10,6 @@ import { listCommand } from './commands/list.js';
 import { newCommand } from './commands/new.js';
 import { showCommand } from './commands/show.js';
 import { resumeCommand } from './commands/resume.js';
-import { doneCommand } from './commands/done.js';
 import { archiveCommand } from './commands/archive.js';
 import { linkCommand } from './commands/link.js';
 import { unlinkCommand } from './commands/unlink.js';
@@ -35,8 +34,7 @@ program
 program
   .command('list', { isDefault: true })
   .description('List sessions')
-  .option('-a, --all', 'Show all sessions including done/archived')
-  .option('-d, --done', 'Show only done sessions')
+  .option('-a, --all', 'Show all sessions including archived')
   .option('--archived', 'Show only archived sessions')
   .option('-w, --waiting', 'Show only sessions waiting for input')
   .option('--prs', 'Show sessions with linked PRs')
@@ -45,7 +43,6 @@ program
   .action(async (options) => {
     await listCommand({
       all: options.all,
-      done: options.done,
       archived: options.archived,
       waiting: options.waiting,
       prs: options.prs,
@@ -91,14 +88,6 @@ program
   .description('Resume a Claude session')
   .action((id) => {
     resumeCommand(id);
-  });
-
-// Done
-program
-  .command('done [id]')
-  .description('Mark session as done')
-  .action((id) => {
-    doneCommand(id);
   });
 
 // Archive

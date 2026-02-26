@@ -12,7 +12,6 @@ const omelette = require('omelette');
 const SESSION_COMMANDS = [
   'show',
   'resume',
-  'done',
   'archive',
   'link',
   'unlink',
@@ -28,7 +27,6 @@ const SUBCOMMANDS = [
   'waiting',
   'show',
   'resume',
-  'done',
   'archive',
   'link',
   'unlink',

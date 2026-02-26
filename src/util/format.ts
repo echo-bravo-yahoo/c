@@ -76,8 +76,6 @@ export function formatStatus(session: Session): string {
       return chalk.green('live');
     case 'closed':
       return chalk.gray('closed');
-    case 'done':
-      return chalk.blue('done');
     case 'archived':
       return chalk.dim('archived');
     default:
