@@ -333,19 +333,18 @@ function orderSessionsWithChildren(visibleSessions: Session[]): OutputRow[] {
     const children = byParent.get(parentId) || [];
     if (children.length === 0) return;
 
-    // Check if we need a gap marker (first child has hidden ancestors)
-    const firstMeta = meta.get(children[0].id)!;
-    if (firstMeta.hiddenCount > 0) {
-      result.push({
-        type: 'gap',
-        count: firstMeta.hiddenCount,
-        depth: parentDepth + 1,
-      });
-    }
-
     const childDepth = parentDepth + 1;
 
     for (const child of children) {
+      // Show gap marker only for children that actually have hidden ancestors
+      const childMeta = meta.get(child.id)!;
+      if (childMeta.hiddenCount > 0) {
+        result.push({
+          type: 'gap',
+          count: childMeta.hiddenCount,
+          depth: childDepth,
+        });
+      }
       result.push({ type: 'session', session: child, depth: childDepth });
       addChildren(child.id, childDepth);
     }
@@ -358,11 +357,14 @@ function orderSessionsWithChildren(visibleSessions: Session[]): OutputRow[] {
 
     // Check if this "root" is actually an orphan with hidden ancestors
     if (rootMeta.hiddenCount > 0) {
+      // Show gap marker at depth 0, but session at depth 1 (as child of hidden ancestors)
       result.push({ type: 'gap', count: rootMeta.hiddenCount, depth: 0 });
+      result.push({ type: 'session', session: root, depth: 1 });
+      addChildren(root.id, 1);
+    } else {
+      result.push({ type: 'session', session: root, depth: 0 });
+      addChildren(root.id, 0);
     }
-
-    result.push({ type: 'session', session: root, depth: 0 });
-    addChildren(root.id, 0);
   }
 
   return result;

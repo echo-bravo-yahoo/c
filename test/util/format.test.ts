@@ -134,3 +134,225 @@ describe('c > util > format > displayWidth', () => {
     assert.strictEqual(displayWidth(''), 0);
   });
 });
+
+describe('c > util > format > gap marker logic', () => {
+  /**
+   * Replicate the gap marker algorithm from orderSessionsWithChildren
+   * to test the per-child gap marker behavior in isolation.
+   */
+  type SessionMeta = { visibleParentId: string | null; hiddenCount: number };
+  type OutputRow =
+    | { type: 'session'; id: string; depth: number }
+    | { type: 'gap'; count: number; depth: number };
+
+  interface TestSession {
+    id: string;
+    parent_session_id?: string;
+    state: 'busy' | 'archived';
+    last_active_at: number; // timestamp for sorting
+  }
+
+  function computeGapMarkers(
+    allSessions: TestSession[],
+    visibleSessions: TestSession[]
+  ): OutputRow[] {
+    const allById = new Map(allSessions.map((s) => [s.id, s]));
+    const visibleIds = new Set(visibleSessions.map((s) => s.id));
+
+    // Compute metadata for each visible session
+    const meta = new Map<string, SessionMeta>();
+
+    for (const session of visibleSessions) {
+      let hiddenCount = 0;
+      let current: TestSession | undefined = session;
+
+      while (current?.parent_session_id) {
+        const parent = allById.get(current.parent_session_id);
+        if (!parent) break;
+
+        if (visibleIds.has(parent.id)) {
+          meta.set(session.id, { visibleParentId: parent.id, hiddenCount });
+          break;
+        }
+        hiddenCount++;
+        current = parent;
+      }
+
+      if (!meta.has(session.id)) {
+        meta.set(session.id, { visibleParentId: null, hiddenCount });
+      }
+    }
+
+    // Group by visible parent
+    const byParent = new Map<string | null, TestSession[]>();
+    for (const session of visibleSessions) {
+      const m = meta.get(session.id)!;
+      const children = byParent.get(m.visibleParentId) || [];
+      children.push(session);
+      byParent.set(m.visibleParentId, children);
+    }
+
+    // Sort each group by last_active_at descending
+    for (const children of byParent.values()) {
+      children.sort((a, b) => b.last_active_at - a.last_active_at);
+    }
+
+    const result: OutputRow[] = [];
+
+    function addChildren(parentId: string | null, parentDepth: number): void {
+      const children = byParent.get(parentId) || [];
+      if (children.length === 0) return;
+
+      const childDepth = parentDepth + 1;
+
+      for (const child of children) {
+        // Show gap marker only for children that actually have hidden ancestors
+        const childMeta = meta.get(child.id)!;
+        if (childMeta.hiddenCount > 0) {
+          result.push({ type: 'gap', count: childMeta.hiddenCount, depth: childDepth });
+        }
+        result.push({ type: 'session', id: child.id, depth: childDepth });
+        addChildren(child.id, childDepth);
+      }
+    }
+
+    // Start with roots
+    const roots = byParent.get(null) || [];
+    for (const root of roots) {
+      const rootMeta = meta.get(root.id)!;
+      if (rootMeta.hiddenCount > 0) {
+        // Show gap marker at depth 0, but session at depth 1 (as child of hidden ancestors)
+        result.push({ type: 'gap', count: rootMeta.hiddenCount, depth: 0 });
+        result.push({ type: 'session', id: root.id, depth: 1 });
+        addChildren(root.id, 1);
+      } else {
+        result.push({ type: 'session', id: root.id, depth: 0 });
+        addChildren(root.id, 0);
+      }
+    }
+
+    return result;
+  }
+
+  it('shows no gap for sessions without hidden ancestors', () => {
+    const allSessions: TestSession[] = [
+      { id: 'A', state: 'busy', last_active_at: 1 },
+      { id: 'B', state: 'busy', parent_session_id: 'A', last_active_at: 2 },
+    ];
+    const visible = allSessions.filter((s) => s.state === 'busy');
+
+    const result = computeGapMarkers(allSessions, visible);
+
+    // No gaps, just sessions
+    assert.deepStrictEqual(result, [
+      { type: 'session', id: 'A', depth: 0 },
+      { type: 'session', id: 'B', depth: 1 },
+    ]);
+  });
+
+  it('shows gap for session with hidden ancestor', () => {
+    const allSessions: TestSession[] = [
+      { id: 'A', state: 'archived', last_active_at: 1 },
+      { id: 'B', state: 'busy', parent_session_id: 'A', last_active_at: 2 },
+    ];
+    const visible = allSessions.filter((s) => s.state === 'busy');
+
+    const result = computeGapMarkers(allSessions, visible);
+
+    // Session with hidden ancestors shown at depth 1 (as child of hidden)
+    assert.deepStrictEqual(result, [
+      { type: 'gap', count: 1, depth: 0 },
+      { type: 'session', id: 'B', depth: 1 },
+    ]);
+  });
+
+  it('shows gap only for child with hidden ancestors, not siblings', () => {
+    // A (visible) -> B (archived) -> C (visible)
+    // A (visible) -> D (visible, direct child)
+    const allSessions: TestSession[] = [
+      { id: 'A', state: 'busy', last_active_at: 1 },
+      { id: 'B', state: 'archived', parent_session_id: 'A', last_active_at: 2 },
+      { id: 'C', state: 'busy', parent_session_id: 'B', last_active_at: 3 },
+      { id: 'D', state: 'busy', parent_session_id: 'A', last_active_at: 4 },
+    ];
+    const visible = allSessions.filter((s) => s.state === 'busy');
+
+    const result = computeGapMarkers(allSessions, visible);
+
+    // D is more recent, comes first. D has no hidden ancestors.
+    // C has hidden ancestor B, gets gap marker.
+    assert.deepStrictEqual(result, [
+      { type: 'session', id: 'A', depth: 0 },
+      { type: 'session', id: 'D', depth: 1 }, // No gap before D
+      { type: 'gap', count: 1, depth: 1 }, // Gap before C
+      { type: 'session', id: 'C', depth: 1 },
+    ]);
+  });
+
+  it('counts multiple hidden ancestors correctly', () => {
+    // A (archived) -> B (archived) -> C (visible)
+    const allSessions: TestSession[] = [
+      { id: 'A', state: 'archived', last_active_at: 1 },
+      { id: 'B', state: 'archived', parent_session_id: 'A', last_active_at: 2 },
+      { id: 'C', state: 'busy', parent_session_id: 'B', last_active_at: 3 },
+    ];
+    const visible = allSessions.filter((s) => s.state === 'busy');
+
+    const result = computeGapMarkers(allSessions, visible);
+
+    // Session with hidden ancestors shown at depth 1
+    assert.deepStrictEqual(result, [
+      { type: 'gap', count: 2, depth: 0 },
+      { type: 'session', id: 'C', depth: 1 },
+    ]);
+  });
+
+  it('archived siblings with no visible children do not affect gap count', () => {
+    // A (visible)
+    //   -> B (archived) -> C (visible)
+    //   -> D (archived, no visible children)
+    const allSessions: TestSession[] = [
+      { id: 'A', state: 'busy', last_active_at: 1 },
+      { id: 'B', state: 'archived', parent_session_id: 'A', last_active_at: 2 },
+      { id: 'C', state: 'busy', parent_session_id: 'B', last_active_at: 3 },
+      { id: 'D', state: 'archived', parent_session_id: 'A', last_active_at: 4 },
+    ];
+    const visible = allSessions.filter((s) => s.state === 'busy');
+
+    const result = computeGapMarkers(allSessions, visible);
+
+    // D has no visible descendants, so it doesn't appear anywhere
+    // C has 1 hidden ancestor (B)
+    assert.deepStrictEqual(result, [
+      { type: 'session', id: 'A', depth: 0 },
+      { type: 'gap', count: 1, depth: 1 },
+      { type: 'session', id: 'C', depth: 1 },
+    ]);
+  });
+
+  it('handles mixed visible and hidden at multiple levels', () => {
+    // A (visible)
+    //   -> B (archived)
+    //     -> C (visible)
+    //       -> D (archived)
+    //         -> E (visible)
+    const allSessions: TestSession[] = [
+      { id: 'A', state: 'busy', last_active_at: 1 },
+      { id: 'B', state: 'archived', parent_session_id: 'A', last_active_at: 2 },
+      { id: 'C', state: 'busy', parent_session_id: 'B', last_active_at: 3 },
+      { id: 'D', state: 'archived', parent_session_id: 'C', last_active_at: 4 },
+      { id: 'E', state: 'busy', parent_session_id: 'D', last_active_at: 5 },
+    ];
+    const visible = allSessions.filter((s) => s.state === 'busy');
+
+    const result = computeGapMarkers(allSessions, visible);
+
+    assert.deepStrictEqual(result, [
+      { type: 'session', id: 'A', depth: 0 },
+      { type: 'gap', count: 1, depth: 1 }, // B is hidden between A and C
+      { type: 'session', id: 'C', depth: 1 },
+      { type: 'gap', count: 1, depth: 2 }, // D is hidden between C and E
+      { type: 'session', id: 'E', depth: 2 },
+    ]);
+  });
+});
