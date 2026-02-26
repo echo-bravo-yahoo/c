@@ -6,6 +6,23 @@ import chalk from 'chalk';
 import { Session } from '../store/schema.js';
 import { getClaudeSessionTitles } from '../claude/sessions.js';
 import { getAllSessions } from '../store/index.js';
+import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.js';
+
+const USER_ICON = '󰇘';
+
+/**
+ * Abbreviate branch name by replacing username prefix with icon
+ */
+export function abbreviateBranch(branch: string): string {
+  const username = getGitHubUsername();
+  if (!username) return branch;
+
+  const { matches, prefix } = matchesUsernamePrefix(branch, username);
+  if (matches) {
+    return USER_ICON + branch.slice(prefix.length);
+  }
+  return branch;
+}
 
 /**
  * Format a relative time string
@@ -54,13 +71,31 @@ export function shortId(id: string): string {
 }
 
 /**
- * Truncate or pad a string to exact width (for column alignment)
+ * Calculate visual display width of a string
+ * Accounts for surrogate pairs (like 󰇘) that have length 2 but width 1
+ */
+export function displayWidth(str: string): number {
+  // Spread handles surrogate pairs correctly (1 visual char = 1 array element)
+  return [...str].length;
+}
+
+/**
+ * Truncate or pad a string to exact visual width (for column alignment)
  */
 function fixedWidth(str: string, width: number): string {
-  if (str.length >= width) {
-    return str.slice(0, width - 2) + '… ';
+  const visualWidth = displayWidth(str);
+  if (visualWidth >= width) {
+    // Truncate: need to count visual chars, not bytes
+    let truncated = '';
+    let w = 0;
+    for (const char of str) {
+      if (w >= width - 2) break;
+      truncated += char;
+      w += 1;
+    }
+    return truncated + '… ';
   }
-  return str.padEnd(width);
+  return str + ' '.repeat(width - visualWidth);
 }
 
 /**
@@ -133,8 +168,9 @@ export function formatSessionLine(session: Session, depth = 0): string {
 
   // Resources column - build plain text first, then truncate, then colorize
   const resourceParts: string[] = [];
-  if (session.resources.branch) {
-    resourceParts.push(session.resources.branch);
+  const displayBranch = session.resources.branch ? abbreviateBranch(session.resources.branch) : '';
+  if (displayBranch) {
+    resourceParts.push(displayBranch);
   }
   if (session.resources.pr) {
     const prNum = session.resources.pr.match(/\/pull\/(\d+)/)?.[1];
@@ -160,11 +196,11 @@ export function formatSessionLine(session: Session, depth = 0): string {
     } else {
       // Not truncated - apply individual colors
       const coloredParts = [
-        session.resources.branch ? chalk.magenta(session.resources.branch) : '',
+        displayBranch ? chalk.magenta(displayBranch) : '',
         session.resources.pr ? chalk.green(`#${session.resources.pr.match(/\/pull\/(\d+)/)?.[1]}`) : '',
         session.resources.jira ? chalk.yellow(session.resources.jira) : '',
       ].filter(Boolean).join(' ');
-      resourceCol = coloredParts + ' '.repeat(Math.max(0, COL_RESOURCES - resourceText.length));
+      resourceCol = coloredParts + ' '.repeat(Math.max(0, COL_RESOURCES - displayWidth(resourceText)));
     }
   }
 
@@ -196,7 +232,7 @@ export function formatSessionDetails(session: Session): string {
   lines.push('');
   lines.push(chalk.bold('Resources:'));
   if (session.resources.branch) {
-    lines.push('  Branch: ' + chalk.magenta(session.resources.branch));
+    lines.push('  Branch: ' + chalk.magenta(abbreviateBranch(session.resources.branch)));
   }
   if (session.resources.worktree) {
     lines.push('  Worktree: ' + session.resources.worktree);

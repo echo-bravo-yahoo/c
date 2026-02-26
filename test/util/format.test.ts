@@ -7,7 +7,7 @@ import assert from 'node:assert';
 import { useFakeTime } from '../setup.js';
 
 // These are pure functions we can test directly
-import { relativeTime, shortId } from '../../src/util/format.js';
+import { relativeTime, shortId, displayWidth } from '../../src/util/format.js';
 
 describe('c > util > format > relativeTime', () => {
   let fakeTime: { restore: () => void };
@@ -107,5 +107,30 @@ describe('c > util > format > shortId', () => {
   it('handles exactly 8 characters', () => {
     const result = shortId('12345678');
     assert.strictEqual(result, '12345678');
+  });
+});
+
+describe('c > util > format > displayWidth', () => {
+  it('counts ASCII characters correctly', () => {
+    assert.strictEqual(displayWidth('hello'), 5);
+  });
+
+  it('counts surrogate pairs as single visual character', () => {
+    // 󰇘 is U+F0298, a surrogate pair with .length === 2 but visual width 1
+    const icon = '󰇘';
+    assert.strictEqual(icon.length, 2, 'surrogate pair has .length of 2');
+    assert.strictEqual(displayWidth(icon), 1, 'displayWidth should count as 1');
+  });
+
+  it('handles abbreviated branch with surrogate pair icon', () => {
+    const abbreviated = '󰇘/billing-error-discovery';
+    // .length returns 26 (2 for icon + 24 for rest)
+    // displayWidth should return 25 (1 for icon + 24 for rest)
+    assert.strictEqual(abbreviated.length, 26);
+    assert.strictEqual(displayWidth(abbreviated), 25);
+  });
+
+  it('handles empty string', () => {
+    assert.strictEqual(displayWidth(''), 0);
   });
 });
