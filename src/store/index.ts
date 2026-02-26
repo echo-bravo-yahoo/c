@@ -202,6 +202,14 @@ export function getSession(idOrPrefix: string): Session | undefined {
 }
 
 /**
+ * Get all sessions (unfiltered, for ancestry lookups)
+ */
+export function getAllSessions(): Session[] {
+  const index = readIndex();
+  return Object.values(index.sessions);
+}
+
+/**
  * Get all sessions matching a filter
  */
 export function getSessions(filter?: {

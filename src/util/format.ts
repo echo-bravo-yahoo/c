@@ -5,6 +5,7 @@
 import chalk from 'chalk';
 import { Session } from '../store/schema.js';
 import { getClaudeSessionTitles } from '../claude/sessions.js';
+import { getAllSessions } from '../store/index.js';
 
 /**
  * Format a relative time string
@@ -205,63 +206,107 @@ export function formatSessionDetails(session: Session): string {
   return lines.join('\n');
 }
 
-interface SessionWithDepth {
-  session: Session;
-  depth: number;
-}
+type OutputRow =
+  | { type: 'session'; session: Session; depth: number }
+  | { type: 'gap'; count: number; depth: number };
 
 /**
- * Order sessions so children appear under their parents.
- * Root sessions sorted by last_active_at, children grouped under parents.
- * Returns sessions with their nesting depth for indentation.
+ * Order sessions so children appear under their parents, with gap markers
+ * for hidden (archived) ancestors in the chain.
  */
-function orderSessionsWithChildren(sessions: Session[]): SessionWithDepth[] {
-  // Build parent -> children map
-  const childrenMap = new Map<string, Session[]>();
-  const roots: Session[] = [];
+function orderSessionsWithChildren(visibleSessions: Session[]): OutputRow[] {
+  // Get all sessions to trace ancestry through hidden sessions
+  const allSessions = getAllSessions();
+  const allById = new Map(allSessions.map((s) => [s.id, s]));
+  const visibleIds = new Set(visibleSessions.map((s) => s.id));
 
-  for (const session of sessions) {
-    if (session.parent_session_id) {
-      const siblings = childrenMap.get(session.parent_session_id) || [];
-      siblings.push(session);
-      childrenMap.set(session.parent_session_id, siblings);
-    } else {
-      roots.push(session);
+  // For each visible session, find nearest visible ancestor and count hidden sessions between
+  type SessionMeta = { visibleParentId: string | null; hiddenCount: number };
+  const meta = new Map<string, SessionMeta>();
+
+  for (const session of visibleSessions) {
+    let hiddenCount = 0;
+    let current: Session | undefined = session;
+
+    while (current?.parent_session_id) {
+      const parent = allById.get(current.parent_session_id);
+      if (!parent) break;
+
+      if (visibleIds.has(parent.id)) {
+        meta.set(session.id, { visibleParentId: parent.id, hiddenCount });
+        break;
+      }
+      hiddenCount++;
+      current = parent;
+    }
+
+    if (!meta.has(session.id)) {
+      meta.set(session.id, { visibleParentId: null, hiddenCount });
     }
   }
 
-  // Sort children by last_active_at descending
-  for (const children of childrenMap.values()) {
+  // Group by visible parent
+  const byParent = new Map<string | null, Session[]>();
+  for (const session of visibleSessions) {
+    const m = meta.get(session.id)!;
+    const children = byParent.get(m.visibleParentId) || [];
+    children.push(session);
+    byParent.set(m.visibleParentId, children);
+  }
+
+  // Sort each group by last_active_at descending
+  for (const children of byParent.values()) {
     children.sort((a, b) => b.last_active_at.getTime() - a.last_active_at.getTime());
   }
 
-  // Build result: each root followed by its children (recursively)
-  const result: SessionWithDepth[] = [];
+  const result: OutputRow[] = [];
 
-  function addWithChildren(session: Session, depth: number): void {
-    result.push({ session, depth });
-    const children = childrenMap.get(session.id);
-    if (children) {
-      for (const child of children) {
-        addWithChildren(child, depth + 1);
-      }
+  function addChildren(parentId: string | null, parentDepth: number): void {
+    const children = byParent.get(parentId) || [];
+    if (children.length === 0) return;
+
+    // Check if we need a gap marker (first child has hidden ancestors)
+    const firstMeta = meta.get(children[0].id)!;
+    if (firstMeta.hiddenCount > 0) {
+      result.push({
+        type: 'gap',
+        count: firstMeta.hiddenCount,
+        depth: parentDepth + 1,
+      });
+    }
+
+    const childDepth = parentDepth + 1;
+
+    for (const child of children) {
+      result.push({ type: 'session', session: child, depth: childDepth });
+      addChildren(child.id, childDepth);
     }
   }
 
-  // roots already sorted by getSessions()
+  // Start with roots (sessions with no visible parent)
+  const roots = byParent.get(null) || [];
   for (const root of roots) {
-    addWithChildren(root, 0);
-  }
+    const rootMeta = meta.get(root.id)!;
 
-  // Append orphan children (parent not in filtered results)
-  const addedIds = new Set(result.map(s => s.session.id));
-  for (const session of sessions) {
-    if (!addedIds.has(session.id)) {
-      result.push({ session, depth: 0 });
+    // Check if this "root" is actually an orphan with hidden ancestors
+    if (rootMeta.hiddenCount > 0) {
+      result.push({ type: 'gap', count: rootMeta.hiddenCount, depth: 0 });
     }
+
+    result.push({ type: 'session', session: root, depth: 0 });
+    addChildren(root.id, 0);
   }
 
   return result;
+}
+
+/**
+ * Format a gap marker line (indicates hidden ancestors)
+ */
+function formatGapLine(count: number, depth: number): string {
+  const indent = '  '.repeat(depth);
+  const label = count === 1 ? '1 hidden' : `${count} hidden`;
+  return indent + chalk.dim(`  ⋮ (${label})`);
 }
 
 /**
@@ -273,7 +318,7 @@ export function printSessionTable(sessions: Session[]): void {
     return;
   }
 
-  // Reorder so children appear under their parents
+  // Reorder so children appear under their parents, with gap markers
   const ordered = orderSessionsWithChildren(sessions);
 
   const totalWidth = COL_ID + COL_NAME + COL_STATUS + COL_RESOURCES + 10;
@@ -291,7 +336,11 @@ export function printSessionTable(sessions: Session[]): void {
   );
   console.log(chalk.dim('─'.repeat(totalWidth)));
 
-  for (const { session, depth } of ordered) {
-    console.log(formatSessionLine(session, depth));
+  for (const row of ordered) {
+    if (row.type === 'gap') {
+      console.log(formatGapLine(row.count, row.depth));
+    } else if (row.type === 'session') {
+      console.log(formatSessionLine(row.session, row.depth));
+    }
   }
 }
