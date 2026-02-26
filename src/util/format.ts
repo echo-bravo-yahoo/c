@@ -85,9 +85,26 @@ export function formatStatus(session: Session): string {
 
 // Column widths (including trailing space)
 const COL_ID = 12;
-const COL_NAME = 34;
+const COL_NAME = 28;
 const COL_STATUS = 10;
-const COL_RESOURCES = 40;
+const COL_REPO = 14;
+const COL_RESOURCES = 36;
+
+/**
+ * Get repo name from session directory
+ * - If in a worktree (path contains .worktrees/), use the original repo's directory name
+ * - Otherwise, use the directory's basename
+ */
+function getRepoName(directory: string): string {
+  const worktreeMatch = directory.match(/^(.+)\/\.worktrees\//);
+  if (worktreeMatch) {
+    // Extract basename of the original repo
+    const originalRepo = worktreeMatch[1];
+    return originalRepo.split('/').pop() || originalRepo;
+  }
+  // Just use the directory's basename
+  return directory.split('/').pop() || directory;
+}
 
 /**
  * Format a session as a single line for list views
@@ -110,7 +127,11 @@ export function formatSessionLine(session: Session, depth = 0): string {
   const statusPad = ' '.repeat(Math.max(1, COL_STATUS - statusText.length));
   const statusCol = formatStatus(session) + statusPad;
 
-  // Resources column
+  // Repo column
+  const repoName = getRepoName(session.directory);
+  const repoCol = chalk.blue(fixedWidth(repoName, COL_REPO));
+
+  // Resources column - build plain text first, then truncate, then colorize
   const resourceParts: string[] = [];
   if (session.resources.branch) {
     resourceParts.push(session.resources.branch);
@@ -125,19 +146,32 @@ export function formatSessionLine(session: Session, depth = 0): string {
     resourceParts.push(session.resources.jira);
   }
   const resourceText = resourceParts.join(' ') || '-';
-  const resourceColored = resourceParts.length > 0
-    ? [
+
+  // Truncate if needed, then colorize
+  let resourceCol: string;
+  if (resourceParts.length === 0) {
+    resourceCol = chalk.dim(fixedWidth('-', COL_RESOURCES));
+  } else {
+    const truncated = fixedWidth(resourceText, COL_RESOURCES);
+    // Re-colorize the truncated text (simplified: just color the whole thing if branch is primary)
+    if (truncated.includes('…')) {
+      // Truncated - use magenta for branch-heavy display
+      resourceCol = chalk.magenta(truncated);
+    } else {
+      // Not truncated - apply individual colors
+      const coloredParts = [
         session.resources.branch ? chalk.magenta(session.resources.branch) : '',
         session.resources.pr ? chalk.green(`#${session.resources.pr.match(/\/pull\/(\d+)/)?.[1]}`) : '',
         session.resources.jira ? chalk.yellow(session.resources.jira) : '',
-      ].filter(Boolean).join(' ')
-    : chalk.dim('-');
-  const resourceCol = resourceColored + ' '.repeat(Math.max(0, COL_RESOURCES - resourceText.length));
+      ].filter(Boolean).join(' ');
+      resourceCol = coloredParts + ' '.repeat(Math.max(0, COL_RESOURCES - resourceText.length));
+    }
+  }
 
   // Time column
   const timeCol = chalk.dim(relativeTime(session.last_active_at));
 
-  return `${idCol}${nameCol}${statusCol}${resourceCol}${timeCol}`;
+  return `${idCol}${nameCol}${statusCol}${repoCol}${resourceCol}${timeCol}`;
 }
 
 /**
@@ -319,7 +353,7 @@ export function printSessionTable(sessions: Session[]): void {
   // Reorder so children appear under their parents, with gap markers
   const ordered = orderSessionsWithChildren(sessions);
 
-  const totalWidth = COL_ID + COL_NAME + COL_STATUS + COL_RESOURCES + 10;
+  const totalWidth = COL_ID + COL_NAME + COL_STATUS + COL_REPO + COL_RESOURCES + 10;
 
   // Header (2-space indent to match data rows)
   console.log(
@@ -328,6 +362,7 @@ export function printSessionTable(sessions: Session[]): void {
         fixedWidth('ID', COL_ID - 2) +
         fixedWidth('Name', COL_NAME) +
         fixedWidth('Status', COL_STATUS) +
+        fixedWidth('Repo', COL_REPO) +
         fixedWidth('Resources', COL_RESOURCES) +
         'Last Active'
     )
