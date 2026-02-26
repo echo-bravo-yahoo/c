@@ -227,4 +227,393 @@ describe('c > hooks > session-start', () => {
       assert.strictEqual(session.state, 'busy');
     });
   });
+
+  describe('worktree branch resolution', () => {
+    /**
+     * Simulate listWorktrees() output format
+     */
+    type WorktreeInfo = { path: string; branch: string };
+
+    /**
+     * Replicate the worktree resolution logic from session-start hook
+     */
+    function resolveWorktreeBranch(
+      session: Session,
+      worktrees: WorktreeInfo[]
+    ): string | undefined {
+      if (!session.resources.worktree) {
+        return undefined;
+      }
+
+      const wt = worktrees.find(
+        (w) =>
+          w.path.endsWith(`/${session.resources.worktree}`) ||
+          w.branch === session.resources.worktree
+      );
+
+      return wt?.branch;
+    }
+
+    it('resolves branch from worktree path match', () => {
+      const session = createTestSession({
+        resources: { worktree: 'my-feature' },
+      });
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo', branch: 'main' },
+        { path: '/repo/.worktrees/my-feature', branch: 'my-feature' },
+      ];
+
+      const branch = resolveWorktreeBranch(session, worktrees);
+
+      assert.strictEqual(branch, 'my-feature');
+    });
+
+    it('resolves branch from branch name match', () => {
+      const session = createTestSession({
+        resources: { worktree: 'feature/cool-thing' },
+      });
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo', branch: 'main' },
+        { path: '/worktrees/cool-thing', branch: 'feature/cool-thing' },
+      ];
+
+      const branch = resolveWorktreeBranch(session, worktrees);
+
+      assert.strictEqual(branch, 'feature/cool-thing');
+    });
+
+    it('returns undefined when no worktree matches', () => {
+      const session = createTestSession({
+        resources: { worktree: 'nonexistent' },
+      });
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo', branch: 'main' },
+        { path: '/repo/.worktrees/other', branch: 'other' },
+      ];
+
+      const branch = resolveWorktreeBranch(session, worktrees);
+
+      assert.strictEqual(branch, undefined);
+    });
+
+    it('returns undefined when session has no worktree set', () => {
+      const session = createTestSession({ resources: {} });
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo', branch: 'main' },
+      ];
+
+      const branch = resolveWorktreeBranch(session, worktrees);
+
+      assert.strictEqual(branch, undefined);
+    });
+
+    it('prefers path match over branch match', () => {
+      const session = createTestSession({
+        resources: { worktree: 'bugfix' },
+      });
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo/.worktrees/bugfix', branch: 'bugfix-v2' },
+        { path: '/other/worktrees/different', branch: 'bugfix' },
+      ];
+
+      // Path match comes first in find(), so bugfix-v2 is returned
+      const branch = resolveWorktreeBranch(session, worktrees);
+
+      assert.strictEqual(branch, 'bugfix-v2');
+    });
+
+    it('sets branch on session when resolved', () => {
+      const session = createTestSession({
+        resources: { worktree: 'my-feature' },
+      });
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo/.worktrees/my-feature', branch: 'my-feature' },
+      ];
+
+      const resolvedBranch = resolveWorktreeBranch(session, worktrees);
+      if (resolvedBranch && !session.resources.branch) {
+        session.resources.branch = resolvedBranch;
+      }
+
+      assert.strictEqual(session.resources.branch, 'my-feature');
+    });
+
+    it('does not overwrite existing branch', () => {
+      const session = createTestSession({
+        resources: { worktree: 'my-feature', branch: 'main' },
+      });
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo/.worktrees/my-feature', branch: 'my-feature' },
+      ];
+
+      const resolvedBranch = resolveWorktreeBranch(session, worktrees);
+      if (resolvedBranch && !session.resources.branch) {
+        session.resources.branch = resolvedBranch;
+      }
+
+      // Branch unchanged - was already 'main'
+      assert.strictEqual(session.resources.branch, 'main');
+    });
+  });
+
+  describe('worktree branch resolution - before/after fix comparison', () => {
+    /**
+     * These tests demonstrate the bug fix by comparing old vs new behavior.
+     * The OLD logic would have gotten the wrong branch; the NEW logic gets it right.
+     */
+
+    type WorktreeInfo = { path: string; branch: string };
+
+    // Simulate git branch detection per directory
+    type BranchByPath = Record<string, string>;
+
+    /**
+     * OLD BEHAVIOR (before fix):
+     * Always use hook's cwd directly for branch detection.
+     * This was wrong when cwd is the original repo but Claude is in a worktree.
+     */
+    function detectBranchOld(
+      cwd: string,
+      _session: Session,
+      _worktrees: WorktreeInfo[],
+      branchByPath: BranchByPath
+    ): string | undefined {
+      // Old logic: just use cwd directly
+      return branchByPath[cwd];
+    }
+
+    /**
+     * NEW BEHAVIOR (after fix):
+     * When session has worktree set, resolve the actual worktree path
+     * and use that for branch detection.
+     */
+    function detectBranchNew(
+      cwd: string,
+      session: Session,
+      worktrees: WorktreeInfo[],
+      branchByPath: BranchByPath
+    ): string | undefined {
+      let branchCwd = cwd;
+
+      // New logic: resolve worktree path if session has worktree set
+      if (session.resources.worktree) {
+        const wt = worktrees.find(
+          (w) =>
+            w.path.endsWith(`/${session.resources.worktree}`) ||
+            w.branch === session.resources.worktree
+        );
+        if (wt) {
+          branchCwd = wt.path;
+        }
+      }
+
+      return branchByPath[branchCwd];
+    }
+
+    it('OLD behavior gets wrong branch for worktree session', () => {
+      // Scenario: `c new billing-fix` run from /repo, creates worktree at /repo/.worktrees/billing-fix
+      // Hook receives cwd=/repo (original repo), but Claude is working in the worktree
+      const session = createTestSession({
+        directory: '/repo',
+        resources: { worktree: 'billing-fix' },
+      });
+
+      const cwd = '/repo'; // Hook's cwd is original repo
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo', branch: 'main' },
+        { path: '/repo/.worktrees/billing-fix', branch: 'billing-fix' },
+      ];
+      const branchByPath: BranchByPath = {
+        '/repo': 'main',
+        '/repo/.worktrees/billing-fix': 'billing-fix',
+      };
+
+      const oldResult = detectBranchOld(cwd, session, worktrees, branchByPath);
+
+      // OLD: Returns 'main' (WRONG - this is the bug!)
+      assert.strictEqual(oldResult, 'main');
+    });
+
+    it('NEW behavior gets correct branch for worktree session', () => {
+      // Same scenario as above
+      const session = createTestSession({
+        directory: '/repo',
+        resources: { worktree: 'billing-fix' },
+      });
+
+      const cwd = '/repo';
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo', branch: 'main' },
+        { path: '/repo/.worktrees/billing-fix', branch: 'billing-fix' },
+      ];
+      const branchByPath: BranchByPath = {
+        '/repo': 'main',
+        '/repo/.worktrees/billing-fix': 'billing-fix',
+      };
+
+      const newResult = detectBranchNew(cwd, session, worktrees, branchByPath);
+
+      // NEW: Returns 'billing-fix' (CORRECT!)
+      assert.strictEqual(newResult, 'billing-fix');
+    });
+
+    it('demonstrates fix for feature branch naming', () => {
+      // Scenario: worktree name differs from branch name
+      // `c new cool-feature` creates worktree, but branch is feature/cool-feature
+      const session = createTestSession({
+        directory: '/project',
+        resources: { worktree: 'cool-feature' },
+      });
+
+      const cwd = '/project';
+      const worktrees: WorktreeInfo[] = [
+        { path: '/project', branch: 'develop' },
+        { path: '/project/.worktrees/cool-feature', branch: 'feature/cool-feature' },
+      ];
+      const branchByPath: BranchByPath = {
+        '/project': 'develop',
+        '/project/.worktrees/cool-feature': 'feature/cool-feature',
+      };
+
+      const oldResult = detectBranchOld(cwd, session, worktrees, branchByPath);
+      const newResult = detectBranchNew(cwd, session, worktrees, branchByPath);
+
+      // OLD gets wrong branch
+      assert.strictEqual(oldResult, 'develop');
+      // NEW gets correct branch
+      assert.strictEqual(newResult, 'feature/cool-feature');
+    });
+
+    it('demonstrates fix for JIRA branch pattern', () => {
+      // Scenario: `c new MAC-123-fix` creates worktree with JIRA ticket branch
+      const session = createTestSession({
+        directory: '/work/repo',
+        resources: { worktree: 'MAC-123-fix' },
+      });
+
+      const cwd = '/work/repo';
+      const worktrees: WorktreeInfo[] = [
+        { path: '/work/repo', branch: 'main' },
+        { path: '/work/repo/.worktrees/MAC-123-fix', branch: 'MAC-123-fix' },
+      ];
+      const branchByPath: BranchByPath = {
+        '/work/repo': 'main',
+        '/work/repo/.worktrees/MAC-123-fix': 'MAC-123-fix',
+      };
+
+      const oldResult = detectBranchOld(cwd, session, worktrees, branchByPath);
+      const newResult = detectBranchNew(cwd, session, worktrees, branchByPath);
+
+      assert.strictEqual(oldResult, 'main'); // Wrong
+      assert.strictEqual(newResult, 'MAC-123-fix'); // Correct
+    });
+
+    it('both behaviors match when no worktree is set', () => {
+      // For sessions without worktree, both behaviors should be identical
+      const session = createTestSession({
+        directory: '/repo',
+        resources: {}, // No worktree
+      });
+
+      const cwd = '/repo';
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo', branch: 'main' },
+      ];
+      const branchByPath: BranchByPath = {
+        '/repo': 'main',
+      };
+
+      const oldResult = detectBranchOld(cwd, session, worktrees, branchByPath);
+      const newResult = detectBranchNew(cwd, session, worktrees, branchByPath);
+
+      // Both return the same (correct) result
+      assert.strictEqual(oldResult, 'main');
+      assert.strictEqual(newResult, 'main');
+    });
+
+    it('both behaviors match when cwd is already the worktree', () => {
+      // If Claude's cwd is already the worktree path, both should work
+      const session = createTestSession({
+        directory: '/repo/.worktrees/feature',
+        resources: { worktree: 'feature' },
+      });
+
+      const cwd = '/repo/.worktrees/feature'; // Hook provides worktree path
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo', branch: 'main' },
+        { path: '/repo/.worktrees/feature', branch: 'feature' },
+      ];
+      const branchByPath: BranchByPath = {
+        '/repo': 'main',
+        '/repo/.worktrees/feature': 'feature',
+      };
+
+      const oldResult = detectBranchOld(cwd, session, worktrees, branchByPath);
+      const newResult = detectBranchNew(cwd, session, worktrees, branchByPath);
+
+      // Both get the correct result when cwd is already correct
+      assert.strictEqual(oldResult, 'feature');
+      assert.strictEqual(newResult, 'feature');
+    });
+
+    it('new behavior falls back to cwd when worktree not found', () => {
+      // Edge case: worktree set but not found in list (maybe deleted)
+      const session = createTestSession({
+        directory: '/repo',
+        resources: { worktree: 'deleted-worktree' },
+      });
+
+      const cwd = '/repo';
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo', branch: 'main' },
+        // Note: 'deleted-worktree' not in list
+      ];
+      const branchByPath: BranchByPath = {
+        '/repo': 'main',
+      };
+
+      const newResult = detectBranchNew(cwd, session, worktrees, branchByPath);
+
+      // Falls back to cwd branch
+      assert.strictEqual(newResult, 'main');
+    });
+
+    it('demonstrates the full session update flow', () => {
+      // End-to-end test of how session.resources.branch gets set
+      const cwd = '/repo';
+      const worktrees: WorktreeInfo[] = [
+        { path: '/repo', branch: 'main' },
+        { path: '/repo/.worktrees/my-feature', branch: 'my-feature' },
+      ];
+      const branchByPath: BranchByPath = {
+        '/repo': 'main',
+        '/repo/.worktrees/my-feature': 'my-feature',
+      };
+
+      // Simulate OLD behavior updating session
+      const sessionOld = createTestSession({
+        directory: '/repo',
+        resources: { worktree: 'my-feature' },
+      });
+      const branchOld = detectBranchOld(cwd, sessionOld, worktrees, branchByPath);
+      if (branchOld && !sessionOld.resources.branch) {
+        sessionOld.resources.branch = branchOld;
+      }
+
+      // Simulate NEW behavior updating session
+      const sessionNew = createTestSession({
+        directory: '/repo',
+        resources: { worktree: 'my-feature' },
+      });
+      const branchNew = detectBranchNew(cwd, sessionNew, worktrees, branchByPath);
+      if (branchNew && !sessionNew.resources.branch) {
+        sessionNew.resources.branch = branchNew;
+      }
+
+      // OLD: Session gets wrong branch
+      assert.strictEqual(sessionOld.resources.branch, 'main');
+      // NEW: Session gets correct branch
+      assert.strictEqual(sessionNew.resources.branch, 'my-feature');
+    });
+  });
 });

@@ -5,7 +5,7 @@
 import { updateIndex, getSession, getSessions } from '../store/index.js';
 import { createSession } from '../store/schema.js';
 import { generateHumanhash } from '../util/humanhash.js';
-import { getCurrentBranch, getWorktreeInfo } from '../detection/git.js';
+import { getCurrentBranch, getWorktreeInfo, listWorktrees } from '../detection/git.js';
 import { extractJiraFromBranch } from '../detection/jira.js';
 import { encodeProjectKey, getPlanExecutionInfo } from '../claude/sessions.js';
 import type { HookInput } from './index.js';
@@ -51,8 +51,26 @@ export async function handleSessionStart(
       s.last_active_at = new Date();
       s.state = 'busy';
 
+      // Resolve worktree path if session was created with --worktree
+      // The cwd from hook may be the original repo, not the worktree
+      let branchCwd = cwd;
+      if (s.resources.worktree) {
+        const worktrees = listWorktrees(cwd);
+        // Match by worktree name in path or by branch name
+        const wt = worktrees.find(
+          (w) => w.path.endsWith(`/${s.resources.worktree}`) || w.branch === s.resources.worktree
+        );
+        if (wt) {
+          branchCwd = wt.path;
+          // Also set the branch directly from worktree info
+          if (!s.resources.branch) {
+            s.resources.branch = wt.branch;
+          }
+        }
+      }
+
       // Merge git info if not already set by user
-      const branch = getCurrentBranch(cwd);
+      const branch = getCurrentBranch(branchCwd);
       if (branch && !s.resources.branch) {
         s.resources.branch = branch;
         if (!s.resources.jira) {
@@ -61,7 +79,7 @@ export async function handleSessionStart(
         }
       }
 
-      const worktree = getWorktreeInfo(cwd);
+      const worktree = getWorktreeInfo(branchCwd);
       if (worktree && !s.resources.worktree) {
         s.resources.worktree = worktree.name;
       }
