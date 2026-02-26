@@ -15,55 +15,81 @@ describe('c > hooks > session-start', () => {
     resetSessionCounter();
   });
 
-  describe('stale session detection', () => {
-    it('identifies sessions in same directory', () => {
+  describe('concurrent session support', () => {
+    it('allows multiple active sessions in same directory', () => {
+      // Simulate the index state after starting multiple sessions
       const sessions: Session[] = [
-        createTestSession({ id: 'sess-1', directory: '/home/user/project', state: 'busy' }),
-        createTestSession({ id: 'sess-2', directory: '/home/user/project', state: 'idle' }),
-        createTestSession({ id: 'sess-3', directory: '/home/user/other', state: 'busy' }),
-      ];
-
-      const currentId = 'new-session';
-      const cwd = '/home/user/project';
-      const activeStates = ['busy', 'idle', 'waiting'];
-
-      const stale = sessions.filter(
-        s => activeStates.includes(s.state) && s.directory === cwd && s.id !== currentId
-      );
-
-      assert.strictEqual(stale.length, 2);
-      assert.ok(stale.some(s => s.id === 'sess-1'));
-      assert.ok(stale.some(s => s.id === 'sess-2'));
-    });
-
-    it('excludes current session from stale list', () => {
-      const currentId = 'sess-1';
-      const sessions: Session[] = [
-        createTestSession({ id: currentId, directory: '/project', state: 'busy' }),
-        createTestSession({ id: 'sess-2', directory: '/project', state: 'busy' }),
+        createTestSession({ id: 'sess-1', directory: '/project', state: 'busy' }),
+        createTestSession({ id: 'sess-2', directory: '/project', state: 'idle' }),
+        createTestSession({ id: 'sess-3', directory: '/project', state: 'waiting' }),
       ];
 
       const activeStates = ['busy', 'idle', 'waiting'];
-      const stale = sessions.filter(
-        s => activeStates.includes(s.state) && s.directory === '/project' && s.id !== currentId
-      );
-
-      assert.strictEqual(stale.length, 1);
-      assert.strictEqual(stale[0].id, 'sess-2');
-    });
-
-    it('ignores closed sessions', () => {
-      const sessions: Session[] = [
-        createTestSession({ id: 'sess-1', directory: '/project', state: 'closed' }),
-        createTestSession({ id: 'sess-2', directory: '/project', state: 'busy' }),
-      ];
-
-      const activeStates = ['busy', 'idle', 'waiting'];
-      const stale = sessions.filter(
+      const activeSessions = sessions.filter(
         s => activeStates.includes(s.state) && s.directory === '/project'
       );
 
-      assert.strictEqual(stale.length, 1);
+      // All three sessions remain active - no auto-closing
+      assert.strictEqual(activeSessions.length, 3);
+    });
+
+    it('does not modify existing sessions when new session starts', () => {
+      const existingSession = createTestSession({
+        id: 'existing',
+        directory: '/project',
+        state: 'idle',
+      });
+
+      // Simulate starting a new session - existing session state unchanged
+      const newSession = createTestSession({
+        id: 'new-session',
+        directory: '/project',
+        state: 'busy',
+      });
+
+      // Existing session remains idle (not closed)
+      assert.strictEqual(existingSession.state, 'idle');
+      assert.strictEqual(newSession.state, 'busy');
+    });
+
+    it('sessions only close via SessionEnd hook', () => {
+      const sessions: Session[] = [
+        createTestSession({ id: 'sess-1', directory: '/project', state: 'busy' }),
+        createTestSession({ id: 'sess-2', directory: '/project', state: 'idle' }),
+      ];
+
+      // Simulate SessionEnd for sess-1 only
+      const sessionEndFired = (id: string) => {
+        const s = sessions.find(s => s.id === id);
+        if (s) s.state = 'closed';
+      };
+
+      sessionEndFired('sess-1');
+
+      // Only sess-1 is closed, sess-2 remains active
+      assert.strictEqual(sessions[0].state, 'closed');
+      assert.strictEqual(sessions[1].state, 'idle');
+    });
+
+    it('orphaned sessions persist until manually closed', () => {
+      // Session where SessionEnd never fired (Ctrl-C, crash)
+      const orphanedSession = createTestSession({
+        id: 'orphaned',
+        directory: '/project',
+        state: 'busy',
+        last_active_at: new Date(Date.now() - 24 * 60 * 60 * 1000), // 24 hours ago
+      });
+
+      // New session starts in same directory
+      const newSession = createTestSession({
+        id: 'new',
+        directory: '/project',
+        state: 'busy',
+      });
+
+      // Orphaned session is NOT auto-closed
+      assert.strictEqual(orphanedSession.state, 'busy');
+      assert.strictEqual(newSession.state, 'busy');
     });
   });
 

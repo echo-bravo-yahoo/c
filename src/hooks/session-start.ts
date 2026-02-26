@@ -20,25 +20,18 @@ export async function handleSessionStart(
     return;
   }
 
-  // Close any stale "live" sessions in the same directory
-  // This handles cases where SessionEnd didn't fire (e.g., Ctrl-C, crash)
-  const staleSessions = getSessions({ state: ['busy', 'idle', 'waiting'], directory: cwd }).filter(
-    (s) => s.id !== sessionId
-  );
-
   let parentSessionId: string | undefined;
   let planSlug: string | undefined;
   let planTitle: string | undefined;
 
   // Check recently closed sessions for plan execution (ExitPlanMode)
-  // SessionEnd may have already marked the planning session as closed
   const recentThreshold = 30 * 1000; // 30 seconds
   const recentSessions = getSessions({ state: ['closed'], directory: cwd }).filter(
     (s) =>
       s.id !== sessionId && Date.now() - new Date(s.last_active_at).getTime() < recentThreshold
   );
 
-  for (const session of [...staleSessions, ...recentSessions]) {
+  for (const session of recentSessions) {
     const planInfo = getPlanExecutionInfo(session.id);
     if (planInfo) {
       parentSessionId = session.id;
@@ -46,16 +39,6 @@ export async function handleSessionStart(
       planTitle = planInfo.title ?? undefined;
       break;
     }
-  }
-
-  if (staleSessions.length > 0) {
-    await updateIndex((index) => {
-      for (const stale of staleSessions) {
-        if (index.sessions[stale.id]) {
-          index.sessions[stale.id].state = 'closed';
-        }
-      }
-    });
   }
 
   // Check if session already exists (e.g., created by `c new`)
