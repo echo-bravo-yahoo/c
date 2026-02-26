@@ -57,8 +57,8 @@ export function shortId(id: string): string {
  * Truncate or pad a string to exact width (for column alignment)
  */
 function fixedWidth(str: string, width: number): string {
-  if (str.length > width) {
-    return str.slice(0, width - 1) + '…';
+  if (str.length >= width) {
+    return str.slice(0, width - 2) + '… ';
   }
   return str.padEnd(width);
 }
