@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import { getSession } from '../store/index.js';
 import { getClaudeSession } from '../claude/sessions.js';
-import { execReplace } from '../util/exec.js';
+import { execReplace, setTmuxPaneTitle } from '../util/exec.js';
 import { getDisplayName } from '../util/format.js';
 
 export function resumeCommand(idOrPrefix: string): void {
@@ -25,6 +25,8 @@ export function resumeCommand(idOrPrefix: string): void {
 
   // Use session.directory from c's index - it stores the actual path correctly
   // (claudeSession.directory may be wrong due to lossy project key encoding)
-  console.log(chalk.dim(`Resuming session ${getDisplayName(session)} in ${session.directory}...`));
+  const displayName = getDisplayName(session);
+  console.log(chalk.dim(`Resuming session ${displayName} in ${session.directory}...`));
+  setTmuxPaneTitle(displayName);
   execReplace('claude', ['-r', session.id], { cwd: session.directory });
 }

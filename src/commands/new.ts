@@ -8,7 +8,7 @@ import { updateIndex } from '../store/index.js';
 import { createSession } from '../store/schema.js';
 import { encodeProjectKey } from '../claude/sessions.js';
 import { generateHumanhash } from '../util/humanhash.js';
-import { execReplace } from '../util/exec.js';
+import { execReplace, setTmuxPaneTitle } from '../util/exec.js';
 
 export interface NewOptions {
   jira?: string;
@@ -48,6 +48,8 @@ export async function newCommand(name: string | undefined, options: NewOptions):
     index.sessions[sessionId] = session;
   });
 
-  console.log(chalk.dim(`Starting session: ${name || humanhash}`));
+  const displayName = name || humanhash;
+  console.log(chalk.dim(`Starting session: ${displayName}`));
+  setTmuxPaneTitle(displayName);
   execReplace('claude', ['--session-id', sessionId], { cwd });
 }

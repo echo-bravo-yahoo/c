@@ -4,6 +4,7 @@
 
 import chalk from 'chalk';
 import { updateIndex, getSession, getCurrentSession } from '../store/index.js';
+import { setTmuxPaneTitle } from '../util/exec.js';
 
 export async function titleCommand(title: string, idOrPrefix?: string): Promise<void> {
   let session;
@@ -30,5 +31,6 @@ export async function titleCommand(title: string, idOrPrefix?: string): Promise<
     s.last_active_at = new Date();
   });
 
+  setTmuxPaneTitle(title);
   console.log(chalk.green(`✓ Set title: ${title}`));
 }

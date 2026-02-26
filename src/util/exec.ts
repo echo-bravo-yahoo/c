@@ -20,6 +20,19 @@ export function exec(command: string, options?: { cwd?: string }): string {
 }
 
 /**
+ * Set the tmux pane title (no-op if not in tmux)
+ */
+export function setTmuxPaneTitle(title: string): void {
+  if (process.env.TMUX) {
+    try {
+      execSync(`tmux select-pane -T ${JSON.stringify(title)}`, { stdio: 'ignore' });
+    } catch {
+      // Ignore errors (e.g., tmux not available)
+    }
+  }
+}
+
+/**
  * Execute a command and replace the current process
  */
 export function execReplace(command: string, args: string[], options?: { cwd?: string }): never {
