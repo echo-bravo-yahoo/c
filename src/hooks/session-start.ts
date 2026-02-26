@@ -28,6 +28,7 @@ export async function handleSessionStart(
 
   let parentSessionId: string | undefined;
   let planSlug: string | undefined;
+  let planTitle: string | undefined;
 
   // Check recently closed sessions for plan execution (ExitPlanMode)
   // SessionEnd may have already marked the planning session as closed
@@ -42,6 +43,7 @@ export async function handleSessionStart(
     if (planInfo) {
       parentSessionId = session.id;
       planSlug = planInfo.slug;
+      planTitle = planInfo.title ?? undefined;
       break;
     }
   }
@@ -96,8 +98,10 @@ export async function handleSessionStart(
     session.parent_session_id = parentSessionId;
   }
 
-  // Use plan slug as session name if available
-  if (planSlug) {
+  // Use plan title as session name if available, fall back to slug
+  if (planTitle) {
+    session.name = planTitle;
+  } else if (planSlug) {
     session.name = planSlug;
   }
 

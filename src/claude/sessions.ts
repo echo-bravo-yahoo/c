@@ -20,14 +20,43 @@ export interface ClaudeSession {
 
 /**
  * Decode Claude's project key to a directory path
- * Claude encodes paths by replacing / with -
+ * Claude encodes paths by replacing both / and . with -
+ * Since the encoding is lossy, we try to find an existing path
  */
 export function decodeProjectKey(projectKey: string): string {
   // Handle the leading dash that represents root /
-  if (projectKey.startsWith('-')) {
-    return '/' + projectKey.slice(1).replace(/-/g, '/');
+  const withoutLeading = projectKey.startsWith('-') ? projectKey.slice(1) : projectKey;
+  const parts = withoutLeading.split('-');
+
+  // Try to reconstruct the path by checking which interpretation exists
+  // Start with root /
+  let current = '/';
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (!part) continue;
+
+    // Try appending as a new path segment first
+    const asSegment = path.join(current, part);
+    if (fs.existsSync(asSegment)) {
+      current = asSegment;
+      continue;
+    }
+
+    // Try appending with a dot (e.g., "ashton" + "eby" -> "ashton.eby")
+    if (current !== '/') {
+      const withDot = current + '.' + part;
+      if (fs.existsSync(withDot)) {
+        current = withDot;
+        continue;
+      }
+    }
+
+    // Neither exists yet, default to path segment
+    current = asSegment;
   }
-  return projectKey.replace(/-/g, '/');
+
+  return current;
 }
 
 /**
@@ -219,11 +248,38 @@ export function getClaudeSessionTitles(
   return { customTitle: null, summary: null };
 }
 
+const PLANS_DIR = path.join(CLAUDE_DIR, 'plans');
+
+/**
+ * Extract the H1 title from a plan file
+ * Plan files start with "# Plan: <title>" or just "# <title>"
+ */
+function extractPlanTitle(slug: string): string | null {
+  const planPath = path.join(PLANS_DIR, `${slug}.md`);
+  if (!fs.existsSync(planPath)) {
+    return null;
+  }
+
+  try {
+    const content = fs.readFileSync(planPath, 'utf-8');
+    const firstLine = content.split('\n')[0];
+    // Match "# Plan: Title" or "# Title"
+    const match = firstLine.match(/^#\s+(?:Plan:\s*)?(.+)$/);
+    if (match) {
+      return match[1].trim();
+    }
+  } catch {
+    // File read error
+  }
+
+  return null;
+}
+
 /**
  * Check if a session ended with ExitPlanMode (plan execution)
- * Returns the plan slug if found, null otherwise
+ * Returns the plan title (extracted from file) and slug if found
  */
-export function getPlanExecutionInfo(sessionId: string): { slug: string } | null {
+export function getPlanExecutionInfo(sessionId: string): { slug: string; title: string | null } | null {
   const session = getClaudeSession(sessionId);
   if (!session) return null;
 
@@ -244,9 +300,10 @@ export function getPlanExecutionInfo(sessionId: string): { slug: string } | null
         ) {
           for (const block of entry.message.content) {
             if (block.type === 'tool_use' && block.name === 'ExitPlanMode') {
-              // Found it - return the slug from the entry
+              // Found it - return the slug and title from the plan file
               if (entry.slug) {
-                return { slug: entry.slug };
+                const title = extractPlanTitle(entry.slug);
+                return { slug: entry.slug, title };
               }
             }
           }
