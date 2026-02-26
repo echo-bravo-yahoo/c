@@ -23,9 +23,8 @@ export function resumeCommand(idOrPrefix: string): void {
     process.exit(1);
   }
 
-  // Use claude -r to resume the session from the directory where the transcript exists
-  // This handles worktrees where Claude may store transcripts in the main repo's project directory
-  const resumeDir = claudeSession.directory;
-  console.log(chalk.dim(`Resuming session ${getDisplayName(session)} in ${resumeDir}...`));
-  execReplace('claude', ['-r', session.id], { cwd: resumeDir });
+  // Use session.directory from c's index - it stores the actual path correctly
+  // (claudeSession.directory may be wrong due to lossy project key encoding)
+  console.log(chalk.dim(`Resuming session ${getDisplayName(session)} in ${session.directory}...`));
+  execReplace('claude', ['-r', session.id], { cwd: session.directory });
 }

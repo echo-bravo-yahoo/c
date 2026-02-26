@@ -60,8 +60,9 @@ describe('c > claude > sessions', () => {
     });
 
     it('handles key without leading dash', () => {
+      // decodeProjectKey always returns absolute paths (starts from /)
       const result = decodeProjectKey('relative-path');
-      assert.strictEqual(result, 'relative/path');
+      assert.strictEqual(result, '/relative/path');
     });
 
     it('handles single directory key', () => {
