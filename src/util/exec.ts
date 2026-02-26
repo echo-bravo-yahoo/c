@@ -21,11 +21,16 @@ export function exec(command: string, options?: { cwd?: string }): string {
 
 /**
  * Set the tmux pane title (no-op if not in tmux)
+ * @param title - The title to set
+ * @param execFn - Optional executor for testing (defaults to execSync)
  */
-export function setTmuxPaneTitle(title: string): void {
+export function setTmuxPaneTitle(
+  title: string,
+  execFn: (cmd: string) => void = (cmd) => execSync(cmd, { stdio: 'ignore' })
+): void {
   if (process.env.TMUX) {
     try {
-      execSync(`tmux select-pane -T ${JSON.stringify(title)}`, { stdio: 'ignore' });
+      execFn(`tmux select-pane -T ${JSON.stringify(title)}`);
     } catch {
       // Ignore errors (e.g., tmux not available)
     }

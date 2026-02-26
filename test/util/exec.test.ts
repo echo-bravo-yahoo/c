@@ -5,9 +5,9 @@
  * since they wrap child_process which is hard to mock in ESM
  */
 
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { exec } from '../../src/util/exec.js';
+import { exec, setTmuxPaneTitle } from '../../src/util/exec.js';
 
 describe('c > util > exec > exec', () => {
   it('returns trimmed stdout', () => {
@@ -43,5 +43,62 @@ describe('c > util > exec > exec', () => {
   it('handles multiline output', () => {
     const result = exec('printf "line1\\nline2"');
     assert.strictEqual(result, 'line1\nline2');
+  });
+});
+
+describe('c > util > exec > setTmuxPaneTitle', () => {
+  let originalTmux: string | undefined;
+
+  beforeEach(() => {
+    originalTmux = process.env.TMUX;
+  });
+
+  afterEach(() => {
+    if (originalTmux === undefined) {
+      delete process.env.TMUX;
+    } else {
+      process.env.TMUX = originalTmux;
+    }
+  });
+
+  it('calls tmux with correct command when TMUX is set', () => {
+    process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
+    const commands: string[] = [];
+    const mockExec = (cmd: string) => { commands.push(cmd); };
+
+    setTmuxPaneTitle('My Session', mockExec);
+
+    assert.strictEqual(commands.length, 1);
+    assert.strictEqual(commands[0], 'tmux select-pane -T "My Session"');
+  });
+
+  it('does not call tmux when TMUX is not set', () => {
+    delete process.env.TMUX;
+    const commands: string[] = [];
+    const mockExec = (cmd: string) => { commands.push(cmd); };
+
+    setTmuxPaneTitle('My Session', mockExec);
+
+    assert.strictEqual(commands.length, 0);
+  });
+
+  it('escapes special characters in title', () => {
+    process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
+    const commands: string[] = [];
+    const mockExec = (cmd: string) => { commands.push(cmd); };
+
+    setTmuxPaneTitle('Session "with" quotes', mockExec);
+
+    assert.strictEqual(commands[0], 'tmux select-pane -T "Session \\"with\\" quotes"');
+  });
+
+  it('does not throw when tmux command fails', () => {
+    process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
+    const mockExec = () => { throw new Error('tmux not found'); };
+
+    // Should not throw
+    assert.doesNotThrow(() => {
+      setTmuxPaneTitle('My Session', mockExec);
+    });
   });
 });
