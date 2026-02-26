@@ -31,6 +31,7 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   if (options.jira) session.resources.jira = options.jira;
   if (options.pr) session.resources.pr = options.pr;
   if (options.branch) session.resources.branch = options.branch;
+  if (name) session.resources.worktree = name;
 
   // Populate meta
   if (options.note) session.meta.note = options.note;
@@ -51,5 +52,10 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   const displayName = name || humanhash;
   console.log(chalk.dim(`Starting session: ${displayName}`));
   setTmuxPaneTitle(displayName);
-  execReplace('claude', ['--session-id', sessionId], { cwd });
+
+  const args = ['--session-id', sessionId];
+  if (name) {
+    args.push('--worktree', name);
+  }
+  execReplace('claude', args, { cwd });
 }

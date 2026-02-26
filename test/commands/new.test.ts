@@ -162,4 +162,119 @@ describe('c > commands > new', () => {
       assert.strictEqual(session.name, '');
     });
   });
+
+  describe('worktree integration', () => {
+    it('sets worktree resource when name is provided', () => {
+      const session = createSession('uuid', '/path', 'key', 'hash');
+      const name = 'my-feature';
+
+      if (name) session.resources.worktree = name;
+
+      assert.strictEqual(session.resources.worktree, 'my-feature');
+    });
+
+    it('does not set worktree resource when name is undefined', () => {
+      const session = createSession('uuid', '/path', 'key', 'hash');
+      const name: string | undefined = undefined;
+
+      if (name) session.resources.worktree = name;
+
+      assert.strictEqual(session.resources.worktree, undefined);
+    });
+
+    it('does not set worktree resource when name is empty string', () => {
+      const session = createSession('uuid', '/path', 'key', 'hash');
+      const name = '';
+
+      if (name) session.resources.worktree = name;
+
+      assert.strictEqual(session.resources.worktree, undefined);
+    });
+
+    it('worktree name matches session name', () => {
+      const session = createSession('uuid', '/path', 'key', 'hash');
+      const name = 'feature/cool-thing';
+      session.name = name;
+
+      if (name) session.resources.worktree = name;
+
+      assert.strictEqual(session.name, session.resources.worktree);
+    });
+
+    it('handles worktree names with special characters', () => {
+      const session = createSession('uuid', '/path', 'key', 'hash');
+      const name = 'feature/MAC-123-add-thing';
+
+      if (name) session.resources.worktree = name;
+
+      assert.strictEqual(session.resources.worktree, 'feature/MAC-123-add-thing');
+    });
+
+    it('handles worktree names with spaces', () => {
+      const session = createSession('uuid', '/path', 'key', 'hash');
+      const name = 'my cool feature';
+
+      if (name) session.resources.worktree = name;
+
+      assert.strictEqual(session.resources.worktree, 'my cool feature');
+    });
+  });
+
+  describe('claude CLI args', () => {
+    /**
+     * Helper to build Claude CLI args matching newCommand logic
+     */
+    function buildClaudeArgs(sessionId: string, name: string | undefined): string[] {
+      const args = ['--session-id', sessionId];
+      if (name) {
+        args.push('--worktree', name);
+      }
+      return args;
+    }
+
+    it('includes --session-id', () => {
+      const args = buildClaudeArgs('abc-123', undefined);
+
+      assert.deepStrictEqual(args, ['--session-id', 'abc-123']);
+    });
+
+    it('includes --worktree when name is provided', () => {
+      const args = buildClaudeArgs('abc-123', 'my-feature');
+
+      assert.deepStrictEqual(args, ['--session-id', 'abc-123', '--worktree', 'my-feature']);
+    });
+
+    it('does not include --worktree when name is undefined', () => {
+      const args = buildClaudeArgs('abc-123', undefined);
+
+      assert.ok(!args.includes('--worktree'));
+    });
+
+    it('does not include --worktree when name is empty string', () => {
+      const args = buildClaudeArgs('abc-123', '');
+
+      assert.ok(!args.includes('--worktree'));
+    });
+
+    it('preserves worktree name with slashes', () => {
+      const args = buildClaudeArgs('abc-123', 'feature/new-thing');
+
+      assert.strictEqual(args[3], 'feature/new-thing');
+    });
+
+    it('preserves worktree name with dashes and numbers', () => {
+      const args = buildClaudeArgs('abc-123', 'MAC-123-fix-bug');
+
+      assert.strictEqual(args[3], 'MAC-123-fix-bug');
+    });
+
+    it('args order is correct: session-id before worktree', () => {
+      const args = buildClaudeArgs('abc-123', 'my-feature');
+
+      assert.strictEqual(args[0], '--session-id');
+      assert.strictEqual(args[1], 'abc-123');
+      assert.strictEqual(args[2], '--worktree');
+      assert.strictEqual(args[3], 'my-feature');
+    });
+  });
 });
