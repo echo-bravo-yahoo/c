@@ -99,22 +99,22 @@ function fixedWidth(str: string, width: number): string {
 }
 
 /**
- * Format session status with color
+ * Format session state with color
  */
 export function formatStatus(session: Session): string {
-  if (session.waiting) {
-    return chalk.yellow('waiting');
-  }
-
-  switch (session.status) {
-    case 'live':
-      return chalk.green('live');
+  switch (session.state) {
+    case 'busy':
+      return chalk.green('busy');
+    case 'idle':
+      return chalk.blue('idle');
+    case 'waiting':
+      return chalk.yellow('waiting');
     case 'closed':
       return chalk.gray('closed');
     case 'archived':
       return chalk.dim('archived');
     default:
-      return session.status;
+      return session.state;
   }
 }
 
@@ -158,7 +158,7 @@ export function formatSessionLine(session: Session, depth = 0): string {
   const nameCol = chalk.bold(fixedWidth(name, nameWidth));
 
   // Status column
-  const statusText = session.waiting ? 'waiting' : session.status;
+  const statusText = session.state;
   const statusPad = ' '.repeat(Math.max(1, COL_STATUS - statusText.length));
   const statusCol = formatStatus(session) + statusPad;
 

@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import TOML from '@iarna/toml';
-import { IndexFile, Session, createDefaultIndex } from './schema.js';
+import { IndexFile, Session, SessionState, createDefaultIndex } from './schema.js';
 
 const INDEX_DIR = path.join(os.homedir(), '.c');
 const INDEX_PATH = path.join(INDEX_DIR, 'index.toml');
@@ -77,8 +77,28 @@ function parseDate(value: unknown): Date {
 
 /**
  * Convert raw TOML data to typed Session
+ * Handles migration from old status+waiting format to new state format
  */
 function parseSession(raw: Record<string, unknown>): Session {
+  // Migration: convert old status+waiting to new state
+  let state: SessionState;
+  if (raw.state) {
+    state = raw.state as SessionState;
+  } else {
+    // Old format migration
+    const oldStatus = raw.status as string | undefined;
+    const oldWaiting = Boolean(raw.waiting);
+    if (oldStatus === 'archived') {
+      state = 'archived';
+    } else if (oldStatus === 'closed') {
+      state = 'closed';
+    } else if (oldWaiting) {
+      state = 'waiting';
+    } else {
+      state = 'busy'; // live + not waiting = busy (conservative default)
+    }
+  }
+
   const session: Session = {
     id: String(raw.id ?? ''),
     name: String(raw.name ?? ''),
@@ -87,8 +107,7 @@ function parseSession(raw: Record<string, unknown>): Session {
     project_key: String(raw.project_key ?? ''),
     created_at: parseDate(raw.created_at),
     last_active_at: parseDate(raw.last_active_at),
-    status: (raw.status as Session['status']) ?? 'live',
-    waiting: Boolean(raw.waiting),
+    state,
     resources: (raw.resources as Session['resources']) ?? {},
     servers: (raw.servers as Session['servers']) ?? {},
     tags: (raw.tags as Session['tags']) ?? { values: [] },
@@ -213,19 +232,14 @@ export function getAllSessions(): Session[] {
  * Get all sessions matching a filter
  */
 export function getSessions(filter?: {
-  status?: Session['status'][];
-  waiting?: boolean;
+  state?: SessionState[];
   directory?: string;
 }): Session[] {
   const index = readIndex();
   let sessions = Object.values(index.sessions);
 
-  if (filter?.status) {
-    sessions = sessions.filter((s) => filter.status!.includes(s.status));
-  }
-
-  if (filter?.waiting !== undefined) {
-    sessions = sessions.filter((s) => s.waiting === filter.waiting);
+  if (filter?.state) {
+    sessions = sessions.filter((s) => filter.state!.includes(s.state));
   }
 
   if (filter?.directory) {
@@ -237,11 +251,11 @@ export function getSessions(filter?: {
 }
 
 /**
- * Get the current session for a directory
+ * Get the current session for a directory (active = busy, idle, or waiting)
  */
 export function getCurrentSession(directory: string = process.cwd()): Session | undefined {
   const sessions = getSessions({
-    status: ['live'],
+    state: ['busy', 'idle', 'waiting'],
     directory,
   });
 
@@ -249,7 +263,7 @@ export function getCurrentSession(directory: string = process.cwd()): Session | 
 }
 
 /**
- * Reconcile stale sessions by closing "live" sessions that no longer exist in Claude's storage.
+ * Reconcile stale sessions by closing active sessions that no longer exist in Claude's storage.
  * This handles cases where SessionEnd hook didn't fire (Ctrl-C, crash, etc).
  */
 export async function reconcileStaleSessions(): Promise<number> {
@@ -257,10 +271,12 @@ export async function reconcileStaleSessions(): Promise<number> {
   const { getClaudeSession } = await import('../claude/sessions.js');
 
   const index = readIndex();
-  const liveSessions = Object.values(index.sessions).filter((s) => s.status === 'live');
+  const activeSessions = Object.values(index.sessions).filter(
+    (s) => s.state === 'busy' || s.state === 'idle' || s.state === 'waiting'
+  );
 
   const staleIds: string[] = [];
-  for (const session of liveSessions) {
+  for (const session of activeSessions) {
     const claudeSession = getClaudeSession(session.id);
     if (!claudeSession) {
       staleIds.push(session.id);
@@ -271,7 +287,7 @@ export async function reconcileStaleSessions(): Promise<number> {
     await updateIndex((idx) => {
       for (const id of staleIds) {
         if (idx.sessions[id]) {
-          idx.sessions[id].status = 'closed';
+          idx.sessions[id].state = 'closed';
         }
       }
     });

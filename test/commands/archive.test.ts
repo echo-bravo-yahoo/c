@@ -12,32 +12,32 @@ describe('c > commands > archive', () => {
     resetSessionCounter();
   });
 
-  describe('status change', () => {
-    it('sets status to archived', () => {
-      const session = createTestSession({ status: 'live' });
+  describe('state change', () => {
+    it('sets state to archived', () => {
+      const session = createTestSession({ state: 'busy' });
 
-      session.status = 'archived';
+      session.state = 'archived';
 
-      assert.strictEqual(session.status, 'archived');
+      assert.strictEqual(session.state, 'archived');
     });
 
     it('archives closed session', () => {
-      const session = createTestSession({ status: 'closed' });
+      const session = createTestSession({ state: 'closed' });
 
-      session.status = 'archived';
+      session.state = 'archived';
 
-      assert.strictEqual(session.status, 'archived');
+      assert.strictEqual(session.state, 'archived');
     });
 
     it('updates last_active_at', () => {
       const oldDate = new Date('2024-01-01');
       const session = createTestSession({
-        status: 'live',
+        state: 'busy',
         last_active_at: oldDate,
       });
 
       const newDate = new Date('2024-01-15');
-      session.status = 'archived';
+      session.state = 'archived';
       session.last_active_at = newDate;
 
       assert.strictEqual(session.last_active_at, newDate);
@@ -60,13 +60,14 @@ describe('c > commands > archive', () => {
 
     it('uses current session when no ID provided', () => {
       const sessions = [
-        createTestSession({ directory: '/project', status: 'live' }),
-        createTestSession({ directory: '/other', status: 'live' }),
+        createTestSession({ directory: '/project', state: 'busy' }),
+        createTestSession({ directory: '/other', state: 'busy' }),
       ];
 
       const cwd = '/project';
+      const activeStates = ['busy', 'idle', 'waiting'];
       const current = sessions.find(
-        s => s.status === 'live' && s.directory === cwd
+        s => activeStates.includes(s.state) && s.directory === cwd
       );
 
       assert.ok(current);
@@ -85,12 +86,13 @@ describe('c > commands > archive', () => {
 
     it('errors when no active session in directory', () => {
       const sessions = [
-        createTestSession({ directory: '/project', status: 'closed' }),
+        createTestSession({ directory: '/project', state: 'closed' }),
       ];
 
       const cwd = '/project';
+      const activeStates = ['busy', 'idle', 'waiting'];
       const current = sessions.find(
-        s => s.status === 'live' && s.directory === cwd
+        s => activeStates.includes(s.state) && s.directory === cwd
       );
 
       assert.strictEqual(current, undefined);

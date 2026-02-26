@@ -25,7 +25,7 @@ export async function archiveCommand(idOrPrefix?: string): Promise<void> {
 
   await updateIndex((index) => {
     if (index.sessions[session!.id]) {
-      index.sessions[session!.id].status = 'archived';
+      index.sessions[session!.id].state = 'archived';
       index.sessions[session!.id].last_active_at = new Date();
     }
   });

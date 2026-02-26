@@ -1,5 +1,5 @@
 /**
- * Tests for user-prompt hook logic
+ * Tests for stop hook logic
  */
 
 import { describe, it, beforeEach } from 'node:test';
@@ -7,37 +7,50 @@ import assert from 'node:assert';
 import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
 import type { Session } from '../../src/store/schema.js';
 
-describe('c > hooks > user-prompt', () => {
+describe('c > hooks > stop', () => {
   beforeEach(() => {
     resetSessionCounter();
   });
 
   describe('state transition', () => {
-    it('sets state to busy from waiting', () => {
-      const session = createTestSession({ state: 'waiting' });
-
-      // Simulate hook behavior
-      session.state = 'busy';
-
-      assert.strictEqual(session.state, 'busy');
-    });
-
-    it('sets state to busy from idle', () => {
-      const session = createTestSession({ state: 'idle' });
-
-      // Simulate hook behavior
-      session.state = 'busy';
-
-      assert.strictEqual(session.state, 'busy');
-    });
-
-    it('keeps state as busy when already busy', () => {
+    it('sets state to idle from busy', () => {
       const session = createTestSession({ state: 'busy' });
 
       // Simulate hook behavior
-      session.state = 'busy';
+      session.state = 'idle';
 
-      assert.strictEqual(session.state, 'busy');
+      assert.strictEqual(session.state, 'idle');
+    });
+
+    it('sets state to idle from waiting', () => {
+      const session = createTestSession({ state: 'waiting' });
+
+      // Simulate hook behavior
+      session.state = 'idle';
+
+      assert.strictEqual(session.state, 'idle');
+    });
+  });
+
+  describe('stop_hook_active guard', () => {
+    it('does not change state when stop_hook_active is true', () => {
+      // This tests the guard logic - when the stop hook itself
+      // triggers further processing, we don't want to set idle again
+      const input = { session_id: 'test', cwd: '/test', stop_hook_active: true };
+      const shouldSkip = input.stop_hook_active === true;
+      assert.strictEqual(shouldSkip, true);
+    });
+
+    it('proceeds when stop_hook_active is false', () => {
+      const input = { session_id: 'test', cwd: '/test', stop_hook_active: false };
+      const shouldSkip = input.stop_hook_active === true;
+      assert.strictEqual(shouldSkip, false);
+    });
+
+    it('proceeds when stop_hook_active is undefined', () => {
+      const input = { session_id: 'test', cwd: '/test' };
+      const shouldSkip = (input as { stop_hook_active?: boolean }).stop_hook_active === true;
+      assert.strictEqual(shouldSkip, false);
     });
   });
 

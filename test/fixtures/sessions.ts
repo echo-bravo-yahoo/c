@@ -12,8 +12,7 @@ export interface SessionOverrides {
   project_key?: string;
   created_at?: Date;
   last_active_at?: Date;
-  status?: Session['status'];
-  waiting?: boolean;
+  state?: Session['state'];
   resources?: Partial<SessionResources>;
   tags?: string[];
   meta?: SessionMeta;
@@ -37,8 +36,7 @@ export function createTestSession(overrides: SessionOverrides = {}): Session {
     project_key: overrides.project_key ?? '-home-test-project',
     created_at: overrides.created_at ?? now,
     last_active_at: overrides.last_active_at ?? now,
-    status: overrides.status ?? 'live',
-    waiting: overrides.waiting ?? false,
+    state: overrides.state ?? 'busy',
     resources: {
       branch: overrides.resources?.branch,
       worktree: overrides.resources?.worktree,
@@ -53,31 +51,38 @@ export function createTestSession(overrides: SessionOverrides = {}): Session {
 }
 
 /**
- * Create a session with live status
+ * Create a session with busy state
  */
-export function createLiveSession(overrides: SessionOverrides = {}): Session {
-  return createTestSession({ ...overrides, status: 'live' });
+export function createBusySession(overrides: SessionOverrides = {}): Session {
+  return createTestSession({ ...overrides, state: 'busy' });
 }
 
 /**
- * Create a session with closed status
+ * Create a session with idle state
+ */
+export function createIdleSession(overrides: SessionOverrides = {}): Session {
+  return createTestSession({ ...overrides, state: 'idle' });
+}
+
+/**
+ * Create a session with closed state
  */
 export function createClosedSession(overrides: SessionOverrides = {}): Session {
-  return createTestSession({ ...overrides, status: 'closed' });
+  return createTestSession({ ...overrides, state: 'closed' });
 }
 
 /**
- * Create a session with archived status
+ * Create a session with archived state
  */
 export function createArchivedSession(overrides: SessionOverrides = {}): Session {
-  return createTestSession({ ...overrides, status: 'archived' });
+  return createTestSession({ ...overrides, state: 'archived' });
 }
 
 /**
  * Create a session in waiting state
  */
 export function createWaitingSession(overrides: SessionOverrides = {}): Session {
-  return createTestSession({ ...overrides, status: 'live', waiting: true });
+  return createTestSession({ ...overrides, state: 'waiting' });
 }
 
 /**

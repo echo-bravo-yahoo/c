@@ -18,16 +18,17 @@ describe('c > hooks > session-start', () => {
   describe('stale session detection', () => {
     it('identifies sessions in same directory', () => {
       const sessions: Session[] = [
-        createTestSession({ id: 'sess-1', directory: '/home/user/project', status: 'live' }),
-        createTestSession({ id: 'sess-2', directory: '/home/user/project', status: 'live' }),
-        createTestSession({ id: 'sess-3', directory: '/home/user/other', status: 'live' }),
+        createTestSession({ id: 'sess-1', directory: '/home/user/project', state: 'busy' }),
+        createTestSession({ id: 'sess-2', directory: '/home/user/project', state: 'idle' }),
+        createTestSession({ id: 'sess-3', directory: '/home/user/other', state: 'busy' }),
       ];
 
       const currentId = 'new-session';
       const cwd = '/home/user/project';
+      const activeStates = ['busy', 'idle', 'waiting'];
 
       const stale = sessions.filter(
-        s => s.status === 'live' && s.directory === cwd && s.id !== currentId
+        s => activeStates.includes(s.state) && s.directory === cwd && s.id !== currentId
       );
 
       assert.strictEqual(stale.length, 2);
@@ -38,12 +39,13 @@ describe('c > hooks > session-start', () => {
     it('excludes current session from stale list', () => {
       const currentId = 'sess-1';
       const sessions: Session[] = [
-        createTestSession({ id: currentId, directory: '/project', status: 'live' }),
-        createTestSession({ id: 'sess-2', directory: '/project', status: 'live' }),
+        createTestSession({ id: currentId, directory: '/project', state: 'busy' }),
+        createTestSession({ id: 'sess-2', directory: '/project', state: 'busy' }),
       ];
 
+      const activeStates = ['busy', 'idle', 'waiting'];
       const stale = sessions.filter(
-        s => s.status === 'live' && s.directory === '/project' && s.id !== currentId
+        s => activeStates.includes(s.state) && s.directory === '/project' && s.id !== currentId
       );
 
       assert.strictEqual(stale.length, 1);
@@ -52,12 +54,13 @@ describe('c > hooks > session-start', () => {
 
     it('ignores closed sessions', () => {
       const sessions: Session[] = [
-        createTestSession({ id: 'sess-1', directory: '/project', status: 'closed' }),
-        createTestSession({ id: 'sess-2', directory: '/project', status: 'live' }),
+        createTestSession({ id: 'sess-1', directory: '/project', state: 'closed' }),
+        createTestSession({ id: 'sess-2', directory: '/project', state: 'busy' }),
       ];
 
+      const activeStates = ['busy', 'idle', 'waiting'];
       const stale = sessions.filter(
-        s => s.status === 'live' && s.directory === '/project'
+        s => activeStates.includes(s.state) && s.directory === '/project'
       );
 
       assert.strictEqual(stale.length, 1);
@@ -75,20 +78,20 @@ describe('c > hooks > session-start', () => {
         createTestSession({
           id: 'recent',
           directory: cwd,
-          status: 'closed',
+          state: 'closed',
           last_active_at: new Date(now - 10 * 1000), // 10 seconds ago
         }),
         createTestSession({
           id: 'old',
           directory: cwd,
-          status: 'closed',
+          state: 'closed',
           last_active_at: new Date(now - 60 * 1000), // 60 seconds ago
         }),
       ];
 
       const recent = sessions.filter(
         s =>
-          s.status === 'closed' &&
+          s.state === 'closed' &&
           s.directory === cwd &&
           s.id !== currentId &&
           now - s.last_active_at.getTime() < threshold
@@ -190,12 +193,12 @@ describe('c > hooks > session-start', () => {
       assert.strictEqual(session.last_active_at, newDate);
     });
 
-    it('sets status to live when resuming', () => {
-      const session = createTestSession({ status: 'closed' });
+    it('sets state to busy when resuming', () => {
+      const session = createTestSession({ state: 'closed' });
 
-      session.status = 'live';
+      session.state = 'busy';
 
-      assert.strictEqual(session.status, 'live');
+      assert.strictEqual(session.state, 'busy');
     });
   });
 });

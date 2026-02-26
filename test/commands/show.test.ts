@@ -58,9 +58,9 @@ describe('c > commands > show', () => {
       assert.strictEqual(session.humanhash, 'alpha-bravo-charlie');
     });
 
-    it('displays status', () => {
-      const session = createTestSession({ status: 'live' });
-      assert.strictEqual(session.status, 'live');
+    it('displays state', () => {
+      const session = createTestSession({ state: 'busy' });
+      assert.strictEqual(session.state, 'busy');
     });
 
     it('displays directory path', () => {

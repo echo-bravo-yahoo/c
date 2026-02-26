@@ -145,32 +145,34 @@ https://github.com/org/repo/pull/42
   });
 
   describe('current session lookup', () => {
-    it('finds live session for directory', () => {
+    it('finds active session for directory', () => {
       const sessions = [
-        createTestSession({ directory: '/project', status: 'live' }),
-        createTestSession({ directory: '/project', status: 'closed' }),
-        createTestSession({ directory: '/other', status: 'live' }),
+        createTestSession({ directory: '/project', state: 'busy' }),
+        createTestSession({ directory: '/project', state: 'closed' }),
+        createTestSession({ directory: '/other', state: 'busy' }),
       ];
 
       const cwd = '/project';
+      const activeStates = ['busy', 'idle', 'waiting'];
       const current = sessions.find(
-        s => s.status === 'live' && s.directory === cwd
+        s => activeStates.includes(s.state) && s.directory === cwd
       );
 
       assert.ok(current);
       assert.strictEqual(current.directory, '/project');
-      assert.strictEqual(current.status, 'live');
+      assert.strictEqual(current.state, 'busy');
     });
 
-    it('returns undefined when no live session', () => {
+    it('returns undefined when no active session', () => {
       const sessions = [
-        createTestSession({ directory: '/project', status: 'closed' }),
-        createTestSession({ directory: '/project', status: 'archived' }),
+        createTestSession({ directory: '/project', state: 'closed' }),
+        createTestSession({ directory: '/project', state: 'archived' }),
       ];
 
       const cwd = '/project';
+      const activeStates = ['busy', 'idle', 'waiting'];
       const current = sessions.find(
-        s => s.status === 'live' && s.directory === cwd
+        s => activeStates.includes(s.state) && s.directory === cwd
       );
 
       assert.strictEqual(current, undefined);

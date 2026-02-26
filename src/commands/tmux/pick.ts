@@ -7,7 +7,7 @@ import { getSessions } from '../../store/index.js';
 import { getDisplayName, shortId } from '../../util/format.js';
 
 export function tmuxPickCommand(): void {
-  const sessions = getSessions({ status: ['live', 'closed'] });
+  const sessions = getSessions({ state: ['busy', 'idle', 'waiting', 'closed'] });
 
   if (sessions.length === 0) {
     console.error('No sessions available.');
@@ -17,7 +17,7 @@ export function tmuxPickCommand(): void {
   // Format sessions for fzf
   const lines = sessions.map((s) => {
     const name = getDisplayName(s);
-    const status = s.waiting ? 'waiting' : s.status;
+    const status = s.state;
     const branch = s.resources.branch ?? '';
     return `${shortId(s.id)}\t${name}\t${status}\t${branch}\t${s.id}`;
   });

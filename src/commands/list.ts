@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import { getSessions, reconcileStaleSessions } from '../store/index.js';
 import { printSessionTable, getDisplayName, shortId } from '../util/format.js';
-import type { Session } from '../store/schema.js';
+import type { SessionState } from '../store/schema.js';
 
 export interface ListOptions {
   all?: boolean;
@@ -30,21 +30,21 @@ export async function listCommand(options: ListOptions): Promise<void> {
     return;
   }
 
-  let statusFilter: Session['status'][] = ['live', 'closed'];
-  let waitingFilter: boolean | undefined;
+  let stateFilter: SessionState[];
 
   if (options.all) {
-    statusFilter = ['live', 'closed', 'archived'];
+    stateFilter = ['busy', 'idle', 'waiting', 'closed', 'archived'];
   } else if (options.archived) {
-    statusFilter = ['archived'];
+    stateFilter = ['archived'];
   } else if (options.waiting) {
-    statusFilter = ['live'];
-    waitingFilter = true;
+    stateFilter = ['waiting'];
+  } else {
+    // Default: show active (busy/idle/waiting) and closed
+    stateFilter = ['busy', 'idle', 'waiting', 'closed'];
   }
 
   const sessions = getSessions({
-    status: statusFilter,
-    waiting: waitingFilter,
+    state: stateFilter,
     directory: options.directory,
   });
 
@@ -53,7 +53,7 @@ export async function listCommand(options: ListOptions): Promise<void> {
 
 function listPRs(): void {
   const sessions = getSessions({
-    status: ['live', 'closed', 'archived'],
+    state: ['busy', 'idle', 'waiting', 'closed', 'archived'],
   });
 
   const withPRs = sessions.filter((s) => s.resources.pr);
@@ -85,7 +85,7 @@ function listPRs(): void {
 
 function listJira(): void {
   const sessions = getSessions({
-    status: ['live', 'closed', 'archived'],
+    state: ['busy', 'idle', 'waiting', 'closed', 'archived'],
   });
 
   const withJira = sessions.filter((s) => s.resources.jira);

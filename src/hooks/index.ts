@@ -7,6 +7,7 @@ import { handleSessionEnd } from './session-end.js';
 import { handleNotificationWaiting } from './notification.js';
 import { handleUserPrompt } from './user-prompt.js';
 import { handlePostBash } from './post-bash.js';
+import { handleStop } from './stop.js';
 
 export interface HookInput {
   session_id: string;
@@ -16,6 +17,7 @@ export interface HookInput {
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   tool_output?: string;
+  stop_hook_active?: boolean;
 }
 
 /**
@@ -94,6 +96,10 @@ export async function handleHook(event: string): Promise<void> {
 
     case 'post-bash':
       await handlePostBash(sessionId, cwd, input);
+      break;
+
+    case 'stop':
+      await handleStop(sessionId, cwd, input);
       break;
 
     default:

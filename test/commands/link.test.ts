@@ -87,13 +87,14 @@ describe('c > commands > link', () => {
   describe('session lookup', () => {
     it('uses current session when no ID', () => {
       const sessions = [
-        createTestSession({ directory: '/project', status: 'live' }),
-        createTestSession({ directory: '/other', status: 'live' }),
+        createTestSession({ directory: '/project', state: 'busy' }),
+        createTestSession({ directory: '/other', state: 'busy' }),
       ];
 
       const cwd = '/project';
+      const activeStates = ['busy', 'idle', 'waiting'];
       const current = sessions.find(
-        s => s.status === 'live' && s.directory === cwd
+        s => activeStates.includes(s.state) && s.directory === cwd
       );
 
       assert.ok(current);

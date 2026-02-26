@@ -5,8 +5,8 @@
 import { getSessions } from '../../store/index.js';
 
 export function tmuxStatusCommand(): void {
-  const liveSessions = getSessions({ status: ['live'] });
-  const waitingSessions = liveSessions.filter((s) => s.waiting);
+  const activeSessions = getSessions({ state: ['busy', 'idle', 'waiting'] });
+  const waitingSessions = activeSessions.filter((s) => s.state === 'waiting');
 
   const parts: string[] = [];
 
@@ -15,10 +15,10 @@ export function tmuxStatusCommand(): void {
     parts.push(`#[fg=yellow,bold]⏳${waitingSessions.length}#[default]`);
   }
 
-  // Show total live sessions
-  if (liveSessions.length > 0) {
+  // Show total active sessions
+  if (activeSessions.length > 0) {
     const icon = waitingSessions.length > 0 ? '' : '🤖';
-    parts.push(`${icon}${liveSessions.length}`);
+    parts.push(`${icon}${activeSessions.length}`);
   }
 
   if (parts.length > 0) {

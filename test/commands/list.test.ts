@@ -13,69 +13,67 @@ describe('c > commands > list', () => {
     resetSessionCounter();
   });
 
-  describe('status filtering', () => {
+  describe('state filtering', () => {
     const sessions: Session[] = [];
 
     beforeEach(() => {
       sessions.length = 0;
       sessions.push(
-        createTestSession({ status: 'live' }),
-        createTestSession({ status: 'closed' }),
-        createTestSession({ status: 'archived' })
+        createTestSession({ state: 'busy' }),
+        createTestSession({ state: 'closed' }),
+        createTestSession({ state: 'archived' })
       );
     });
 
-    it('shows live and closed by default', () => {
+    it('shows active and closed by default', () => {
       const options: ListOptions = {};
-      const statusFilter = options.all
-        ? ['live', 'closed', 'archived']
+      const stateFilter = options.all
+        ? ['busy', 'idle', 'waiting', 'closed', 'archived']
         : options.archived
           ? ['archived']
-          : ['live', 'closed'];
+          : ['busy', 'idle', 'waiting', 'closed'];
 
-      const filtered = sessions.filter(s => statusFilter.includes(s.status));
+      const filtered = sessions.filter(s => stateFilter.includes(s.state));
       assert.strictEqual(filtered.length, 2);
-      assert.ok(filtered.some(s => s.status === 'live'));
-      assert.ok(filtered.some(s => s.status === 'closed'));
+      assert.ok(filtered.some(s => s.state === 'busy'));
+      assert.ok(filtered.some(s => s.state === 'closed'));
     });
 
     it('--all includes archived', () => {
       const options: ListOptions = { all: true };
-      const statusFilter = options.all
-        ? ['live', 'closed', 'archived']
-        : ['live', 'closed'];
+      const stateFilter = options.all
+        ? ['busy', 'idle', 'waiting', 'closed', 'archived']
+        : ['busy', 'idle', 'waiting', 'closed'];
 
-      const filtered = sessions.filter(s => statusFilter.includes(s.status));
+      const filtered = sessions.filter(s => stateFilter.includes(s.state));
       assert.strictEqual(filtered.length, 3);
     });
 
     it('--archived shows only archived', () => {
       const options: ListOptions = { archived: true };
-      const statusFilter = options.archived
+      const stateFilter = options.archived
         ? ['archived']
-        : ['live', 'closed'];
+        : ['busy', 'idle', 'waiting', 'closed'];
 
-      const filtered = sessions.filter(s => statusFilter.includes(s.status));
+      const filtered = sessions.filter(s => stateFilter.includes(s.state));
       assert.strictEqual(filtered.length, 1);
-      assert.strictEqual(filtered[0].status, 'archived');
+      assert.strictEqual(filtered[0].state, 'archived');
     });
   });
 
   describe('waiting filter', () => {
     it('--waiting filters to waiting sessions', () => {
       const sessions = [
-        createTestSession({ status: 'live', waiting: true }),
-        createTestSession({ status: 'live', waiting: false }),
-        createTestSession({ status: 'closed', waiting: false }),
+        createTestSession({ state: 'waiting' }),
+        createTestSession({ state: 'busy' }),
+        createTestSession({ state: 'closed' }),
       ];
 
       const options: ListOptions = { waiting: true };
-      const filtered = sessions.filter(
-        s => s.status === 'live' && s.waiting === true
-      );
+      const filtered = sessions.filter(s => s.state === 'waiting');
 
       assert.strictEqual(filtered.length, 1);
-      assert.strictEqual(filtered[0].waiting, true);
+      assert.strictEqual(filtered[0].state, 'waiting');
     });
   });
 

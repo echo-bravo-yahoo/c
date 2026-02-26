@@ -2,7 +2,7 @@
  * Schema types for the session index stored in ~/.c/index.toml
  */
 
-export type SessionStatus = 'live' | 'closed' | 'archived';
+export type SessionState = 'busy' | 'idle' | 'waiting' | 'closed' | 'archived';
 
 export interface SessionResources {
   branch?: string;
@@ -32,8 +32,7 @@ export interface Session {
   project_key: string;
   created_at: Date;
   last_active_at: Date;
-  status: SessionStatus;
-  waiting: boolean;
+  state: SessionState;
   resources: SessionResources;
   servers: SessionServers;
   tags: SessionTags;
@@ -71,8 +70,7 @@ export function createSession(
     project_key: projectKey,
     created_at: createdAt,
     last_active_at: createdAt,
-    status: 'live',
-    waiting: false,
+    state: 'busy',
     resources: {},
     servers: {},
     tags: { values: [] },

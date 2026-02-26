@@ -107,8 +107,7 @@ describe('c > store > index', () => {
         humanhash: 'alpha-bravo',
         directory: '/home/user/project',
         project_key: '-home-user-project',
-        status: 'live',
-        waiting: true,
+        state: 'waiting',
         resources: { branch: 'main', pr: 'https://github.com/o/r/pull/1' },
         tags: ['important', 'wip'],
         meta: { note: 'test note' },
@@ -140,8 +139,7 @@ describe('c > store > index', () => {
       assert.strictEqual(s.name, 'My Session');
       assert.strictEqual(s.humanhash, 'alpha-bravo');
       assert.strictEqual(s.directory, '/home/user/project');
-      assert.strictEqual(s.status, 'live');
-      assert.strictEqual(s.waiting, true);
+      assert.strictEqual(s.state, 'waiting');
 
       const resources = s.resources as Record<string, string>;
       assert.strictEqual(resources.branch, 'main');
@@ -228,25 +226,25 @@ describe('c > store > index', () => {
   });
 
   describe('getSessions (behavior)', () => {
-    it('filters by status', () => {
+    it('filters by state', () => {
       const sessions = [
-        createTestSession({ status: 'live' }),
-        createTestSession({ status: 'closed' }),
-        createTestSession({ status: 'archived' }),
+        createTestSession({ state: 'busy' }),
+        createTestSession({ state: 'closed' }),
+        createTestSession({ state: 'archived' }),
       ];
 
-      const filtered = sessions.filter(s => ['live', 'closed'].includes(s.status));
+      const filtered = sessions.filter(s => ['busy', 'idle', 'waiting', 'closed'].includes(s.state));
       assert.strictEqual(filtered.length, 2);
     });
 
-    it('filters by waiting flag', () => {
+    it('filters by waiting state', () => {
       const sessions = [
-        createTestSession({ waiting: true }),
-        createTestSession({ waiting: false }),
-        createTestSession({ waiting: true }),
+        createTestSession({ state: 'waiting' }),
+        createTestSession({ state: 'busy' }),
+        createTestSession({ state: 'waiting' }),
       ];
 
-      const waiting = sessions.filter(s => s.waiting === true);
+      const waiting = sessions.filter(s => s.state === 'waiting');
       assert.strictEqual(waiting.length, 2);
     });
 

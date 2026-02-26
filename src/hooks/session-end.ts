@@ -19,9 +19,8 @@ export async function handleSessionEnd(
 
   await updateIndex((index) => {
     if (index.sessions[targetId]) {
-      index.sessions[targetId].status = 'closed';
+      index.sessions[targetId].state = 'closed';
       index.sessions[targetId].last_active_at = new Date();
-      index.sessions[targetId].waiting = false;
     }
   });
 }

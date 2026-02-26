@@ -12,25 +12,26 @@ describe('c > commands > tmux-status', () => {
   });
 
   describe('session counting', () => {
-    it('shows live session count', () => {
+    it('shows active session count', () => {
       const sessions = [
-        createTestSession({ status: 'live' }),
-        createTestSession({ status: 'live' }),
-        createTestSession({ status: 'closed' }),
+        createTestSession({ state: 'busy' }),
+        createTestSession({ state: 'idle' }),
+        createTestSession({ state: 'closed' }),
       ];
 
-      const live = sessions.filter(s => s.status === 'live');
-      assert.strictEqual(live.length, 2);
+      const activeStates = ['busy', 'idle', 'waiting'];
+      const active = sessions.filter(s => activeStates.includes(s.state));
+      assert.strictEqual(active.length, 2);
     });
 
     it('counts waiting sessions', () => {
       const sessions = [
-        createTestSession({ status: 'live', waiting: true }),
-        createTestSession({ status: 'live', waiting: false }),
-        createTestSession({ status: 'live', waiting: true }),
+        createTestSession({ state: 'waiting' }),
+        createTestSession({ state: 'busy' }),
+        createTestSession({ state: 'waiting' }),
       ];
 
-      const waiting = sessions.filter(s => s.waiting);
+      const waiting = sessions.filter(s => s.state === 'waiting');
       assert.strictEqual(waiting.length, 2);
     });
   });
@@ -70,21 +71,22 @@ describe('c > commands > tmux-status', () => {
       assert.strictEqual(parts.length, 0);
     });
 
-    it('only shows live count when no waiting', () => {
+    it('only shows active count when no waiting', () => {
       const sessions = [
-        createTestSession({ status: 'live', waiting: false }),
-        createTestSession({ status: 'live', waiting: false }),
+        createTestSession({ state: 'busy' }),
+        createTestSession({ state: 'idle' }),
       ];
 
-      const waiting = sessions.filter(s => s.waiting);
-      const live = sessions.filter(s => s.status === 'live');
+      const waiting = sessions.filter(s => s.state === 'waiting');
+      const activeStates = ['busy', 'idle', 'waiting'];
+      const active = sessions.filter(s => activeStates.includes(s.state));
 
       const parts: string[] = [];
       if (waiting.length > 0) {
         parts.push(`waiting:${waiting.length}`);
       }
-      if (live.length > 0) {
-        parts.push(`${live.length}`);
+      if (active.length > 0) {
+        parts.push(`${active.length}`);
       }
 
       assert.strictEqual(parts.length, 1);
@@ -103,20 +105,20 @@ describe('c > commands > tmux-pick', () => {
       const session = createTestSession({
         id: '12345678-uuid',
         name: 'My Session',
-        status: 'live',
+        state: 'busy',
         resources: { branch: 'main' },
       });
 
       const shortId = session.id.slice(0, 8);
       const name = session.name || session.humanhash;
-      const status = session.waiting ? 'waiting' : session.status;
+      const status = session.state;
       const branch = session.resources.branch ?? '';
 
       const line = `${shortId}\t${name}\t${status}\t${branch}\t${session.id}`;
 
       assert.ok(line.includes('12345678'));
       assert.ok(line.includes('My Session'));
-      assert.ok(line.includes('live'));
+      assert.ok(line.includes('busy'));
       assert.ok(line.includes('main'));
     });
 
@@ -130,13 +132,12 @@ describe('c > commands > tmux-pick', () => {
       assert.strictEqual(name, 'alpha-bravo');
     });
 
-    it('shows waiting status', () => {
+    it('shows waiting state', () => {
       const session = createTestSession({
-        status: 'live',
-        waiting: true,
+        state: 'waiting',
       });
 
-      const status = session.waiting ? 'waiting' : session.status;
+      const status = session.state;
       assert.strictEqual(status, 'waiting');
     });
 
@@ -167,32 +168,30 @@ describe('c > commands > tmux-pick', () => {
   });
 
   describe('filtering', () => {
-    it('includes live and closed sessions', () => {
+    it('includes active and closed sessions', () => {
       const sessions = [
-        createTestSession({ status: 'live' }),
-        createTestSession({ status: 'closed' }),
-        createTestSession({ status: 'archived' }),
+        createTestSession({ state: 'busy' }),
+        createTestSession({ state: 'closed' }),
+        createTestSession({ state: 'archived' }),
       ];
 
-      const filtered = sessions.filter(
-        s => s.status === 'live' || s.status === 'closed'
-      );
+      const pickStates = ['busy', 'idle', 'waiting', 'closed'];
+      const filtered = sessions.filter(s => pickStates.includes(s.state));
 
       assert.strictEqual(filtered.length, 2);
     });
 
     it('excludes archived sessions', () => {
       const sessions = [
-        createTestSession({ status: 'live' }),
-        createTestSession({ status: 'archived' }),
+        createTestSession({ state: 'busy' }),
+        createTestSession({ state: 'archived' }),
       ];
 
-      const filtered = sessions.filter(
-        s => s.status === 'live' || s.status === 'closed'
-      );
+      const pickStates = ['busy', 'idle', 'waiting', 'closed'];
+      const filtered = sessions.filter(s => pickStates.includes(s.state));
 
       assert.strictEqual(filtered.length, 1);
-      assert.strictEqual(filtered[0].status, 'live');
+      assert.strictEqual(filtered[0].state, 'busy');
     });
   });
 

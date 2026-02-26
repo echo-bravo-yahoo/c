@@ -22,7 +22,7 @@ export async function handleSessionStart(
 
   // Close any stale "live" sessions in the same directory
   // This handles cases where SessionEnd didn't fire (e.g., Ctrl-C, crash)
-  const staleSessions = getSessions({ status: ['live'], directory: cwd }).filter(
+  const staleSessions = getSessions({ state: ['busy', 'idle', 'waiting'], directory: cwd }).filter(
     (s) => s.id !== sessionId
   );
 
@@ -33,7 +33,7 @@ export async function handleSessionStart(
   // Check recently closed sessions for plan execution (ExitPlanMode)
   // SessionEnd may have already marked the planning session as closed
   const recentThreshold = 30 * 1000; // 30 seconds
-  const recentSessions = getSessions({ status: ['closed'], directory: cwd }).filter(
+  const recentSessions = getSessions({ state: ['closed'], directory: cwd }).filter(
     (s) =>
       s.id !== sessionId && Date.now() - new Date(s.last_active_at).getTime() < recentThreshold
   );
@@ -52,7 +52,7 @@ export async function handleSessionStart(
     await updateIndex((index) => {
       for (const stale of staleSessions) {
         if (index.sessions[stale.id]) {
-          index.sessions[stale.id].status = 'closed';
+          index.sessions[stale.id].state = 'closed';
         }
       }
     });
@@ -66,7 +66,7 @@ export async function handleSessionStart(
       if (!s) return;
 
       s.last_active_at = new Date();
-      s.status = 'live';
+      s.state = 'busy';
 
       // Merge git info if not already set by user
       const branch = getCurrentBranch(cwd);

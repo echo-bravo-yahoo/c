@@ -24,14 +24,9 @@ describe('c > store > schema > createDefaultIndex', () => {
 });
 
 describe('c > store > schema > createSession', () => {
-  it('sets status to live', () => {
+  it('sets state to busy', () => {
     const session = createSession('uuid', '/path', 'key', 'hash');
-    assert.strictEqual(session.status, 'live');
-  });
-
-  it('defaults waiting to false', () => {
-    const session = createSession('uuid', '/path', 'key', 'hash');
-    assert.strictEqual(session.waiting, false);
+    assert.strictEqual(session.state, 'busy');
   });
 
   it('initializes empty resources', () => {

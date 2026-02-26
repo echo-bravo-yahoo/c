@@ -150,16 +150,10 @@ describe('c > commands > new', () => {
   });
 
   describe('session defaults', () => {
-    it('starts with live status', () => {
+    it('starts with busy state', () => {
       const session = createSession('uuid', '/path', 'key', 'hash');
 
-      assert.strictEqual(session.status, 'live');
-    });
-
-    it('starts with waiting=false', () => {
-      const session = createSession('uuid', '/path', 'key', 'hash');
-
-      assert.strictEqual(session.waiting, false);
+      assert.strictEqual(session.state, 'busy');
     });
 
     it('starts with empty name', () => {
