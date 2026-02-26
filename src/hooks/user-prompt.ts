@@ -19,6 +19,7 @@ export async function handleUserPrompt(
   await updateIndex((index) => {
     if (index.sessions[targetId]) {
       index.sessions[targetId].waiting = false;
+      index.sessions[targetId].status = 'live';
       index.sessions[targetId].last_active_at = new Date();
     }
   });
