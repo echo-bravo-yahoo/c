@@ -39,8 +39,8 @@ export function getWorktreeInfo(cwd?: string): { name: string; path: string } | 
   const root = getGitRoot(cwd);
   if (!root) return undefined;
 
-  // Extract worktree name from path
-  const match = root.match(/\.worktrees\/([^/]+)/);
+  // Extract worktree name from path (.worktrees/ or .claude/worktrees/)
+  const match = root.match(/\.(?:claude\/)?worktrees\/([^/]+)/);
   if (match) {
     return { name: match[1], path: root };
   }

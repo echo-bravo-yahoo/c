@@ -6,7 +6,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { getCurrentBranch, getGitRoot, isWorktree, listWorktrees } from '../../src/detection/git.js';
+import { getCurrentBranch, getGitRoot, isWorktree, getWorktreeInfo, listWorktrees } from '../../src/detection/git.js';
 
 describe('c > detection > git > getCurrentBranch', () => {
   it('returns branch name in git repo', () => {
@@ -55,6 +55,22 @@ describe('c > detection > git > isWorktree', () => {
     const result = isWorktree();
     // Can be true or false depending on whether we're running in a worktree
     assert.ok(typeof result === 'boolean');
+  });
+});
+
+describe('c > detection > git > getWorktreeInfo', () => {
+  it('extracts name from .worktrees/ path', () => {
+    const regex = /\.(?:claude\/)?worktrees\/([^/]+)/;
+    const match = '/repo/.worktrees/my-branch'.match(regex);
+    assert.ok(match);
+    assert.strictEqual(match[1], 'my-branch');
+  });
+
+  it('extracts name from .claude/worktrees/ path', () => {
+    const regex = /\.(?:claude\/)?worktrees\/([^/]+)/;
+    const match = '/repo/.claude/worktrees/my-branch'.match(regex);
+    assert.ok(match);
+    assert.strictEqual(match[1], 'my-branch');
   });
 });
 
