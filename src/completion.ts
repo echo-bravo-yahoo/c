@@ -17,7 +17,7 @@ const SESSION_COMMANDS = [
   'link',
   'unlink',
   'tag',
-  'title',
+  'name',
   'meta',
 ];
 
@@ -34,7 +34,7 @@ const SUBCOMMANDS = [
   'unlink',
   'tag',
   'untag',
-  'title',
+  'name',
   'meta',
   'find',
   'clean',

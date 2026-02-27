@@ -16,7 +16,7 @@ import { linkCommand } from './commands/link.js';
 import { unlinkCommand } from './commands/unlink.js';
 import { tagCommand } from './commands/tag.js';
 import { untagCommand } from './commands/untag.js';
-import { titleCommand } from './commands/title.js';
+import { nameCommand } from './commands/name.js';
 import { metaCommand } from './commands/meta.js';
 import { findCommand } from './commands/find.js';
 import { cleanCommand } from './commands/clean.js';
@@ -166,12 +166,12 @@ program
     untagCommand(tag, id);
   });
 
-// Title
+// Name
 program
-  .command('title <title> [id]')
-  .description('Set session title')
-  .action((title, id) => {
-    titleCommand(title, id);
+  .command('name <name> [id]')
+  .description('Set session name')
+  .action((name, id) => {
+    nameCommand(name, id);
   });
 
 // Meta

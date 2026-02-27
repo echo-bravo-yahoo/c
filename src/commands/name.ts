@@ -1,12 +1,12 @@
 /**
- * c title "..." - set session title/name
+ * c name "..." - set session name
  */
 
 import chalk from 'chalk';
 import { updateIndex, getSession, getCurrentSession } from '../store/index.js';
 import { setTmuxPaneTitle } from '../util/exec.js';
 
-export async function titleCommand(title: string, idOrPrefix?: string): Promise<void> {
+export async function nameCommand(name: string, idOrPrefix?: string): Promise<void> {
   let session;
 
   if (idOrPrefix) {
@@ -27,10 +27,10 @@ export async function titleCommand(title: string, idOrPrefix?: string): Promise<
     const s = index.sessions[session!.id];
     if (!s) return;
 
-    s.name = title;
+    s.name = name;
     s.last_active_at = new Date();
   });
 
-  setTmuxPaneTitle(title);
-  console.log(chalk.green(`✓ Set title: ${title}`));
+  setTmuxPaneTitle(name);
+  console.log(chalk.green(`✓ Set name: ${name}`));
 }

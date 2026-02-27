@@ -1,49 +1,49 @@
 /**
- * Tests for title command behavior
+ * Tests for name command behavior
  */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
 
-describe('c > commands > title', () => {
+describe('c > commands > name', () => {
   beforeEach(() => {
     resetSessionCounter();
   });
 
-  describe('title setting', () => {
+  describe('name setting', () => {
     it('sets session name', () => {
       const session = createTestSession({ name: '' });
-      const title = 'My New Title';
+      const name = 'My New Name';
 
-      session.name = title;
+      session.name = name;
 
-      assert.strictEqual(session.name, title);
+      assert.strictEqual(session.name, name);
     });
 
     it('overwrites existing name', () => {
-      const session = createTestSession({ name: 'Old Title' });
-      const title = 'New Title';
+      const session = createTestSession({ name: 'Old Name' });
+      const name = 'New Name';
 
-      session.name = title;
+      session.name = name;
 
-      assert.strictEqual(session.name, 'New Title');
+      assert.strictEqual(session.name, 'New Name');
     });
 
-    it('handles empty title (clears name)', () => {
+    it('handles empty name (clears name)', () => {
       const session = createTestSession({ name: 'Existing' });
-      const title = '';
+      const name = '';
 
-      session.name = title;
+      session.name = name;
 
       assert.strictEqual(session.name, '');
     });
 
-    it('handles title with special characters', () => {
+    it('handles name with special characters', () => {
       const session = createTestSession({ name: '' });
-      const title = 'Fix: bug #123 (urgent!)';
+      const name = 'Fix: bug #123 (urgent!)';
 
-      session.name = title;
+      session.name = name;
 
       assert.strictEqual(session.name, 'Fix: bug #123 (urgent!)');
     });
@@ -53,9 +53,9 @@ describe('c > commands > title', () => {
     it('updates last_active_at', () => {
       const oldDate = new Date('2024-01-01');
       const session = createTestSession({ name: '', last_active_at: oldDate });
-      const title = 'New Title';
+      const name = 'New Name';
 
-      session.name = title;
+      session.name = name;
       session.last_active_at = new Date();
 
       assert.ok(session.last_active_at > oldDate);
@@ -119,12 +119,12 @@ describe('c > commands > title', () => {
   });
 
   describe('output message', () => {
-    it('confirms title in success message', () => {
-      const title = 'My New Title';
+    it('confirms name in success message', () => {
+      const name = 'My New Name';
 
-      // Output: "Set title: My New Title"
-      const message = `Set title: ${title}`;
-      assert.ok(message.includes(title));
+      // Output: "Set name: My New Name"
+      const message = `Set name: ${name}`;
+      assert.ok(message.includes(name));
     });
   });
 });
