@@ -498,10 +498,11 @@ describe('c > util > format > formatSessionLine', () => {
     assert.ok(!line.includes('\x1b[1m'), 'humanhash name should not use bold escape code');
   });
 
-  it('renders explicit name as bold', () => {
+  it('renders explicit name as white (not bold)', () => {
     const session = makeSession({ name: 'my cool session' });
     const line = formatSessionLine(session, layout);
-    assert.ok(line.includes('\x1b[1m'), 'explicit name should use bold escape code');
+    assert.ok(!line.includes('\x1b[1m'), 'explicit name should not use bold escape code');
+    assert.ok(line.includes('\x1b[97m'), 'explicit name should use whiteBright escape code');
   });
 });
 

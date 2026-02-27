@@ -255,7 +255,7 @@ export function formatSessionLine(session: Session, layout: ColumnLayout, depth 
     const nameWidth = layout.name - (depth * 2);
     const nameCol = name === session.humanhash
       ? chalk.dim(fixedWidth(name, nameWidth))
-      : chalk.bold(fixedWidth(name, nameWidth));
+      : chalk.whiteBright(fixedWidth(name, nameWidth));
     parts.push(nameCol);
   }
 
