@@ -54,7 +54,7 @@ export function getDisplayName(session: Session): string {
   // customTitle = user explicitly renamed via /rename (highest priority)
   if (customTitle) return customTitle;
 
-  // c's name = user explicitly renamed via `c title`
+  // c's name = user explicitly renamed via `c name`
   if (session.name) return session.name;
 
   // summary = Claude-generated summary
@@ -69,6 +69,34 @@ export function getDisplayName(session: Session): string {
  */
 export function shortId(id: string): string {
   return id.slice(0, 8);
+}
+
+/**
+ * Compute the minimum prefix length needed to uniquely identify target among allIds
+ */
+export function computeUniquePrefixLength(target: string, allIds: string[]): number {
+  for (let len = 1; len < target.length; len++) {
+    const prefix = target.slice(0, len);
+    if (allIds.filter(id => id.startsWith(prefix)).length <= 1) return len;
+  }
+  return target.length;
+}
+
+/**
+ * Render an ID with the unique prefix in cyan and the remainder dim
+ */
+export function highlightId(id: string, prefixLength: number): string {
+  return chalk.cyan(id.slice(0, prefixLength)) + chalk.dim(id.slice(prefixLength));
+}
+
+/**
+ * Pre-compute unique prefix lengths for a list of sessions (keyed by full session ID)
+ */
+export function buildPrefixMap(sessions: Session[]): Map<string, number> {
+  const shorts = sessions.map(s => shortId(s.id));
+  const map = new Map<string, number>();
+  sessions.forEach((s, i) => map.set(s.id, computeUniquePrefixLength(shorts[i], shorts)));
+  return map;
 }
 
 /**
@@ -208,22 +236,27 @@ export function getBranchDisplay(session: Session): { text: string; color: 'cyan
 /**
  * Format a session as a single line for list views
  */
-export function formatSessionLine(session: Session, layout: ColumnLayout, depth = 0): string {
+export function formatSessionLine(session: Session, layout: ColumnLayout, depth = 0, prefixMap?: Map<string, number>): string {
   const parts: string[] = [];
 
   // ID column (always visible when idName is visible)
   if (layout.visible.has('idName')) {
     const id = shortId(session.id);
+    const prefixLen = prefixMap?.get(session.id) ?? id.length;
+    const styledId = highlightId(id, prefixLen);
     const indent = '  '.repeat(depth);
     const idCol = depth > 0
-      ? indent + chalk.dim('└ ') + chalk.cyan(id) + '  '
-      : '  ' + chalk.cyan(id) + '  ';
+      ? indent + chalk.dim('└ ') + styledId + '  '
+      : '  ' + styledId + '  ';
     parts.push(idCol);
 
     // Name column (shrink by indent to maintain alignment)
     const name = getDisplayName(session);
     const nameWidth = layout.name - (depth * 2);
-    parts.push(chalk.bold(fixedWidth(name, nameWidth)));
+    const nameCol = name === session.humanhash
+      ? chalk.dim(fixedWidth(name, nameWidth))
+      : chalk.bold(fixedWidth(name, nameWidth));
+    parts.push(nameCol);
   }
 
   // Status column
@@ -462,6 +495,9 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number): 
 
   const width = terminalWidth ?? (process.stdout.columns || 80);
 
+  // Pre-compute unique prefix lengths for ID highlighting
+  const prefixMap = buildPrefixMap(sessions);
+
   // Reorder so children appear under their parents, with gap markers
   const ordered = orderSessionsWithChildren(sessions);
 
@@ -503,7 +539,7 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number): 
     if (row.type === 'gap') {
       console.log(formatGapLine(row.count, row.depth));
     } else if (row.type === 'session') {
-      console.log(formatSessionLine(row.session, layout, row.depth));
+      console.log(formatSessionLine(row.session, layout, row.depth, prefixMap));
     }
   }
 }

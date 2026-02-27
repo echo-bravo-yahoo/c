@@ -7,8 +7,10 @@ import assert from 'node:assert';
 import { useFakeTime } from '../setup.js';
 
 // These are pure functions we can test directly
-import { relativeTime, shortId, displayWidth, getRepoName, getBranchDisplay } from '../../src/util/format.js';
+import { relativeTime, shortId, displayWidth, getRepoName, getBranchDisplay, formatSessionLine, computeUniquePrefixLength, highlightId, buildPrefixMap } from '../../src/util/format.js';
 import type { Session } from '../../src/store/schema.js';
+import type { ColumnLayout } from '../../src/util/layout.js';
+import chalk from 'chalk';
 
 describe('c > util > format > relativeTime', () => {
   let fakeTime: { restore: () => void };
@@ -443,5 +445,165 @@ describe('c > util > format > getBranchDisplay', () => {
     const result = getBranchDisplay(session);
     assert.strictEqual(result.text, 'wt-name');
     assert.strictEqual(result.color, 'cyan');
+  });
+});
+
+describe('c > util > format > formatSessionLine', () => {
+  let savedLevel: typeof chalk.level;
+
+  beforeEach(() => {
+    savedLevel = chalk.level;
+    chalk.level = 1 as typeof chalk.level; // force ANSI output in non-TTY test runner
+  });
+
+  afterEach(() => {
+    chalk.level = savedLevel;
+  });
+
+  function makeSession(overrides: Partial<Session> = {}): Session {
+    return {
+      id: 'test-id-00-0000-0000-000000000000',
+      name: '',
+      humanhash: 'robin-happy-alaska-vermont',
+      directory: '/tmp/test',
+      project_key: 'key',
+      created_at: new Date(),
+      last_active_at: new Date(),
+      state: 'idle',
+      resources: {},
+      servers: {},
+      tags: { values: [] },
+      meta: {},
+      ...overrides,
+    };
+  }
+
+  const layout: ColumnLayout = {
+    id: 12,
+    name: 30,
+    status: 8,
+    repo: 0,
+    branch: 0,
+    resources: 0,
+    time: 0,
+    visible: new Set(['idName', 'status']),
+    totalWidth: 50,
+  };
+
+  it('renders humanhash name as dim (not bold)', () => {
+    const session = makeSession();
+    const line = formatSessionLine(session, layout);
+    // dim = \x1b[2m, bold = \x1b[1m
+    assert.ok(line.includes('\x1b[2m'), 'humanhash name should use dim escape code');
+    assert.ok(!line.includes('\x1b[1m'), 'humanhash name should not use bold escape code');
+  });
+
+  it('renders explicit name as bold', () => {
+    const session = makeSession({ name: 'my cool session' });
+    const line = formatSessionLine(session, layout);
+    assert.ok(line.includes('\x1b[1m'), 'explicit name should use bold escape code');
+  });
+});
+
+describe('c > util > format > computeUniquePrefixLength', () => {
+  it('returns 1 for a single ID', () => {
+    assert.strictEqual(computeUniquePrefixLength('abcdef', ['abcdef']), 1);
+  });
+
+  it('returns 1 for two fully distinct IDs', () => {
+    assert.strictEqual(computeUniquePrefixLength('abcdef', ['abcdef', 'xyz123']), 1);
+  });
+
+  it('returns 6 for two IDs sharing a 5-char prefix', () => {
+    assert.strictEqual(computeUniquePrefixLength('abcde1xx', ['abcde1xx', 'abcde2yy']), 6);
+  });
+
+  it('returns full length for identical IDs', () => {
+    assert.strictEqual(computeUniquePrefixLength('abcdef', ['abcdef', 'abcdef']), 6);
+  });
+
+  it('handles three-way partial overlap', () => {
+    const ids = ['abc111', 'abc222', 'abd333'];
+    assert.strictEqual(computeUniquePrefixLength('abc111', ids), 4);
+    assert.strictEqual(computeUniquePrefixLength('abc222', ids), 4);
+    assert.strictEqual(computeUniquePrefixLength('abd333', ids), 3);
+  });
+});
+
+describe('c > util > format > highlightId', () => {
+  let savedLevel: typeof chalk.level;
+
+  beforeEach(() => {
+    savedLevel = chalk.level;
+    chalk.level = 1 as typeof chalk.level;
+  });
+
+  afterEach(() => {
+    chalk.level = savedLevel;
+  });
+
+  it('renders all cyan when prefix equals full length', () => {
+    const result = highlightId('abcdef', 6);
+    assert.strictEqual(result, chalk.cyan('abcdef') + chalk.dim(''));
+  });
+
+  it('renders cyan prefix + dim remainder for partial prefix', () => {
+    const result = highlightId('abcdef', 3);
+    assert.strictEqual(result, chalk.cyan('abc') + chalk.dim('def'));
+  });
+
+  it('renders single-char prefix', () => {
+    const result = highlightId('abcdef', 1);
+    assert.strictEqual(result, chalk.cyan('a') + chalk.dim('bcdef'));
+  });
+});
+
+describe('c > util > format > buildPrefixMap', () => {
+  function makeSession(overrides: Partial<Session> = {}): Session {
+    return {
+      id: overrides.id ?? 'test-id',
+      name: '',
+      humanhash: 'test-hash',
+      directory: '/tmp/test',
+      project_key: 'key',
+      created_at: new Date(),
+      last_active_at: new Date(),
+      state: 'idle',
+      resources: {},
+      servers: {},
+      tags: { values: [] },
+      meta: {},
+      ...overrides,
+    };
+  }
+
+  it('returns one entry per session', () => {
+    const sessions = [
+      makeSession({ id: 'aaaa1111-0000-0000-0000-000000000000' }),
+      makeSession({ id: 'bbbb2222-0000-0000-0000-000000000000' }),
+    ];
+    const map = buildPrefixMap(sessions);
+    assert.strictEqual(map.size, 2);
+  });
+
+  it('assigns prefix length 1 for fully distinct short IDs', () => {
+    const sessions = [
+      makeSession({ id: 'aaaa1111-0000-0000-0000-000000000000' }),
+      makeSession({ id: 'bbbb2222-0000-0000-0000-000000000000' }),
+    ];
+    const map = buildPrefixMap(sessions);
+    assert.strictEqual(map.get('aaaa1111-0000-0000-0000-000000000000'), 1);
+    assert.strictEqual(map.get('bbbb2222-0000-0000-0000-000000000000'), 1);
+  });
+
+  it('assigns longer prefix for overlapping short IDs', () => {
+    const sessions = [
+      makeSession({ id: 'abcde111-0000-0000-0000-000000000000' }),
+      makeSession({ id: 'abcde222-0000-0000-0000-000000000000' }),
+    ];
+    const map = buildPrefixMap(sessions);
+    // shortId gives 'abcde111' and 'abcde222' — diverge at char 6
+    assert.strictEqual(map.get('abcde111-0000-0000-0000-000000000000'), 6);
+    assert.strictEqual(map.get('abcde222-0000-0000-0000-000000000000'), 6);
   });
 });

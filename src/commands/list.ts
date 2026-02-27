@@ -4,7 +4,7 @@
 
 import chalk from 'chalk';
 import { getSessions, reconcileStaleSessions } from '../store/index.js';
-import { printSessionTable, getDisplayName, shortId } from '../util/format.js';
+import { printSessionTable, getDisplayName, shortId, highlightId, buildPrefixMap } from '../util/format.js';
 import type { SessionState } from '../store/schema.js';
 
 export interface ListOptions {
@@ -69,6 +69,8 @@ function listPRs(): void {
     return;
   }
 
+  const prefixMap = buildPrefixMap(withPRs);
+
   console.log(chalk.dim('Session'.padEnd(30) + 'PR'));
   console.log(chalk.dim('─'.repeat(70)));
 
@@ -76,9 +78,10 @@ function listPRs(): void {
     const name = getDisplayName(session);
     const prNum = session.resources.pr!.match(/\/pull\/(\d+)/)?.[1];
     const prDisplay = prNum ? chalk.green(`#${prNum}`) : session.resources.pr!;
+    const id = shortId(session.id);
 
     console.log(
-      chalk.cyan(shortId(session.id)) +
+      highlightId(id, prefixMap.get(session.id) ?? id.length) +
         '  ' +
         name.padEnd(20) +
         '  ' +
@@ -101,14 +104,17 @@ function listJira(): void {
     return;
   }
 
+  const prefixMap = buildPrefixMap(withJira);
+
   console.log(chalk.dim('Session'.padEnd(30) + 'JIRA'));
   console.log(chalk.dim('─'.repeat(60)));
 
   for (const session of withJira) {
     const name = getDisplayName(session);
+    const id = shortId(session.id);
 
     console.log(
-      chalk.cyan(shortId(session.id)) +
+      highlightId(id, prefixMap.get(session.id) ?? id.length) +
         '  ' +
         name.padEnd(20) +
         '  ' +

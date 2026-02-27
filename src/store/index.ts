@@ -225,6 +225,17 @@ export function getSession(idOrPrefix: string): Session | undefined {
 }
 
 /**
+ * Find all sessions matching a prefix (by ID or humanhash)
+ */
+export function findSessions(prefix: string): Session[] {
+  const index = readIndex();
+  if (index.sessions[prefix]) return [index.sessions[prefix]];
+  return Object.values(index.sessions).filter(
+    (s) => s.id.startsWith(prefix) || s.humanhash.startsWith(prefix)
+  );
+}
+
+/**
  * Get all sessions (unfiltered, for ancestry lookups)
  */
 export function getAllSessions(): Session[] {
