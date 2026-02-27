@@ -240,17 +240,17 @@ export function formatSessionDetails(session: Session): string {
   const lines: string[] = [];
 
   lines.push(chalk.bold('Session: ') + getDisplayName(session));
-  lines.push(chalk.dim('ID: ') + session.id);
-  lines.push(chalk.dim('Humanhash: ') + session.humanhash);
+  lines.push(chalk.dim('  ID: ') + session.id);
+  lines.push(chalk.dim('  Humanhash: ') + session.humanhash);
   if (session.parent_session_id) {
-    lines.push(chalk.dim('Parent: ') + chalk.cyan(session.parent_session_id.slice(0, 8)));
+    lines.push(chalk.dim('  Parent: ') + chalk.cyan(session.parent_session_id.slice(0, 8)));
   }
   lines.push('');
   lines.push(chalk.bold('Status: ') + formatStatus(session));
-  lines.push(chalk.dim('Directory: ') + session.directory);
-  lines.push(chalk.dim('PID: ') + (session.pid != null ? String(session.pid) : '–'));
-  lines.push(chalk.dim('Created: ') + session.created_at.toLocaleString());
-  lines.push(chalk.dim('Last active: ') + session.last_active_at.toLocaleString());
+  lines.push(chalk.dim('  Directory: ') + session.directory);
+  lines.push(chalk.dim('  PID: ') + (session.pid != null ? String(session.pid) : '–'));
+  lines.push(chalk.dim('  Created: ') + session.created_at.toLocaleString());
+  lines.push(chalk.dim('  Last active: ') + session.last_active_at.toLocaleString());
 
   // Resources
   lines.push('');
