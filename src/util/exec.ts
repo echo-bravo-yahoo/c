@@ -65,3 +65,27 @@ export function execReplace(command: string, args: string[], options?: { cwd?: s
   // Return never type - process will exit via child.on('close')
   return undefined as never;
 }
+
+/**
+ * Spawn an interactive child process and return its exit code.
+ * Unlike execReplace, this returns control to the caller after the child exits.
+ */
+export function spawnInteractive(
+  command: string,
+  args: string[],
+  options?: { cwd?: string }
+): Promise<number> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: 'inherit',
+      cwd: options?.cwd,
+    });
+
+    child.on('close', (code) => resolve(code ?? 1));
+
+    const onSigint = () => child.kill('SIGINT');
+    const onSigterm = () => child.kill('SIGTERM');
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
+  });
+}

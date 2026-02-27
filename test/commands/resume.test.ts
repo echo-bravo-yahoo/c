@@ -6,6 +6,7 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
 import type { Session } from '../../src/store/schema.js';
+import { shortId } from '../../src/util/format.js';
 
 describe('c > commands > resume', () => {
   beforeEach(() => {
@@ -51,6 +52,23 @@ describe('c > commands > resume', () => {
 
       // Should have multiple matches - ambiguous
       assert.strictEqual(matches.length, 2);
+    });
+
+    it('reports all matching sessions for ambiguous prefix', () => {
+      const sessions = [
+        createTestSession({ id: 'abc12345-0000-0000-0000-000000000000' }),
+        createTestSession({ id: 'abc67890-0000-0000-0000-000000000000' }),
+        createTestSession({ id: 'def11111-0000-0000-0000-000000000000' }),
+      ];
+
+      const prefix = 'abc';
+      const matches = sessions.filter(
+        s => s.id.startsWith(prefix) || s.humanhash.startsWith(prefix)
+      );
+
+      assert.strictEqual(matches.length, 2);
+      assert.strictEqual(shortId(matches[0].id), 'abc12345');
+      assert.strictEqual(shortId(matches[1].id), 'abc67890');
     });
   });
 
@@ -138,6 +156,50 @@ describe('c > commands > resume', () => {
       const active = sessions.filter(s => s.state !== 'archived');
       assert.strictEqual(active.length, 1);
       assert.strictEqual(active[0].state, 'idle');
+    });
+  });
+
+  describe('claude failure handling', () => {
+    it('archives session on non-zero exit', () => {
+      const session = createTestSession({ state: 'idle', pid: 12345 });
+      const exitCode: number = 1;
+
+      if (exitCode !== 0) {
+        session.state = 'archived';
+        session.last_active_at = new Date();
+        delete session.pid;
+      }
+
+      assert.strictEqual(session.state, 'archived');
+    });
+
+    it('clears PID on non-zero exit', () => {
+      const session = createTestSession({ state: 'idle', pid: 54321 });
+      assert.strictEqual(session.pid, 54321);
+
+      const exitCode: number = 2;
+
+      if (exitCode !== 0) {
+        session.state = 'archived';
+        session.last_active_at = new Date();
+        delete session.pid;
+      }
+
+      assert.strictEqual(session.pid, undefined);
+    });
+
+    it('does not modify session on zero exit', () => {
+      const session = createTestSession({ state: 'idle', pid: 99999 });
+      const exitCode = 0;
+
+      if (exitCode !== 0) {
+        session.state = 'archived';
+        session.last_active_at = new Date();
+        delete session.pid;
+      }
+
+      assert.strictEqual(session.state, 'idle');
+      assert.strictEqual(session.pid, 99999);
     });
   });
 

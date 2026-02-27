@@ -7,7 +7,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { exec, setTmuxPaneTitle } from '../../src/util/exec.js';
+import { exec, setTmuxPaneTitle, spawnInteractive } from '../../src/util/exec.js';
 
 describe('c > util > exec > exec', () => {
   it('returns trimmed stdout', () => {
@@ -101,5 +101,22 @@ describe('c > util > exec > setTmuxPaneTitle', () => {
     assert.doesNotThrow(() => {
       setTmuxPaneTitle('My Session', mockExec);
     });
+  });
+});
+
+describe('c > util > exec > spawnInteractive', () => {
+  it('returns 0 on successful child', async () => {
+    const code = await spawnInteractive('node', ['-e', 'process.exit(0)']);
+    assert.strictEqual(code, 0);
+  });
+
+  it('returns non-zero exit code on child failure', async () => {
+    const code = await spawnInteractive('node', ['-e', 'process.exit(1)']);
+    assert.strictEqual(code, 1);
+  });
+
+  it('returns specific exit code', async () => {
+    const code = await spawnInteractive('node', ['-e', 'process.exit(42)']);
+    assert.strictEqual(code, 42);
   });
 });
