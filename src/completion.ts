@@ -44,7 +44,7 @@ const SUBCOMMANDS = [
 ];
 
 // Flags for list command
-const LIST_FLAGS = ['--all', '--done', '--archived', '--dir'];
+const LIST_FLAGS = ['--all', '--done', '--archived', '--dir', '--min-width', '--max-width'];
 
 /**
  * Get session completions (short IDs + humanhashes)

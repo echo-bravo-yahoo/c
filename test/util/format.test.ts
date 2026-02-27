@@ -427,12 +427,12 @@ describe('c > util > format > getBranchDisplay', () => {
     assert.strictEqual(result.color, 'magenta');
   });
 
-  it('falls back to directory basename when no worktree or branch', () => {
+  it('returns empty text when no worktree or branch', () => {
     const session = makeSession({
       resources: {},
     });
     const result = getBranchDisplay(session);
-    assert.strictEqual(result.text, 'myproject');
+    assert.strictEqual(result.text, '');
     assert.strictEqual(result.color, 'dim');
   });
 

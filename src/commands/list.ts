@@ -14,6 +14,8 @@ export interface ListOptions {
   prs?: boolean;
   jira?: boolean;
   directory?: string;
+  minWidth?: number;
+  maxWidth?: number;
 }
 
 export async function listCommand(options: ListOptions): Promise<void> {
@@ -48,7 +50,11 @@ export async function listCommand(options: ListOptions): Promise<void> {
     directory: options.directory,
   });
 
-  printSessionTable(sessions);
+  let terminalWidth = process.stdout.columns || 80;
+  if (options.minWidth != null) terminalWidth = Math.max(terminalWidth, options.minWidth);
+  if (options.maxWidth != null) terminalWidth = Math.min(terminalWidth, options.maxWidth);
+
+  printSessionTable(sessions, terminalWidth);
 }
 
 function listPRs(): void {

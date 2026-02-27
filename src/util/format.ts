@@ -7,6 +7,7 @@ import { Session } from '../store/schema.js';
 import { getClaudeSessionTitles } from '../claude/sessions.js';
 import { getAllSessions } from '../store/index.js';
 import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.js';
+import { computeColumnLayout, type ColumnKey, type ColumnLayout } from './layout.js';
 
 const USER_ICON = '󰇘';
 
@@ -82,7 +83,7 @@ export function displayWidth(str: string): number {
 /**
  * Truncate or pad a string to exact visual width (for column alignment)
  */
-function fixedWidth(str: string, width: number): string {
+export function fixedWidth(str: string, width: number): string {
   const visualWidth = displayWidth(str);
   if (visualWidth >= width) {
     // Truncate: need to count visual chars, not bytes
@@ -118,13 +119,57 @@ export function formatStatus(session: Session): string {
   }
 }
 
-// Column widths (including trailing space)
-const COL_ID = 12;
-const COL_NAME = 28;
-const COL_STATUS = 10;
-const COL_REPO = 14;
-const COL_BRANCH = 22;
-const COL_RESOURCES = 14;
+/**
+ * Build resource text for a session (PR number, JIRA ticket, first tag)
+ */
+export function buildResourceText(session: Session): string {
+  const parts: string[] = [];
+  if (session.resources.pr) {
+    const prNum = session.resources.pr.match(/\/pull\/(\d+)/)?.[1];
+    if (prNum) parts.push(`#${prNum}`);
+  }
+  if (session.resources.jira) parts.push(session.resources.jira);
+  if (session.tags.values.length > 0) parts.push(session.tags.values[0]);
+  return parts.join(' ') || '-';
+}
+
+/**
+ * Measure max content width per column across all sessions
+ */
+export function measureColumns(sessions: Session[]): Map<ColumnKey, number> {
+  const widths = new Map<ColumnKey, number>();
+
+  for (const session of sessions) {
+    // +1 on each measurement accounts for minimum inter-column spacing
+
+    // idName = ID (12) + name + trailing space
+    const nameWidth = displayWidth(getDisplayName(session));
+    const idNameWidth = 12 + nameWidth + 1;
+    widths.set('idName', Math.max(widths.get('idName') ?? 0, idNameWidth));
+
+    // status
+    const statusWidth = session.state.length + 1;
+    widths.set('status', Math.max(widths.get('status') ?? 0, statusWidth));
+
+    // repo
+    const repoWidth = displayWidth(getRepoName(session.directory)) + 1;
+    widths.set('repo', Math.max(widths.get('repo') ?? 0, repoWidth));
+
+    // branch
+    const branchWidth = displayWidth(getBranchDisplay(session).text) + 1;
+    widths.set('branch', Math.max(widths.get('branch') ?? 0, branchWidth));
+
+    // time
+    const timeWidth = relativeTime(session.last_active_at).length + 1;
+    widths.set('time', Math.max(widths.get('time') ?? 0, timeWidth));
+
+    // resources
+    const resourceWidth = displayWidth(buildResourceText(session)) + 1;
+    widths.set('resources', Math.max(widths.get('resources') ?? 0, resourceWidth));
+  }
+
+  return widths;
+}
 
 /**
  * Get repo name from session directory
@@ -157,80 +202,83 @@ export function getBranchDisplay(session: Session): { text: string; color: 'cyan
   if (session.resources.branch) {
     return { text: abbreviateBranch(session.resources.branch), color: 'magenta' };
   }
-  const basename = session.directory.split('/').pop() || session.directory;
-  return { text: basename, color: 'dim' };
+  return { text: '', color: 'dim' };
 }
 
 /**
  * Format a session as a single line for list views
  */
-export function formatSessionLine(session: Session, depth = 0): string {
-  // ID column (with optional tree prefix for child sessions)
-  const id = shortId(session.id);
-  const indent = '  '.repeat(depth);
-  const idCol = depth > 0
-    ? indent + chalk.dim('└ ') + chalk.cyan(id) + '  '
-    : '  ' + chalk.cyan(id) + '  ';
+export function formatSessionLine(session: Session, layout: ColumnLayout, depth = 0): string {
+  const parts: string[] = [];
 
-  // Name column (shrink by indent to maintain alignment)
-  const name = getDisplayName(session);
-  const nameWidth = COL_NAME - (depth * 2);
-  const nameCol = chalk.bold(fixedWidth(name, nameWidth));
+  // ID column (always visible when idName is visible)
+  if (layout.visible.has('idName')) {
+    const id = shortId(session.id);
+    const indent = '  '.repeat(depth);
+    const idCol = depth > 0
+      ? indent + chalk.dim('└ ') + chalk.cyan(id) + '  '
+      : '  ' + chalk.cyan(id) + '  ';
+    parts.push(idCol);
+
+    // Name column (shrink by indent to maintain alignment)
+    const name = getDisplayName(session);
+    const nameWidth = layout.name - (depth * 2);
+    parts.push(chalk.bold(fixedWidth(name, nameWidth)));
+  }
 
   // Status column
-  const statusText = session.state;
-  const statusPad = ' '.repeat(Math.max(1, COL_STATUS - statusText.length));
-  const statusCol = formatStatus(session) + statusPad;
+  if (layout.visible.has('status')) {
+    const statusText = session.state;
+    const statusPad = ' '.repeat(Math.max(1, layout.status - statusText.length));
+    parts.push(formatStatus(session) + statusPad);
+  }
 
   // Repo column
-  const repoName = getRepoName(session.directory);
-  const repoCol = chalk.blue(fixedWidth(repoName, COL_REPO));
+  if (layout.visible.has('repo')) {
+    const repoName = getRepoName(session.directory);
+    parts.push(chalk.blue(fixedWidth(repoName, layout.repo)));
+  }
 
   // Worktree/Branch column
-  const branch = getBranchDisplay(session);
-  const branchCol = branch.color === 'dim'
-    ? chalk.dim(fixedWidth(branch.text, COL_BRANCH))
-    : chalk[branch.color](fixedWidth(branch.text, COL_BRANCH));
+  if (layout.visible.has('branch')) {
+    const branch = getBranchDisplay(session);
+    const branchCol = branch.color === 'dim'
+      ? chalk.dim(fixedWidth(branch.text, layout.branch))
+      : chalk[branch.color](fixedWidth(branch.text, layout.branch));
+    parts.push(branchCol);
+  }
 
-  // Resources column - PR, JIRA, first tag (no branch)
-  const resourceParts: string[] = [];
-  if (session.resources.pr) {
-    const prNum = session.resources.pr.match(/\/pull\/(\d+)/)?.[1];
-    if (prNum) {
-      resourceParts.push(`#${prNum}`);
-    }
-  }
-  if (session.resources.jira) {
-    resourceParts.push(session.resources.jira);
-  }
-  if (session.tags.values.length > 0) {
-    resourceParts.push(session.tags.values[0]);
-  }
-  const resourceText = resourceParts.join(' ') || '-';
+  // Resources column
+  if (layout.visible.has('resources')) {
+    const resourceText = buildResourceText(session);
+    const resourceParts = resourceText === '-' ? [] : resourceText.split(' ');
 
-  // Truncate if needed, then colorize
-  let resourceCol: string;
-  if (resourceParts.length === 0) {
-    resourceCol = chalk.dim(fixedWidth('-', COL_RESOURCES));
-  } else {
-    const truncated = fixedWidth(resourceText, COL_RESOURCES);
-    if (truncated.includes('…')) {
-      resourceCol = chalk.dim(truncated);
+    let resourceCol: string;
+    if (resourceParts.length === 0) {
+      resourceCol = chalk.dim(fixedWidth('-', layout.resources));
     } else {
-      const prNum = session.resources.pr?.match(/\/pull\/(\d+)/)?.[1];
-      const coloredParts = [
-        prNum ? chalk.green(`#${prNum}`) : '',
-        session.resources.jira ? chalk.yellow(session.resources.jira) : '',
-        session.tags.values.length > 0 ? chalk.cyan(session.tags.values[0]) : '',
-      ].filter(Boolean).join(' ');
-      resourceCol = coloredParts + ' '.repeat(Math.max(0, COL_RESOURCES - displayWidth(resourceText)));
+      const truncated = fixedWidth(resourceText, layout.resources);
+      if (truncated.includes('…')) {
+        resourceCol = chalk.dim(truncated);
+      } else {
+        const prNum = session.resources.pr?.match(/\/pull\/(\d+)/)?.[1];
+        const coloredParts = [
+          prNum ? chalk.green(`#${prNum}`) : '',
+          session.resources.jira ? chalk.yellow(session.resources.jira) : '',
+          session.tags.values.length > 0 ? chalk.cyan(session.tags.values[0]) : '',
+        ].filter(Boolean).join(' ');
+        resourceCol = coloredParts + ' '.repeat(Math.max(0, layout.resources - displayWidth(resourceText)));
+      }
     }
+    parts.push(resourceCol);
   }
 
   // Time column
-  const timeCol = chalk.dim(relativeTime(session.last_active_at));
+  if (layout.visible.has('time')) {
+    parts.push(chalk.dim(relativeTime(session.last_active_at)));
+  }
 
-  return `${idCol}${nameCol}${statusCol}${repoCol}${branchCol}${resourceCol}${timeCol}`;
+  return parts.join('');
 }
 
 /**
@@ -406,37 +454,50 @@ function formatGapLine(count: number, depth: number): string {
 /**
  * Print a table of sessions
  */
-export function printSessionTable(sessions: Session[]): void {
+export function printSessionTable(sessions: Session[], terminalWidth?: number): void {
   if (sessions.length === 0) {
     console.log(chalk.dim('No sessions found.'));
     return;
   }
 
+  const width = terminalWidth ?? (process.stdout.columns || 80);
+
+  // Measure content and compute layout
+  const contentWidths = measureColumns(sessions);
+  const layout = computeColumnLayout(contentWidths, width);
+
   // Reorder so children appear under their parents, with gap markers
   const ordered = orderSessionsWithChildren(sessions);
 
-  const totalWidth = COL_ID + COL_NAME + COL_STATUS + COL_REPO + COL_BRANCH + COL_RESOURCES + 10;
+  // Build header from visible columns
+  const headerParts: string[] = [];
+  if (layout.visible.has('idName')) {
+    headerParts.push('  ' + fixedWidth('ID', layout.id - 2) + fixedWidth('Name', layout.name));
+  }
+  if (layout.visible.has('status')) {
+    headerParts.push(fixedWidth('Status', layout.status));
+  }
+  if (layout.visible.has('repo')) {
+    headerParts.push(fixedWidth('Repo', layout.repo));
+  }
+  if (layout.visible.has('branch')) {
+    headerParts.push(fixedWidth('Worktree/Branch', layout.branch));
+  }
+  if (layout.visible.has('resources')) {
+    headerParts.push(fixedWidth('Resources', layout.resources));
+  }
+  if (layout.visible.has('time')) {
+    headerParts.push('Last Active');
+  }
 
-  // Header (2-space indent to match data rows)
-  console.log(
-    chalk.dim(
-      '  ' +
-        fixedWidth('ID', COL_ID - 2) +
-        fixedWidth('Name', COL_NAME) +
-        fixedWidth('Status', COL_STATUS) +
-        fixedWidth('Repo', COL_REPO) +
-        fixedWidth('Worktree/Branch', COL_BRANCH) +
-        fixedWidth('Resources', COL_RESOURCES) +
-        'Last Active'
-    )
-  );
-  console.log(chalk.dim('─'.repeat(totalWidth)));
+  console.log(chalk.dim(headerParts.join('')));
+  console.log(chalk.dim('─'.repeat(layout.totalWidth)));
 
   for (const row of ordered) {
     if (row.type === 'gap') {
       console.log(formatGapLine(row.count, row.depth));
     } else if (row.type === 'session') {
-      console.log(formatSessionLine(row.session, row.depth));
+      console.log(formatSessionLine(row.session, layout, row.depth));
     }
   }
 }

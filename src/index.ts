@@ -42,6 +42,8 @@ program
   .option('--prs', 'Show sessions with linked PRs')
   .option('--jira', 'Show sessions with linked JIRA tickets')
   .option('--dir <directory>', 'Filter by directory')
+  .option('--min-width <n>', 'Minimum table width', parseInt)
+  .option('--max-width <n>', 'Maximum table width', parseInt)
   .action(async (options) => {
     await listCommand({
       all: options.all,
@@ -50,6 +52,8 @@ program
       prs: options.prs,
       jira: options.jira,
       directory: options.dir,
+      minWidth: options.minWidth,
+      maxWidth: options.maxWidth,
     });
   });
 
