@@ -29,11 +29,12 @@ const program = new Command();
 program
   .name('c')
   .description('Claude Code session manager')
-  .version('0.1.0');
+  .version('0.1.0')
+  .showSuggestionAfterError(true);
 
-// Default command: list
+// List sessions
 program
-  .command('list', { isDefault: true })
+  .command('list')
   .description('List sessions')
   .option('-a, --all', 'Show all sessions including archived')
   .option('--archived', 'Show only archived sessions')
@@ -234,5 +235,11 @@ program
 
 // Initialize completion (handles --compgen flags from shell)
 initCompletion();
+
+// Default to list when no command given
+const args = process.argv.slice(2);
+if (args.length === 0 || (args.length > 0 && args.every(a => a.startsWith('-')))) {
+  process.argv.splice(2, 0, 'list');
+}
 
 program.parse();

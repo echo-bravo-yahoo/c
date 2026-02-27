@@ -16,10 +16,20 @@ export async function resumeCommand(idOrPrefix: string): Promise<void> {
     process.exit(1);
   }
 
+  const displayName = getDisplayName(session);
+
   // Verify session exists in Claude's storage
   const claudeSession = getClaudeSession(session.id);
   if (!claudeSession) {
-    console.error(chalk.red(`Session ${session.humanhash} no longer exists in Claude's storage`));
+    await updateIndex((index) => {
+      if (index.sessions[session!.id]) {
+        index.sessions[session!.id].state = 'archived';
+        index.sessions[session!.id].last_active_at = new Date();
+        delete index.sessions[session!.id].pid;
+      }
+    });
+    console.error(chalk.red(`Session ${displayName} no longer exists in Claude's storage`));
+    console.error(chalk.dim(`Archived stale session. Run ${chalk.cyan('c new')} to start fresh.`));
     process.exit(1);
   }
 
@@ -29,10 +39,6 @@ export async function resumeCommand(idOrPrefix: string): Promise<void> {
       index.sessions[session!.id].pid = process.pid;
     }
   });
-
-  // Use session.directory from c's index - it stores the actual path correctly
-  // (claudeSession.directory may be wrong due to lossy project key encoding)
-  const displayName = getDisplayName(session);
   console.log(chalk.dim(`Resuming session ${displayName} in ${session.directory}...`));
   setTmuxPaneTitle(displayName);
   execReplace('claude', ['-r', session.id], { cwd: session.directory });

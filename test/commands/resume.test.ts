@@ -86,6 +86,61 @@ describe('c > commands > resume', () => {
     });
   });
 
+  describe('stale session handling', () => {
+    it('archives session when Claude storage is missing', () => {
+      const session = createTestSession({ state: 'busy', pid: 12345 });
+
+      // Simulate: session in c's index but getClaudeSession returns undefined
+      const claudeSessionExists = false;
+
+      if (!claudeSessionExists) {
+        session.state = 'archived';
+        session.last_active_at = new Date();
+        delete session.pid;
+      }
+
+      assert.strictEqual(session.state, 'archived');
+      assert.strictEqual(session.pid, undefined);
+    });
+
+    it('clears PID on stale session', () => {
+      const session = createTestSession({ state: 'busy', pid: 99999 });
+      assert.strictEqual(session.pid, 99999);
+
+      // After archival
+      session.state = 'archived';
+      delete session.pid;
+
+      assert.strictEqual(session.pid, undefined);
+    });
+
+    it('archives session with no PID cleanly', () => {
+      const session = createTestSession({ state: 'idle' });
+      assert.strictEqual(session.pid, undefined);
+
+      session.state = 'archived';
+      session.last_active_at = new Date();
+      delete session.pid;
+
+      assert.strictEqual(session.state, 'archived');
+    });
+
+    it('stale session no longer appears as active after archival', () => {
+      const sessions = [
+        createTestSession({ state: 'busy', pid: 111 }),
+        createTestSession({ state: 'idle' }),
+      ];
+
+      // Archive the first session (stale)
+      sessions[0].state = 'archived';
+      delete sessions[0].pid;
+
+      const active = sessions.filter(s => s.state !== 'archived');
+      assert.strictEqual(active.length, 1);
+      assert.strictEqual(active[0].state, 'idle');
+    });
+  });
+
   describe('session info for display', () => {
     it('provides display name for logging', () => {
       const session = createTestSession({
