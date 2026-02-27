@@ -30,7 +30,9 @@ export function setTmuxPaneTitle(
 ): void {
   if (process.env.TMUX) {
     try {
-      execFn(`tmux select-pane -T ${JSON.stringify(title)}`);
+      const escaped = JSON.stringify(title);
+      execFn(`tmux select-pane -T ${escaped}`);
+      execFn(`tmux set -p allow-set-title off`);
     } catch {
       // Ignore errors (e.g., tmux not available)
     }

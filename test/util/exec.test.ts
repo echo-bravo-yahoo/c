@@ -61,15 +61,16 @@ describe('c > util > exec > setTmuxPaneTitle', () => {
     }
   });
 
-  it('calls tmux with correct command when TMUX is set', () => {
+  it('sets title and locks it when TMUX is set', () => {
     process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
     const commands: string[] = [];
     const mockExec = (cmd: string) => { commands.push(cmd); };
 
     setTmuxPaneTitle('My Session', mockExec);
 
-    assert.strictEqual(commands.length, 1);
+    assert.strictEqual(commands.length, 2);
     assert.strictEqual(commands[0], 'tmux select-pane -T "My Session"');
+    assert.strictEqual(commands[1], 'tmux set -p allow-set-title off');
   });
 
   it('does not call tmux when TMUX is not set', () => {
