@@ -37,6 +37,7 @@ export async function resumeCommand(idOrPrefix: string): Promise<void> {
   await updateIndex((index) => {
     if (index.sessions[session!.id]) {
       index.sessions[session!.id].pid = process.pid;
+      index.sessions[session!.id].state = 'idle';
     }
   });
   console.log(chalk.dim(`Resuming session ${displayName} in ${session.directory}...`));
