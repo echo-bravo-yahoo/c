@@ -5,6 +5,7 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
+import { formatSessionDetails } from '../../src/util/format.js';
 import type { Session } from '../../src/store/schema.js';
 
 describe('c > commands > show', () => {
@@ -107,6 +108,41 @@ describe('c > commands > show', () => {
       const session = createTestSession({ meta: { note: 'Test note', priority: 'high' } });
       assert.strictEqual(session.meta.note, 'Test note');
       assert.strictEqual(session.meta.priority, 'high');
+    });
+  });
+
+  describe('pid display', () => {
+    it('shows PID when session has one', () => {
+      const session = createTestSession({ pid: 42567 });
+      const output = formatSessionDetails(session);
+      assert.match(output, /PID/);
+      assert.match(output, /42567/);
+    });
+
+    it('shows dash when session has no PID', () => {
+      const session = createTestSession();
+      const output = formatSessionDetails(session);
+      assert.match(output, /PID/);
+      assert.match(output, /–/);
+    });
+
+    it('PID line appears for every session regardless of state', () => {
+      for (const state of ['busy', 'idle', 'waiting', 'closed', 'archived'] as const) {
+        const session = createTestSession({ state });
+        const output = formatSessionDetails(session);
+        assert.match(output, /PID/, `PID missing for state: ${state}`);
+      }
+    });
+
+    it('shows different PIDs for different sessions', () => {
+      const s1 = createTestSession({ pid: 111 });
+      const s2 = createTestSession({ pid: 222 });
+      const out1 = formatSessionDetails(s1);
+      const out2 = formatSessionDetails(s2);
+      assert.match(out1, /111/);
+      assert.match(out2, /222/);
+      assert.doesNotMatch(out1, /222/);
+      assert.doesNotMatch(out2, /111/);
     });
   });
 
