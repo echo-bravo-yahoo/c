@@ -21,6 +21,7 @@ export async function handleSessionEnd(
     if (index.sessions[targetId]) {
       index.sessions[targetId].state = 'closed';
       index.sessions[targetId].last_active_at = new Date();
+      delete index.sessions[targetId].pid;
     }
   });
 }

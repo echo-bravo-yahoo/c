@@ -37,6 +37,8 @@ export interface Session {
   servers: SessionServers;
   tags: SessionTags;
   meta: SessionMeta;
+  /** PID of the wrapper process that launched this session */
+  pid?: number;
   /** Parent session ID if this session was spawned from plan execution */
   parent_session_id?: string;
 }

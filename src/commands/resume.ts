@@ -3,12 +3,12 @@
  */
 
 import chalk from 'chalk';
-import { getSession } from '../store/index.js';
+import { getSession, updateIndex } from '../store/index.js';
 import { getClaudeSession } from '../claude/sessions.js';
 import { execReplace, setTmuxPaneTitle } from '../util/exec.js';
 import { getDisplayName } from '../util/format.js';
 
-export function resumeCommand(idOrPrefix: string): void {
+export async function resumeCommand(idOrPrefix: string): Promise<void> {
   const session = getSession(idOrPrefix);
 
   if (!session) {
@@ -22,6 +22,13 @@ export function resumeCommand(idOrPrefix: string): void {
     console.error(chalk.red(`Session ${session.humanhash} no longer exists in Claude's storage`));
     process.exit(1);
   }
+
+  // Store PID before exec replaces this process
+  await updateIndex((index) => {
+    if (index.sessions[session!.id]) {
+      index.sessions[session!.id].pid = process.pid;
+    }
+  });
 
   // Use session.directory from c's index - it stores the actual path correctly
   // (claudeSession.directory may be wrong due to lossy project key encoding)

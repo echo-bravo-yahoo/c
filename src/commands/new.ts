@@ -47,6 +47,7 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   // Save to c's index
   await updateIndex((index) => {
     index.sessions[sessionId] = session;
+    index.sessions[sessionId].pid = process.pid;
   });
 
   const displayName = name || humanhash;

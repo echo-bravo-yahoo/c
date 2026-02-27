@@ -114,6 +114,10 @@ function parseSession(raw: Record<string, unknown>): Session {
     meta: (raw.meta as Session['meta']) ?? {},
   };
 
+  if (typeof raw.pid === 'number') {
+    session.pid = raw.pid;
+  }
+
   if (raw.parent_session_id) {
     session.parent_session_id = String(raw.parent_session_id);
   }

@@ -16,6 +16,7 @@ export interface SessionOverrides {
   resources?: Partial<SessionResources>;
   tags?: string[];
   meta?: SessionMeta;
+  pid?: number;
   parent_session_id?: string;
 }
 
@@ -46,6 +47,7 @@ export function createTestSession(overrides: SessionOverrides = {}): Session {
     servers: {},
     tags: { values: overrides.tags ?? [] },
     meta: overrides.meta ?? {},
+    ...(overrides.pid != null && { pid: overrides.pid }),
     ...(overrides.parent_session_id && { parent_session_id: overrides.parent_session_id }),
   };
 }
