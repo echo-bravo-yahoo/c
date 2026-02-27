@@ -26,7 +26,7 @@ export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
       }
     });
 
-    console.log(chalk.green(`Archived ${getDisplayName(session)}`));
+    console.log(chalk.green(`Archived session "${getDisplayName(session)}" (${session.id.slice(0, 8)})`));
     return;
   }
 
@@ -49,6 +49,6 @@ export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
       }
     });
 
-    console.log(chalk.green(`Archived ${getDisplayName(session)}`));
+    console.log(chalk.green(`Archived session "${getDisplayName(session)}" (${session.id.slice(0, 8)})`));
   }
 }

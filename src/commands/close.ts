@@ -37,7 +37,7 @@ export async function closeCommand(
       }
     });
 
-    console.log(chalk.green(`${verb} ${getDisplayName(session)}`));
+    console.log(chalk.green(`${verb} session "${getDisplayName(session)}" (${session.id.slice(0, 8)})`));
     return;
   }
 
@@ -65,6 +65,6 @@ export async function closeCommand(
       }
     });
 
-    console.log(chalk.green(`${verb} ${getDisplayName(session)}`));
+    console.log(chalk.green(`${verb} session "${getDisplayName(session)}" (${session.id.slice(0, 8)})`));
   }
 }
