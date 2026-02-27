@@ -7,7 +7,7 @@ import { Session } from '../store/schema.js';
 import { getClaudeSessionTitles } from '../claude/sessions.js';
 import { getAllSessions } from '../store/index.js';
 import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.js';
-import { computeColumnLayout, type ColumnKey, type ColumnLayout } from './layout.js';
+import { computeColumnLayout, ID_FIXED_WIDTH, type ColumnKey, type ColumnLayout } from './layout.js';
 
 const USER_ICON = '󰇘';
 
@@ -462,12 +462,18 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number): 
 
   const width = terminalWidth ?? (process.stdout.columns || 80);
 
-  // Measure content and compute layout
-  const contentWidths = measureColumns(sessions);
-  const layout = computeColumnLayout(contentWidths, width);
-
   // Reorder so children appear under their parents, with gap markers
   const ordered = orderSessionsWithChildren(sessions);
+
+  // Measure content and compute layout, accounting for nesting depth
+  const contentWidths = measureColumns(sessions);
+  for (const row of ordered) {
+    if (row.type !== 'session') continue;
+    const nameLen = displayWidth(getDisplayName(row.session));
+    const idNameWidth = ID_FIXED_WIDTH + nameLen + 1 + row.depth * 2;
+    contentWidths.set('idName', Math.max(contentWidths.get('idName') ?? 0, idNameWidth));
+  }
+  const layout = computeColumnLayout(contentWidths, width);
 
   // Build header from visible columns
   const headerParts: string[] = [];

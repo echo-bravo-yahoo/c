@@ -29,7 +29,7 @@ export const ID_FIXED_WIDTH = 12;
 
 export const COLUMN_SPECS: readonly ColumnSpec[] = [
   { key: 'status',    label: 'Status',          min:  7, max:  9, priority: 1 },
-  { key: 'idName',    label: 'ID',              min: 20, max: 44, priority: 2 },
+  { key: 'idName',    label: 'ID',              min: 20, max: Infinity, priority: 2 },
   { key: 'repo',      label: 'Repo',            min:  6, max: 20, priority: 3 },
   { key: 'branch',    label: 'Worktree/Branch', min:  6, max: 30, priority: 4 },
   { key: 'time',      label: 'Last Active',     min:  6, max: 12, priority: 5 },
@@ -42,7 +42,7 @@ export const COLUMN_SPECS: readonly ColumnSpec[] = [
  * 1. Drop lowest-priority columns until minimums + gutter fit.
  * 2. Allocate minimums.
  * 3. Expand in priority order toward content width (capped by max).
- * 4. Leftover space goes to idName (up to max 44).
+ * 4. Leftover space goes to idName (up to content width).
  */
 export function computeColumnLayout(
   contentWidths: Map<ColumnKey, number>,
@@ -81,11 +81,12 @@ export function computeColumnLayout(
     }
   }
 
-  // Step 4: Leftover to idName (up to max 44)
+  // Step 4: Leftover to idName (up to content width)
   if (remaining > 0 && widths.has('idName')) {
-    const idNameSpec = COLUMN_SPECS.find((s) => s.key === 'idName')!;
     const current = widths.get('idName')!;
-    const grow = Math.min(idNameSpec.max - current, remaining);
+    const content = contentWidths.get('idName') ?? 0;
+    const target = Math.max(content, current);
+    const grow = Math.min(target - current, remaining);
     if (grow > 0) {
       widths.set('idName', current + grow);
       remaining -= grow;

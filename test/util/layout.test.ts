@@ -89,12 +89,15 @@ describe('c > util > layout > computeColumnLayout', () => {
     assert.strictEqual(layout.id, 12);
   });
 
-  it('name gets remainder of idName budget', () => {
-    // With enough space, idName expands to max 44 via leftover
+  it('name gets remainder of idName budget up to content width', () => {
+    // With enough space but no content, idName stays at min
     const layout = computeColumnLayout(emptyWidths(), 200);
-    // idName max is 44, id is 12, so name = 44 - 12 = 32
-    assert.strictEqual(layout.name, 44 - 12);
-    assert.strictEqual(layout.id + layout.name, 44);
+    assert.strictEqual(layout.id + layout.name, 20); // idName min
+
+    // With content, idName expands to fit
+    const content = widths({ idName: 60 });
+    const layout2 = computeColumnLayout(content, 200);
+    assert.strictEqual(layout2.id + layout2.name, 60);
   });
 
   it('empty content widths → all at minimums (plus leftover to idName)', () => {
@@ -125,7 +128,7 @@ describe('c > util > layout > computeColumnLayout', () => {
 
     // Status expands first (priority 1): min 7, content 9, max 9 → grow by 2. Remaining = 8.
     assert.strictEqual(layout.status, 9);
-    // idName expands next (priority 2): min 20, content 44, max 44 → grow by min(24, 8) = 8
+    // idName expands next (priority 2): min 20, content 44 → grow by min(24, 8) = 8
     assert.strictEqual(layout.id + layout.name, 28);
     // Others stay at minimums
     assert.strictEqual(layout.repo, 6);
@@ -145,7 +148,7 @@ describe('c > util > layout > computeColumnLayout', () => {
     assert.ok(layout.branch >= 6, 'branch should not go below min');
   });
 
-  it('max width cap respected per column', () => {
+  it('max width cap respected per column (idName expands to content)', () => {
     // Give huge content but plenty of terminal space
     const content = widths({
       status: 50,
@@ -159,30 +162,29 @@ describe('c > util > layout > computeColumnLayout', () => {
     const layout = computeColumnLayout(content, 500);
 
     assert.ok(layout.status <= 9, 'status capped at max 9');
-    assert.ok(layout.id + layout.name <= 44, 'idName capped at max 44');
+    assert.strictEqual(layout.id + layout.name, 100, 'idName expands to content width');
     assert.ok(layout.repo <= 20, 'repo capped at max 20');
     assert.ok(layout.branch <= 30, 'branch capped at max 30');
     assert.ok(layout.time <= 12, 'time capped at max 12');
     assert.ok(layout.resources <= 24, 'resources capped at max 24');
   });
 
-  it('leftover space goes to idName (up to max 44)', () => {
-    // Content at minimums, but extra terminal space
+  it('leftover space goes to idName (up to content width)', () => {
+    // Content at minimums except idName has long content
     const content = widths({
       status: 7,
-      idName: 20,
+      idName: 60,
       repo: 6,
       branch: 6,
       time: 6,
       resources: 4,
     });
 
-    // 30 extra beyond minimums
-    const layout = computeColumnLayout(content, ALL_MIN + GUTTER + 30);
+    // 50 extra beyond minimums — enough for idName to reach content width of 60
+    const layout = computeColumnLayout(content, ALL_MIN + GUTTER + 50);
 
-    // No column needs expansion beyond min, so all 30 goes to idName (up to max 44)
-    // idName min is 20, max is 44, so grows by 24 (capped)
-    assert.strictEqual(layout.id + layout.name, 44);
+    // idName min is 20, content is 60, so grows by 40 (within 50 available)
+    assert.strictEqual(layout.id + layout.name, 60);
   });
 
   it('totalWidth equals sum of allocated widths + gutter', () => {
