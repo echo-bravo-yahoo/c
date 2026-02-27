@@ -123,22 +123,42 @@ const COL_ID = 12;
 const COL_NAME = 28;
 const COL_STATUS = 10;
 const COL_REPO = 14;
-const COL_RESOURCES = 36;
+const COL_BRANCH = 22;
+const COL_RESOURCES = 14;
 
 /**
  * Get repo name from session directory
  * - If in a worktree (path contains .worktrees/), use the original repo's directory name
  * - Otherwise, use the directory's basename
  */
-function getRepoName(directory: string): string {
-  const worktreeMatch = directory.match(/^(.+)\/\.worktrees\//);
+export function getRepoName(directory: string): string {
+  const home = process.env.HOME || '';
+  // Session dir is $HOME itself
+  if (home && (directory === home || directory === home + '/')) {
+    return '~';
+  }
+  // Match .worktrees/ or .claude/worktrees/
+  const worktreeMatch = directory.match(/^(.+?)\/\.(?:claude\/)?worktrees\//);
   if (worktreeMatch) {
-    // Extract basename of the original repo
     const originalRepo = worktreeMatch[1];
     return originalRepo.split('/').pop() || originalRepo;
   }
-  // Just use the directory's basename
   return directory.split('/').pop() || directory;
+}
+
+/**
+ * Get branch/worktree display for a session
+ * Priority: worktree > branch > directory basename fallback
+ */
+export function getBranchDisplay(session: Session): { text: string; color: 'cyan' | 'magenta' | 'dim' } {
+  if (session.resources.worktree) {
+    return { text: session.resources.worktree, color: 'cyan' };
+  }
+  if (session.resources.branch) {
+    return { text: abbreviateBranch(session.resources.branch), color: 'magenta' };
+  }
+  const basename = session.directory.split('/').pop() || session.directory;
+  return { text: basename, color: 'dim' };
 }
 
 /**
@@ -166,12 +186,14 @@ export function formatSessionLine(session: Session, depth = 0): string {
   const repoName = getRepoName(session.directory);
   const repoCol = chalk.blue(fixedWidth(repoName, COL_REPO));
 
-  // Resources column - build plain text first, then truncate, then colorize
+  // Worktree/Branch column
+  const branch = getBranchDisplay(session);
+  const branchCol = branch.color === 'dim'
+    ? chalk.dim(fixedWidth(branch.text, COL_BRANCH))
+    : chalk[branch.color](fixedWidth(branch.text, COL_BRANCH));
+
+  // Resources column - PR, JIRA, first tag (no branch)
   const resourceParts: string[] = [];
-  const displayBranch = session.resources.branch ? abbreviateBranch(session.resources.branch) : '';
-  if (displayBranch) {
-    resourceParts.push(displayBranch);
-  }
   if (session.resources.pr) {
     const prNum = session.resources.pr.match(/\/pull\/(\d+)/)?.[1];
     if (prNum) {
@@ -181,6 +203,9 @@ export function formatSessionLine(session: Session, depth = 0): string {
   if (session.resources.jira) {
     resourceParts.push(session.resources.jira);
   }
+  if (session.tags.values.length > 0) {
+    resourceParts.push(session.tags.values[0]);
+  }
   const resourceText = resourceParts.join(' ') || '-';
 
   // Truncate if needed, then colorize
@@ -189,16 +214,14 @@ export function formatSessionLine(session: Session, depth = 0): string {
     resourceCol = chalk.dim(fixedWidth('-', COL_RESOURCES));
   } else {
     const truncated = fixedWidth(resourceText, COL_RESOURCES);
-    // Re-colorize the truncated text (simplified: just color the whole thing if branch is primary)
     if (truncated.includes('…')) {
-      // Truncated - use magenta for branch-heavy display
-      resourceCol = chalk.magenta(truncated);
+      resourceCol = chalk.dim(truncated);
     } else {
-      // Not truncated - apply individual colors
+      const prNum = session.resources.pr?.match(/\/pull\/(\d+)/)?.[1];
       const coloredParts = [
-        displayBranch ? chalk.magenta(displayBranch) : '',
-        session.resources.pr ? chalk.green(`#${session.resources.pr.match(/\/pull\/(\d+)/)?.[1]}`) : '',
+        prNum ? chalk.green(`#${prNum}`) : '',
         session.resources.jira ? chalk.yellow(session.resources.jira) : '',
+        session.tags.values.length > 0 ? chalk.cyan(session.tags.values[0]) : '',
       ].filter(Boolean).join(' ');
       resourceCol = coloredParts + ' '.repeat(Math.max(0, COL_RESOURCES - displayWidth(resourceText)));
     }
@@ -207,7 +230,7 @@ export function formatSessionLine(session: Session, depth = 0): string {
   // Time column
   const timeCol = chalk.dim(relativeTime(session.last_active_at));
 
-  return `${idCol}${nameCol}${statusCol}${repoCol}${resourceCol}${timeCol}`;
+  return `${idCol}${nameCol}${statusCol}${repoCol}${branchCol}${resourceCol}${timeCol}`;
 }
 
 /**
@@ -391,7 +414,7 @@ export function printSessionTable(sessions: Session[]): void {
   // Reorder so children appear under their parents, with gap markers
   const ordered = orderSessionsWithChildren(sessions);
 
-  const totalWidth = COL_ID + COL_NAME + COL_STATUS + COL_REPO + COL_RESOURCES + 10;
+  const totalWidth = COL_ID + COL_NAME + COL_STATUS + COL_REPO + COL_BRANCH + COL_RESOURCES + 10;
 
   // Header (2-space indent to match data rows)
   console.log(
@@ -401,6 +424,7 @@ export function printSessionTable(sessions: Session[]): void {
         fixedWidth('Name', COL_NAME) +
         fixedWidth('Status', COL_STATUS) +
         fixedWidth('Repo', COL_REPO) +
+        fixedWidth('Worktree/Branch', COL_BRANCH) +
         fixedWidth('Resources', COL_RESOURCES) +
         'Last Active'
     )

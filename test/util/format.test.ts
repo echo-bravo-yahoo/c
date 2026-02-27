@@ -7,7 +7,8 @@ import assert from 'node:assert';
 import { useFakeTime } from '../setup.js';
 
 // These are pure functions we can test directly
-import { relativeTime, shortId, displayWidth } from '../../src/util/format.js';
+import { relativeTime, shortId, displayWidth, getRepoName, getBranchDisplay } from '../../src/util/format.js';
+import type { Session } from '../../src/store/schema.js';
 
 describe('c > util > format > relativeTime', () => {
   let fakeTime: { restore: () => void };
@@ -354,5 +355,93 @@ describe('c > util > format > gap marker logic', () => {
       { type: 'gap', count: 1, depth: 2 }, // D is hidden between C and E
       { type: 'session', id: 'E', depth: 2 },
     ]);
+  });
+});
+
+describe('c > util > format > getRepoName', () => {
+  const originalHome = process.env.HOME;
+
+  afterEach(() => {
+    process.env.HOME = originalHome;
+  });
+
+  it('returns ~ when directory is $HOME', () => {
+    process.env.HOME = '/Users/testuser';
+    assert.strictEqual(getRepoName('/Users/testuser'), '~');
+  });
+
+  it('returns ~ when directory is $HOME with trailing slash', () => {
+    process.env.HOME = '/Users/testuser';
+    assert.strictEqual(getRepoName('/Users/testuser/'), '~');
+  });
+
+  it('returns repo name for .worktrees/ path', () => {
+    const dir = '/Users/testuser/workspace/myrepo/.worktrees/feature-branch';
+    assert.strictEqual(getRepoName(dir), 'myrepo');
+  });
+
+  it('returns repo name for .claude/worktrees/ path', () => {
+    const dir = '/Users/testuser/workspace/myrepo/.claude/worktrees/feature-branch';
+    assert.strictEqual(getRepoName(dir), 'myrepo');
+  });
+
+  it('returns basename for normal path', () => {
+    assert.strictEqual(getRepoName('/Users/testuser/workspace/myproject'), 'myproject');
+  });
+});
+
+describe('c > util > format > getBranchDisplay', () => {
+  function makeSession(overrides: Partial<Session> = {}): Session {
+    return {
+      id: 'test-id',
+      name: '',
+      humanhash: 'test-hash',
+      directory: '/Users/testuser/workspace/myproject',
+      project_key: 'key',
+      created_at: new Date(),
+      last_active_at: new Date(),
+      state: 'idle',
+      resources: {},
+      servers: {},
+      tags: { values: [] },
+      meta: {},
+      ...overrides,
+    };
+  }
+
+  it('shows worktree in cyan when worktree is set', () => {
+    const session = makeSession({
+      resources: { worktree: 'feature-wt', branch: 'feature-branch' },
+    });
+    const result = getBranchDisplay(session);
+    assert.strictEqual(result.text, 'feature-wt');
+    assert.strictEqual(result.color, 'cyan');
+  });
+
+  it('shows branch in magenta when no worktree', () => {
+    const session = makeSession({
+      resources: { branch: 'main' },
+    });
+    const result = getBranchDisplay(session);
+    assert.strictEqual(result.text, 'main');
+    assert.strictEqual(result.color, 'magenta');
+  });
+
+  it('falls back to directory basename when no worktree or branch', () => {
+    const session = makeSession({
+      resources: {},
+    });
+    const result = getBranchDisplay(session);
+    assert.strictEqual(result.text, 'myproject');
+    assert.strictEqual(result.color, 'dim');
+  });
+
+  it('worktree takes priority over branch', () => {
+    const session = makeSession({
+      resources: { worktree: 'wt-name', branch: 'some-branch' },
+    });
+    const result = getBranchDisplay(session);
+    assert.strictEqual(result.text, 'wt-name');
+    assert.strictEqual(result.color, 'cyan');
   });
 });
