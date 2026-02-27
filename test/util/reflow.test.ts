@@ -244,7 +244,7 @@ describe('c > util > reflow', () => {
       assert.ok(!line.includes('…'), 'no truncation');
     });
 
-    it('leftover space expands name column', () => {
+    it('leftover space expands name column to content width', () => {
       const sessions = [
         createTestSession({
           name: 'short',
@@ -254,9 +254,13 @@ describe('c > util > reflow', () => {
         }),
       ];
 
-      // Wide terminal with small content: leftover goes to idName
+      // Wide terminal with small content: idName expands to fit content (at least min)
       const layout = layoutAt(sessions, 200);
-      assert.strictEqual(layout.id + layout.name, 44, 'idName at max with plenty of space');
+      const contentWidths = measureColumns(sessions);
+      const content = contentWidths.get('idName') ?? 0;
+      const idNameMin = COLUMN_SPECS.find(c => c.key === 'idName')!.min;
+      const expected = Math.max(content, idNameMin);
+      assert.strictEqual(layout.id + layout.name, expected, 'idName fits content or min');
     });
   });
 
