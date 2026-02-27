@@ -11,6 +11,7 @@ import { newCommand } from './commands/new.js';
 import { showCommand } from './commands/show.js';
 import { resumeCommand } from './commands/resume.js';
 import { archiveCommand } from './commands/archive.js';
+import { closeCommand } from './commands/close.js';
 import { linkCommand } from './commands/link.js';
 import { unlinkCommand } from './commands/unlink.js';
 import { tagCommand } from './commands/tag.js';
@@ -86,16 +87,26 @@ program
   .command('resume <id>')
   .alias('r')
   .description('Resume a Claude session')
-  .action((id) => {
-    resumeCommand(id);
+  .action(async (id) => {
+    await resumeCommand(id);
   });
 
 // Archive
 program
-  .command('archive [id]')
-  .description('Mark session as archived')
-  .action((id) => {
-    archiveCommand(id);
+  .command('archive [ids...]')
+  .description('Archive sessions')
+  .action(async (ids) => {
+    await archiveCommand(ids.length ? ids : undefined);
+  });
+
+// Close
+program
+  .command('close [ids...]')
+  .alias('e')
+  .description('Close running sessions')
+  .option('-a, --archive', 'Archive instead of closing')
+  .action(async (ids, options) => {
+    await closeCommand(ids.length ? ids : undefined, options);
   });
 
 // Link

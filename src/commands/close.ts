@@ -1,13 +1,19 @@
 /**
- * c archive [ids...] - archive sessions
+ * c close [ids...] - close running sessions
  */
 
 import chalk from 'chalk';
-import { updateIndex, getSession, getCurrentSession } from '../store/index.js';
+import { getSession, getCurrentSession, updateIndex } from '../store/index.js';
 import { getDisplayName } from '../util/format.js';
 import { signalSession } from '../util/process.js';
 
-export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
+export async function closeCommand(
+  idsOrPrefixes?: string[],
+  options?: { archive?: boolean }
+): Promise<void> {
+  const targetState = options?.archive ? 'archived' : 'closed';
+  const verb = options?.archive ? 'Archived' : 'Closed';
+
   // No IDs: fall back to current directory session
   if (!idsOrPrefixes || idsOrPrefixes.length === 0) {
     const session = getCurrentSession();
@@ -16,17 +22,22 @@ export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
       process.exit(1);
     }
 
+    if (session.state === 'closed' || session.state === 'archived') {
+      console.error(chalk.red(`Session is already ${session.state}`));
+      process.exit(1);
+    }
+
     await signalSession(session.pid);
 
     await updateIndex((index) => {
       if (index.sessions[session!.id]) {
-        index.sessions[session!.id].state = 'archived';
+        index.sessions[session!.id].state = targetState;
         index.sessions[session!.id].last_active_at = new Date();
         delete index.sessions[session!.id].pid;
       }
     });
 
-    console.log(chalk.green(`Archived ${getDisplayName(session)}`));
+    console.log(chalk.green(`${verb} ${getDisplayName(session)}`));
     return;
   }
 
@@ -39,16 +50,21 @@ export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
       continue;
     }
 
+    if (session.state === 'closed' || session.state === 'archived') {
+      console.error(chalk.red(`Session ${getDisplayName(session)} is already ${session.state}`));
+      continue;
+    }
+
     await signalSession(session.pid);
 
     await updateIndex((index) => {
       if (index.sessions[session!.id]) {
-        index.sessions[session!.id].state = 'archived';
+        index.sessions[session!.id].state = targetState;
         index.sessions[session!.id].last_active_at = new Date();
         delete index.sessions[session!.id].pid;
       }
     });
 
-    console.log(chalk.green(`Archived ${getDisplayName(session)}`));
+    console.log(chalk.green(`${verb} ${getDisplayName(session)}`));
   }
 }

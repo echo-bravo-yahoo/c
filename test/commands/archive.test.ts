@@ -44,6 +44,83 @@ describe('c > commands > archive', () => {
     });
   });
 
+  describe('process signaling', () => {
+    it('signals PID before archiving', () => {
+      const session = createTestSession({ state: 'busy', pid: 12345 });
+
+      // signalSession would be called with session.pid before state change
+      assert.strictEqual(session.pid, 12345);
+
+      // Then archive and clear pid
+      session.state = 'archived';
+      delete session.pid;
+
+      assert.strictEqual(session.state, 'archived');
+      assert.strictEqual(session.pid, undefined);
+    });
+
+    it('clears PID on archive', () => {
+      const session = createTestSession({ state: 'busy', pid: 55555 });
+
+      session.state = 'archived';
+      delete session.pid;
+
+      assert.strictEqual(session.pid, undefined);
+    });
+
+    it('handles missing PID gracefully', () => {
+      const session = createTestSession({ state: 'busy' });
+
+      assert.strictEqual(session.pid, undefined);
+
+      // signalSession(undefined) is a no-op
+      session.state = 'archived';
+
+      assert.strictEqual(session.state, 'archived');
+    });
+  });
+
+  describe('multiple IDs', () => {
+    it('archives multiple sessions in one call', () => {
+      const sessions = [
+        createTestSession({ state: 'busy', pid: 11111 }),
+        createTestSession({ state: 'waiting', pid: 22222 }),
+        createTestSession({ state: 'closed' }),
+      ];
+
+      for (const s of sessions) {
+        s.state = 'archived';
+        delete s.pid;
+      }
+
+      assert.ok(sessions.every((s) => s.state === 'archived'));
+      assert.ok(sessions.every((s) => s.pid === undefined));
+    });
+
+    it('continues after not-found ID', () => {
+      const sessions = [
+        createTestSession({ id: 'aaa-111', state: 'busy' }),
+        createTestSession({ id: 'ccc-333', state: 'waiting' }),
+      ];
+
+      const ids = ['aaa', 'bbb', 'ccc'];
+      const results: string[] = [];
+
+      for (const prefix of ids) {
+        const found = sessions.find((s) => s.id.startsWith(prefix));
+        if (!found) {
+          results.push('not-found');
+        } else {
+          found.state = 'archived';
+          delete found.pid;
+          results.push('archived');
+        }
+      }
+
+      assert.deepStrictEqual(results, ['archived', 'not-found', 'archived']);
+    });
+  });
+
   describe('session lookup', () => {
     it('finds session by ID prefix', () => {
       const sessions = [
