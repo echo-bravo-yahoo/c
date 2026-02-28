@@ -23,227 +23,240 @@ import { cleanCommand } from './commands/clean.js';
 import { tmuxStatusCommand } from './commands/tmux/status.js';
 import { tmuxPickCommand } from './commands/tmux/pick.js';
 import { handleHook } from './hooks/index.js';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const program = new Command();
+export function createProgram(): Command {
+  const program = new Command();
 
-program
-  .name('c')
-  .description('Claude Code session manager')
-  .version('0.1.0')
-  .showSuggestionAfterError(true);
+  program
+    .name('c')
+    .description('Claude Code session manager')
+    .version('0.1.0')
+    .showSuggestionAfterError(true);
 
-// List sessions
-program
-  .command('list')
-  .description('List sessions')
-  .option('-a, --all', 'Show all sessions including archived')
-  .option('--archived', 'Show only archived sessions')
-  .option('-w, --waiting', 'Show only sessions waiting for input')
-  .option('--prs', 'Show sessions with linked PRs')
-  .option('--jira', 'Show sessions with linked JIRA tickets')
-  .option('--dir <directory>', 'Filter by directory')
-  .option('--min-width <n>', 'Minimum table width', parseInt)
-  .option('--max-width <n>', 'Maximum table width', parseInt)
-  .action(async (options) => {
-    await listCommand({
-      all: options.all,
-      archived: options.archived,
-      waiting: options.waiting,
-      prs: options.prs,
-      jira: options.jira,
-      directory: options.dir,
-      minWidth: options.minWidth,
-      maxWidth: options.maxWidth,
+  // List sessions
+  program
+    .command('list')
+    .description('List sessions')
+    .option('-a, --all', 'Show all sessions including archived')
+    .option('--archived', 'Show only archived sessions')
+    .option('-w, --waiting', 'Show only sessions waiting for input')
+    .option('--prs', 'Show sessions with linked PRs')
+    .option('--jira', 'Show sessions with linked JIRA tickets')
+    .option('--dir <directory>', 'Filter by directory')
+    .option('--min-width <n>', 'Minimum table width', parseInt)
+    .option('--max-width <n>', 'Maximum table width', parseInt)
+    .action(async (options) => {
+      await listCommand({
+        all: options.all,
+        archived: options.archived,
+        waiting: options.waiting,
+        prs: options.prs,
+        jira: options.jira,
+        directory: options.dir,
+        minWidth: options.minWidth,
+        maxWidth: options.maxWidth,
+      });
     });
-  });
 
-// New session
-program
-  .command('new [name]')
-  .alias('n')
-  .description('Create a new session with optional name and metadata')
-  .option('--jira <ticket>', 'Link JIRA ticket')
-  .option('--pr <url>', 'Link PR URL')
-  .option('--branch <name>', 'Link branch name')
-  .option('--note <text>', 'Add a note')
-  .option('--meta <key=value...>', 'Set metadata (repeatable)')
-  .action(async (name, options) => {
-    await newCommand(name, options);
-  });
+  // New session
+  program
+    .command('new [name]')
+    .alias('n')
+    .description('Create a new session with optional name and metadata')
+    .option('--jira <ticket>', 'Link JIRA ticket')
+    .option('--pr <url>', 'Link PR URL')
+    .option('--branch <name>', 'Link branch name')
+    .option('--note <text>', 'Add a note')
+    .option('--meta <key=value...>', 'Set metadata (repeatable)')
+    .action(async (name, options) => {
+      await newCommand(name, options);
+    });
 
-// Waiting (alias for list --waiting)
-program
-  .command('waiting')
-  .description('List sessions waiting for input')
-  .action(async () => {
-    await listCommand({ waiting: true });
-  });
+  // Waiting (alias for list --waiting)
+  program
+    .command('waiting')
+    .description('List sessions waiting for input')
+    .action(async () => {
+      await listCommand({ waiting: true });
+    });
 
-// Show
-program
-  .command('show <id>')
-  .description('Show session details')
-  .action((id) => {
-    showCommand(id);
-  });
+  // Show
+  program
+    .command('show <id>')
+    .description('Show session details')
+    .action((id) => {
+      showCommand(id);
+    });
 
-// Resume
-program
-  .command('resume <id>')
-  .alias('r')
-  .description('Resume a Claude session')
-  .action(async (id) => {
-    await resumeCommand(id);
-  });
+  // Resume
+  program
+    .command('resume <id>')
+    .alias('r')
+    .description('Resume a Claude session')
+    .action(async (id) => {
+      await resumeCommand(id);
+    });
 
-// Archive
-program
-  .command('archive [ids...]')
-  .description('Archive sessions')
-  .action(async (ids) => {
-    await archiveCommand(ids.length ? ids : undefined);
-  });
+  // Archive
+  program
+    .command('archive [ids...]')
+    .description('Archive sessions')
+    .action(async (ids) => {
+      await archiveCommand(ids.length ? ids : undefined);
+    });
 
-// Close
-program
-  .command('close [ids...]')
-  .alias('e')
-  .description('Close running sessions')
-  .option('-a, --archive', 'Archive instead of closing')
-  .action(async (ids, options) => {
-    await closeCommand(ids.length ? ids : undefined, options);
-  });
+  // Close
+  program
+    .command('close [ids...]')
+    .alias('e')
+    .description('Close running sessions')
+    .option('-a, --archive', 'Archive instead of closing')
+    .action(async (ids, options) => {
+      await closeCommand(ids.length ? ids : undefined, options);
+    });
 
-// Link
-program
-  .command('link [id]')
-  .description('Link resources to session')
-  .option('--pr <url>', 'Link PR URL')
-  .option('--jira <ticket>', 'Link JIRA ticket')
-  .option('--branch <name>', 'Link branch name')
-  .action((id, options) => {
-    linkCommand(
-      {
-        pr: options.pr,
-        jira: options.jira,
-        branch: options.branch,
-      },
-      id
-    );
-  });
+  // Link
+  program
+    .command('link [id]')
+    .description('Link resources to session')
+    .option('--pr <url>', 'Link PR URL')
+    .option('--jira <ticket>', 'Link JIRA ticket')
+    .option('--branch <name>', 'Link branch name')
+    .action(async (id, options) => {
+      await linkCommand(
+        {
+          pr: options.pr,
+          jira: options.jira,
+          branch: options.branch,
+        },
+        id
+      );
+    });
 
-// Unlink
-program
-  .command('unlink [id]')
-  .description('Remove resource links from session')
-  .option('--pr', 'Unlink PR')
-  .option('--jira', 'Unlink JIRA')
-  .option('--branch', 'Unlink branch')
-  .action((id, options) => {
-    unlinkCommand(
-      {
-        pr: options.pr,
-        jira: options.jira,
-        branch: options.branch,
-      },
-      id
-    );
-  });
+  // Unlink
+  program
+    .command('unlink [id]')
+    .description('Remove resource links from session')
+    .option('--pr', 'Unlink PR')
+    .option('--jira', 'Unlink JIRA')
+    .option('--branch', 'Unlink branch')
+    .action(async (id, options) => {
+      await unlinkCommand(
+        {
+          pr: options.pr,
+          jira: options.jira,
+          branch: options.branch,
+        },
+        id
+      );
+    });
 
-// Tag
-program
-  .command('tag <tag> [id]')
-  .description('Add tag to session')
-  .action((tag, id) => {
-    tagCommand(tag, id);
-  });
+  // Tag
+  program
+    .command('tag <tag> [id]')
+    .description('Add tag to session')
+    .action(async (tag, id) => {
+      await tagCommand(tag, id);
+    });
 
-// Untag
-program
-  .command('untag <tag> [id]')
-  .description('Remove tag from session')
-  .action((tag, id) => {
-    untagCommand(tag, id);
-  });
+  // Untag
+  program
+    .command('untag <tag> [id]')
+    .description('Remove tag from session')
+    .action(async (tag, id) => {
+      await untagCommand(tag, id);
+    });
 
-// Name
-program
-  .command('name <name> [id]')
-  .description('Set session name')
-  .action((name, id) => {
-    nameCommand(name, id);
-  });
+  // Name
+  program
+    .command('name <name> [id]')
+    .description('Set session name')
+    .action(async (name, id) => {
+      await nameCommand(name, id);
+    });
 
-// Meta
-program
-  .command('meta <keyvalue> [id]')
-  .description('Set session metadata (key=value)')
-  .action((keyvalue, id) => {
-    metaCommand(keyvalue, id);
-  });
+  // Meta
+  program
+    .command('meta <keyvalue> [id]')
+    .description('Set session metadata (key=value)')
+    .action(async (keyvalue, id) => {
+      await metaCommand(keyvalue, id);
+    });
 
-// Find
-program
-  .command('find <query>')
-  .alias('f')
-  .description('Search sessions')
-  .action((query) => {
-    findCommand(query);
-  });
+  // Find
+  program
+    .command('find <query>')
+    .alias('f')
+    .description('Search sessions')
+    .action((query) => {
+      findCommand(query);
+    });
 
-// Clean
-program
-  .command('clean')
-  .description('Find orphaned sessions')
-  .option('--prune', 'Delete orphaned sessions')
-  .action((options) => {
-    cleanCommand({ prune: options.prune });
-  });
+  // Clean
+  program
+    .command('clean')
+    .description('Find orphaned sessions')
+    .option('--prune', 'Delete orphaned sessions')
+    .action(async (options) => {
+      await cleanCommand({ prune: options.prune });
+    });
 
-// tmux integration
-program
-  .command('tmux-status')
-  .description('Output for tmux status bar')
-  .action(() => {
-    tmuxStatusCommand();
-  });
+  // tmux integration
+  program
+    .command('tmux-status')
+    .description('Output for tmux status bar')
+    .action(() => {
+      tmuxStatusCommand();
+    });
 
-program
-  .command('tmux-pick')
-  .description('Interactive session picker (fzf)')
-  .action(() => {
-    tmuxPickCommand();
-  });
+  program
+    .command('tmux-pick')
+    .description('Interactive session picker (fzf)')
+    .action(() => {
+      tmuxPickCommand();
+    });
 
-// Hook handler
-program
-  .command('hook <event>')
-  .description('Handle Claude hook events')
-  .action(async (event) => {
-    await handleHook(event);
-  });
+  // Hook handler
+  program
+    .command('hook <event>')
+    .description('Handle Claude hook events')
+    .action(async (event) => {
+      await handleHook(event);
+    });
 
-// Completion
-program
-  .command('completion [action]')
-  .description('Manage shell tab completion (install/uninstall)')
-  .action((action) => {
-    if (action === 'install') {
-      installCompletion();
-    } else if (action === 'uninstall') {
-      uninstallCompletion();
-    } else {
-      console.log('Usage: c completion install|uninstall');
-    }
-  });
+  // Completion
+  program
+    .command('completion [action]')
+    .description('Manage shell tab completion (install/uninstall)')
+    .action((action) => {
+      if (action === 'install') {
+        installCompletion();
+      } else if (action === 'uninstall') {
+        uninstallCompletion();
+      } else {
+        console.log('Usage: c completion install|uninstall');
+      }
+    });
 
-// Initialize completion (handles --compgen flags from shell)
-initCompletion();
-
-// Default to list when no command given
-const args = process.argv.slice(2);
-if (args.length === 0 || (args.length > 0 && args.every(a => a.startsWith('-')))) {
-  process.argv.splice(2, 0, 'list');
+  return program;
 }
 
-program.parse();
+// Only auto-run when executed directly (not imported by tests).
+// Resolve symlinks so ~/bin/c → dist/index.js is detected correctly.
+let isDirectRun = false;
+try {
+  const self = fileURLToPath(import.meta.url);
+  const invoked = realpathSync(process.argv[1] ?? '');
+  isDirectRun = invoked === self;
+} catch {}
+
+if (isDirectRun) {
+  initCompletion();
+  const args = process.argv.slice(2);
+  if (args.length === 0 || args.every(a => a.startsWith('-'))) {
+    process.argv.splice(2, 0, 'list');
+  }
+  createProgram().parse();
+}
