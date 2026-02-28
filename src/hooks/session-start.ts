@@ -7,7 +7,7 @@ import { createSession } from '../store/schema.js';
 import { generateHumanhash } from '../util/humanhash.js';
 import { getCurrentBranch, getWorktreeInfo, getRepoSlug, listWorktrees } from '../detection/git.js';
 import { extractJiraFromBranch } from '../detection/jira.js';
-import { encodeProjectKey, getPlanExecutionInfo } from '../claude/sessions.js';
+import { encodeProjectKey, getPlanExecutionInfo, findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.js';
 import { writeStatusCache } from '../store/status-cache.js';
 import type { StatusCacheData } from '../store/status-cache.js';
 import type { HookInput } from './index.js';
@@ -85,6 +85,16 @@ export async function handleSessionStart(
       if (worktree && !s.resources.worktree) {
         s.resources.worktree = worktree.name;
       }
+
+      // Seed _custom_title baseline to prevent stop hook from treating
+      // a pre-existing /rename title as new on the first stop after resume
+      const transcriptPath = findTranscriptPath(sessionId);
+      const customTitle = transcriptPath
+        ? getCustomTitleFromTranscriptTail(transcriptPath)
+        : null;
+      if (customTitle) {
+        s.meta._custom_title = customTitle;
+      }
     });
 
     const s = updatedIndex.sessions[sessionId];
@@ -144,6 +154,9 @@ function writeCacheFromSession(
   session: { resources: { branch?: string; worktree?: string; pr?: string; jira?: string } },
   cwd: string
 ): void {
+  // On resume, Claude sends a new session ID to hooks, but the statusline
+  // uses the original. C_SESSION_ID is set by `c resume` with the real ID.
+  const cacheId = process.env.C_SESSION_ID || sessionId;
   const repo = getRepoSlug(cwd);
   const worktreeInfo = getWorktreeInfo(cwd);
   const cache: StatusCacheData = {
@@ -155,5 +168,5 @@ function writeCacheFromSession(
     worktree: session.resources.worktree,
     worktree_path: worktreeInfo?.path,
   };
-  writeStatusCache(sessionId, cache);
+  writeStatusCache(cacheId, cache);
 }

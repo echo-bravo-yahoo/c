@@ -48,6 +48,7 @@ export async function resumeCommand(idOrPrefix: string): Promise<void> {
   });
   console.log(chalk.dim(`Resuming session ${displayName} in ${session.directory}...`));
   setTmuxPaneTitle(displayName);
+  process.env.C_SESSION_ID = session.id;
   const exitCode = await spawnInteractive('claude', ['-r', session.id], { cwd: session.directory });
 
   if (exitCode !== 0) {
