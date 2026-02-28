@@ -319,4 +319,89 @@ export function getPlanExecutionInfo(sessionId: string): { slug: string; title: 
   return null;
 }
 
+/**
+ * Find the transcript path for a session ID by scanning PROJECTS_DIR
+ */
+export function findTranscriptPath(sessionId: string): string | null {
+  if (!fs.existsSync(PROJECTS_DIR)) return null;
+
+  for (const projectDir of fs.readdirSync(PROJECTS_DIR)) {
+    const candidate = path.join(PROJECTS_DIR, projectDir, `${sessionId}.jsonl`);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  return null;
+}
+
+/**
+ * Search backward through a transcript file for the most recent custom-title entry.
+ * Reads 16KB chunks working from the end of the file to avoid loading entire transcripts
+ * (which can be 500KB+ with thinking blocks and signatures).
+ */
+export function getCustomTitleFromTranscriptTail(transcriptPath: string): string | null {
+  const CHUNK_SIZE = 16384;
+
+  let fd: number;
+  try {
+    fd = fs.openSync(transcriptPath, 'r');
+  } catch {
+    return null;
+  }
+
+  try {
+    const size = fs.fstatSync(fd).size;
+    if (size === 0) return null;
+
+    let pos = size;
+    let leftover = '';
+
+    while (pos > 0) {
+      const readSize = Math.min(CHUNK_SIZE, pos);
+      pos -= readSize;
+      const buf = Buffer.alloc(readSize);
+      fs.readSync(fd, buf, 0, readSize, pos);
+
+      const chunk = buf.toString('utf-8') + leftover;
+      const lines = chunk.split('\n');
+
+      // First line may be partial (split at chunk boundary) — save for next iteration
+      leftover = lines[0];
+
+      // Search backward through complete lines
+      for (let i = lines.length - 1; i >= 1; i--) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        // Fast check before JSON.parse
+        if (!line.includes('"custom-title"')) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (entry.type === 'custom-title' && entry.customTitle) {
+            return entry.customTitle;
+          }
+        } catch {
+          // Skip malformed lines
+        }
+      }
+    }
+
+    // Check leftover (first line of file)
+    if (leftover.trim() && leftover.includes('"custom-title"')) {
+      try {
+        const entry = JSON.parse(leftover.trim());
+        if (entry.type === 'custom-title' && entry.customTitle) {
+          return entry.customTitle;
+        }
+      } catch {
+        // Skip
+      }
+    }
+  } catch {
+    // Read error
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  return null;
+}
+
 export { CLAUDE_DIR, PROJECTS_DIR };
