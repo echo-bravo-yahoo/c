@@ -22,6 +22,14 @@ export async function handleSessionStart(
     return;
   }
 
+  // When resuming, Claude briefly creates a transient session with a new UUID
+  // before switching to the real one. C_SESSION_ID (set by `c resume`) holds
+  // the real ID — skip persisting the transient ID to avoid phantom entries.
+  const realSessionId = process.env.C_SESSION_ID;
+  if (realSessionId && realSessionId !== sessionId) {
+    return;
+  }
+
   let parentSessionId: string | undefined;
   let planSlug: string | undefined;
   let planTitle: string | undefined;

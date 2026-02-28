@@ -5,9 +5,14 @@
  * without calling the actual hook (which requires mocked filesystem).
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
+import { handleSessionStart } from '../../src/hooks/session-start.js';
+import { updateIndex, getSession } from '../../src/store/index.js';
 import type { Session } from '../../src/store/schema.js';
 
 describe('c', () => {
@@ -227,6 +232,78 @@ describe('c', () => {
           session.state = 'busy';
 
           assert.strictEqual(session.state, 'busy');
+        });
+      });
+
+      describe('transient session filtering on resume', () => {
+        let tmpDir: string;
+        let savedCHome: string | undefined;
+        let savedCSessionId: string | undefined;
+
+        beforeEach(() => {
+          tmpDir = mkdtempSync(join(tmpdir(), 'c-test-'));
+          savedCHome = process.env.C_HOME;
+          savedCSessionId = process.env.C_SESSION_ID;
+          process.env.C_HOME = tmpDir;
+        });
+
+        afterEach(() => {
+          process.env.C_HOME = savedCHome;
+          if (savedCHome === undefined) delete process.env.C_HOME;
+          process.env.C_SESSION_ID = savedCSessionId;
+          if (savedCSessionId === undefined) delete process.env.C_SESSION_ID;
+          rmSync(tmpDir, { recursive: true, force: true });
+        });
+
+        it('does not create a session for a transient ID during resume', async () => {
+          const realId = 'real-session-uuid';
+          const transientId = 'transient-session-uuid';
+
+          // Seed the real session into the store
+          await updateIndex((idx) => {
+            idx.sessions[realId] = createTestSession({ id: realId, state: 'closed' });
+          });
+
+          // Simulate resume: C_SESSION_ID is the real session
+          process.env.C_SESSION_ID = realId;
+
+          // Hook fires with the transient ID
+          await handleSessionStart(transientId, '/some/project', null);
+
+          // No phantom session created for the transient ID
+          assert.strictEqual(getSession(transientId), undefined);
+        });
+
+        it('allows the real session ID through when C_SESSION_ID matches', async () => {
+          const realId = 'real-session-uuid';
+
+          // Seed the real session into the store
+          await updateIndex((idx) => {
+            idx.sessions[realId] = createTestSession({ id: realId, state: 'closed' });
+          });
+
+          // C_SESSION_ID matches the incoming session ID
+          process.env.C_SESSION_ID = realId;
+
+          await handleSessionStart(realId, '/some/project', null);
+
+          // Session was updated (state set to busy on resume)
+          const s = getSession(realId);
+          assert.ok(s);
+          assert.strictEqual(s.state, 'busy');
+        });
+
+        it('creates a new session when C_SESSION_ID is not set', async () => {
+          const newId = 'brand-new-session-uuid';
+
+          delete process.env.C_SESSION_ID;
+
+          await handleSessionStart(newId, '/some/project', null);
+
+          // New session was created
+          const s = getSession(newId);
+          assert.ok(s);
+          assert.strictEqual(s.state, 'busy');
         });
       });
 
