@@ -51,6 +51,11 @@ export function execReplace(command: string, args: string[], options?: { cwd?: s
     cwd: options?.cwd,
   });
 
+  child.on('error', (err) => {
+    console.error(err.message);
+    process.exit(1);
+  });
+
   child.on('close', (code) => {
     process.exit(code ?? 0);
   });
@@ -78,12 +83,13 @@ export function spawnInteractive(
   args: string[],
   options?: { cwd?: string }
 ): Promise<number> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: 'inherit',
       cwd: options?.cwd,
     });
 
+    child.on('error', reject);
     child.on('close', (code) => resolve(code ?? 1));
 
     const onSigint = () => child.kill('SIGINT');

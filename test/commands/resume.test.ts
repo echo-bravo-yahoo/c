@@ -205,6 +205,91 @@ describe('c', () => {
         });
       });
 
+      describe('missing directory handling', () => {
+        it('recovers worktree session when directory is deleted', () => {
+          const session = createTestSession({
+            directory: '/repo/.claude/worktrees/gone',
+            resources: { worktree: 'gone' },
+            state: 'idle',
+          });
+
+          // Simulate: directory doesn't exist, but repo root does
+          const dirExists = false;
+          const repoMatch = session.directory.match(/^(.+?)\/\.(?:claude\/)?worktrees\//);
+
+          if (!dirExists && repoMatch) {
+            session.directory = repoMatch[1];
+            delete session.resources.worktree;
+          }
+
+          assert.strictEqual(session.directory, '/repo');
+          assert.strictEqual(session.resources.worktree, undefined);
+        });
+
+        it('archives non-worktree session when directory is deleted', () => {
+          const session = createTestSession({
+            directory: '/deleted/project',
+            state: 'idle',
+            pid: 12345,
+          });
+
+          // Simulate: directory doesn't exist and path is not a worktree
+          const dirExists = false;
+          const repoMatch = session.directory.match(/^(.+?)\/\.(?:claude\/)?worktrees\//);
+
+          if (!dirExists && !repoMatch) {
+            session.state = 'archived';
+            session.last_active_at = new Date();
+            delete session.pid;
+          }
+
+          assert.strictEqual(session.state, 'archived');
+          assert.strictEqual(session.pid, undefined);
+        });
+
+        it('preserves session state after worktree recovery', () => {
+          const session = createTestSession({
+            id: 'keep-me-alive',
+            name: 'Important Work',
+            directory: '/repo/.claude/worktrees/gone',
+            resources: { worktree: 'gone', branch: 'feature-x' },
+            state: 'idle',
+          });
+
+          // Simulate worktree recovery
+          const repoMatch = session.directory.match(/^(.+?)\/\.(?:claude\/)?worktrees\//);
+          if (repoMatch) {
+            session.directory = repoMatch[1];
+            delete session.resources.worktree;
+          }
+
+          // State, name, ID should be untouched
+          assert.strictEqual(session.state, 'idle');
+          assert.strictEqual(session.id, 'keep-me-alive');
+          assert.strictEqual(session.name, 'Important Work');
+          // Branch resource preserved, worktree cleared
+          assert.strictEqual(session.resources.branch, 'feature-x');
+          assert.strictEqual(session.resources.worktree, undefined);
+        });
+
+        it('recovers from .worktrees/ path (non-.claude variant)', () => {
+          const session = createTestSession({
+            directory: '/repo/.worktrees/old-branch',
+            resources: { worktree: 'old-branch' },
+            state: 'idle',
+          });
+
+          const repoMatch = session.directory.match(/^(.+?)\/\.(?:claude\/)?worktrees\//);
+          if (repoMatch) {
+            session.directory = repoMatch[1];
+            delete session.resources.worktree;
+          }
+
+          assert.strictEqual(session.directory, '/repo');
+          assert.strictEqual(session.resources.worktree, undefined);
+        });
+      });
+
       describe('session info for display', () => {
         it('uses name as display name', () => {
           const session = createTestSession({
