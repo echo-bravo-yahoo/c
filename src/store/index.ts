@@ -8,16 +8,22 @@ import * as os from 'node:os';
 import TOML from '@iarna/toml';
 import { IndexFile, Session, SessionState, createDefaultIndex } from './schema.js';
 
-const INDEX_DIR = path.join(os.homedir(), '.c');
-const INDEX_PATH = path.join(INDEX_DIR, 'index.toml');
-const LOCK_PATH = path.join(INDEX_DIR, 'index.lock');
+function getStoreDir(): string {
+  return process.env.C_HOME || path.join(os.homedir(), '.c');
+}
+function getIndexPath(): string {
+  return path.join(getStoreDir(), 'index.toml');
+}
+function getLockPath(): string {
+  return path.join(getStoreDir(), 'index.lock');
+}
 
 /**
  * Ensure the index directory exists
  */
 function ensureDir(): void {
-  if (!fs.existsSync(INDEX_DIR)) {
-    fs.mkdirSync(INDEX_DIR, { recursive: true });
+  if (!fs.existsSync(getStoreDir())) {
+    fs.mkdirSync(getStoreDir(), { recursive: true });
   }
 }
 
@@ -29,10 +35,10 @@ async function acquireLock(timeout = 5000): Promise<() => void> {
 
   while (Date.now() - start < timeout) {
     try {
-      fs.writeFileSync(LOCK_PATH, String(process.pid), { flag: 'wx' });
+      fs.writeFileSync(getLockPath(), String(process.pid), { flag: 'wx' });
       return () => {
         try {
-          fs.unlinkSync(LOCK_PATH);
+          fs.unlinkSync(getLockPath());
         } catch {
           // Lock already released
         }
@@ -40,7 +46,7 @@ async function acquireLock(timeout = 5000): Promise<() => void> {
     } catch {
       // Lock exists, check if stale
       try {
-        const lockPid = fs.readFileSync(LOCK_PATH, 'utf-8').trim();
+        const lockPid = fs.readFileSync(getLockPath(), 'utf-8').trim();
         // Check if process is still running
         try {
           process.kill(Number(lockPid), 0);
@@ -48,7 +54,7 @@ async function acquireLock(timeout = 5000): Promise<() => void> {
           await new Promise((r) => setTimeout(r, 50));
         } catch {
           // Process doesn't exist, remove stale lock
-          fs.unlinkSync(LOCK_PATH);
+          fs.unlinkSync(getLockPath());
         }
       } catch {
         await new Promise((r) => setTimeout(r, 50));
@@ -131,12 +137,12 @@ function parseSession(raw: Record<string, unknown>): Session {
 export function readIndex(): IndexFile {
   ensureDir();
 
-  if (!fs.existsSync(INDEX_PATH)) {
+  if (!fs.existsSync(getIndexPath())) {
     return createDefaultIndex(getMachineId());
   }
 
   try {
-    const content = fs.readFileSync(INDEX_PATH, 'utf-8');
+    const content = fs.readFileSync(getIndexPath(), 'utf-8');
     const raw = TOML.parse(content) as Record<string, unknown>;
 
     const sessions: Record<string, Session> = {};
@@ -181,7 +187,7 @@ export function writeIndex(index: IndexFile): void {
   }
 
   const content = TOML.stringify(tomlData as TOML.JsonMap);
-  fs.writeFileSync(INDEX_PATH, content);
+  fs.writeFileSync(getIndexPath(), content);
 }
 
 /**
@@ -311,4 +317,3 @@ export async function reconcileStaleSessions(): Promise<number> {
   return staleIds.length;
 }
 
-export { INDEX_DIR, INDEX_PATH };
