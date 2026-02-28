@@ -48,6 +48,9 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   await updateIndex((index) => {
     index.sessions[sessionId] = session;
     index.sessions[sessionId].pid = process.pid;
+    if (process.env.TMUX_PANE) {
+      index.sessions[sessionId].resources.tmux_pane = process.env.TMUX_PANE;
+    }
   });
 
   const displayName = name || humanhash;

@@ -26,13 +26,16 @@ export function exec(command: string, options?: { cwd?: string }): string {
  */
 export function setTmuxPaneTitle(
   title: string,
+  pane?: string,
   execFn: (cmd: string) => void = (cmd) => execSync(cmd, { stdio: 'ignore' })
 ): void {
   if (process.env.TMUX) {
     try {
       const escaped = JSON.stringify(title);
-      execFn(`tmux select-pane -T ${escaped}`);
-      execFn(`tmux set -p allow-set-title off`);
+      const target = pane || process.env.TMUX_PANE;
+      const flag = target ? ` -t ${target}` : '';
+      execFn(`tmux select-pane${flag} -T ${escaped}`);
+      execFn(`tmux set${flag} -p allow-set-title off`);
     } catch {
       // Ignore errors (e.g., tmux not available)
     }

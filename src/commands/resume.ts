@@ -44,6 +44,9 @@ export async function resumeCommand(idOrPrefix: string): Promise<void> {
     if (index.sessions[session!.id]) {
       index.sessions[session!.id].pid = process.pid;
       index.sessions[session!.id].state = 'idle';
+      if (process.env.TMUX_PANE) {
+        index.sessions[session!.id].resources.tmux_pane = process.env.TMUX_PANE;
+      }
     }
   });
   console.log(chalk.dim(`Resuming session ${displayName} in ${session.directory}...`));

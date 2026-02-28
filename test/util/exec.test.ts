@@ -51,9 +51,11 @@ describe('c', () => {
 
       describe('setTmuxPaneTitle', () => {
         let originalTmux: string | undefined;
+        let originalTmuxPane: string | undefined;
 
         beforeEach(() => {
           originalTmux = process.env.TMUX;
+          originalTmuxPane = process.env.TMUX_PANE;
         });
 
         afterEach(() => {
@@ -62,36 +64,70 @@ describe('c', () => {
           } else {
             process.env.TMUX = originalTmux;
           }
+          if (originalTmuxPane === undefined) {
+            delete process.env.TMUX_PANE;
+          } else {
+            process.env.TMUX_PANE = originalTmuxPane;
+          }
         });
 
         it('sets title and locks it when TMUX is set', () => {
           process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
+          delete process.env.TMUX_PANE;
           const commands: string[] = [];
           const mockExec = (cmd: string) => { commands.push(cmd); };
 
-          setTmuxPaneTitle('My Session', mockExec);
+          setTmuxPaneTitle('My Session', undefined, mockExec);
 
           assert.strictEqual(commands.length, 2);
           assert.strictEqual(commands[0], 'tmux select-pane -T "My Session"');
           assert.strictEqual(commands[1], 'tmux set -p allow-set-title off');
         });
 
-        it('no-ops outside tmux', () => {
-          delete process.env.TMUX;
+        it('targets specific pane when TMUX_PANE is set', () => {
+          process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
+          process.env.TMUX_PANE = '%5';
           const commands: string[] = [];
           const mockExec = (cmd: string) => { commands.push(cmd); };
 
-          setTmuxPaneTitle('My Session', mockExec);
+          setTmuxPaneTitle('My Session', undefined, mockExec);
+
+          assert.strictEqual(commands.length, 2);
+          assert.strictEqual(commands[0], 'tmux select-pane -t %5 -T "My Session"');
+          assert.strictEqual(commands[1], 'tmux set -t %5 -p allow-set-title off');
+        });
+
+        it('uses explicit pane over TMUX_PANE env', () => {
+          process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
+          process.env.TMUX_PANE = '%5';
+          const commands: string[] = [];
+          const mockExec = (cmd: string) => { commands.push(cmd); };
+
+          setTmuxPaneTitle('My Session', '%9', mockExec);
+
+          assert.strictEqual(commands.length, 2);
+          assert.strictEqual(commands[0], 'tmux select-pane -t %9 -T "My Session"');
+          assert.strictEqual(commands[1], 'tmux set -t %9 -p allow-set-title off');
+        });
+
+        it('no-ops outside tmux', () => {
+          delete process.env.TMUX;
+          delete process.env.TMUX_PANE;
+          const commands: string[] = [];
+          const mockExec = (cmd: string) => { commands.push(cmd); };
+
+          setTmuxPaneTitle('My Session', undefined, mockExec);
 
           assert.strictEqual(commands.length, 0);
         });
 
         it('escapes special characters in title', () => {
           process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
+          delete process.env.TMUX_PANE;
           const commands: string[] = [];
           const mockExec = (cmd: string) => { commands.push(cmd); };
 
-          setTmuxPaneTitle('Session "with" quotes', mockExec);
+          setTmuxPaneTitle('Session "with" quotes', undefined, mockExec);
 
           assert.strictEqual(commands[0], 'tmux select-pane -T "Session \\"with\\" quotes"');
         });
@@ -102,7 +138,7 @@ describe('c', () => {
 
           // Should not throw
           assert.doesNotThrow(() => {
-            setTmuxPaneTitle('My Session', mockExec);
+            setTmuxPaneTitle('My Session', undefined, mockExec);
           });
         });
       });

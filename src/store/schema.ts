@@ -9,6 +9,7 @@ export interface SessionResources {
   worktree?: string;
   pr?: string;
   jira?: string;
+  tmux_pane?: string;
 }
 
 export interface SessionServers {

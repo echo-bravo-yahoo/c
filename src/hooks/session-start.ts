@@ -71,6 +71,11 @@ export async function handleSessionStart(
         }
       }
 
+      // Store tmux pane if not already set
+      if (process.env.TMUX_PANE && !s.resources.tmux_pane) {
+        s.resources.tmux_pane = process.env.TMUX_PANE;
+      }
+
       // Merge git info if not already set by user
       const branch = getCurrentBranch(branchCwd);
       if (branch && !s.resources.branch) {

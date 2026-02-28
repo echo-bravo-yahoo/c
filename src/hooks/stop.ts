@@ -3,6 +3,8 @@
  */
 
 import { updateIndex, getCurrentSession } from '../store/index.js';
+import { findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.js';
+import { setTmuxPaneTitle } from '../util/exec.js';
 import type { HookInput } from './index.js';
 
 export async function handleStop(
@@ -21,10 +23,29 @@ export async function handleStop(
     return;
   }
 
+  let newTitle: string | undefined;
+  let pane: string | undefined;
+
   await updateIndex((index) => {
-    if (index.sessions[targetId]) {
-      index.sessions[targetId].state = 'idle';
-      index.sessions[targetId].last_active_at = new Date();
+    const s = index.sessions[targetId];
+    if (!s) return;
+
+    s.state = 'idle';
+    s.last_active_at = new Date();
+    pane = s.resources.tmux_pane;
+
+    // Sync tmux pane title with /rename changes from the transcript
+    const transcriptPath = findTranscriptPath(targetId);
+    const customTitle = transcriptPath
+      ? getCustomTitleFromTranscriptTail(transcriptPath)
+      : null;
+    if (customTitle && customTitle !== s.meta._custom_title) {
+      s.meta._custom_title = customTitle;
+      newTitle = customTitle;
     }
   });
+
+  if (newTitle) {
+    setTmuxPaneTitle(newTitle, pane);
+  }
 }

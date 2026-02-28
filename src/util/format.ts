@@ -330,6 +330,7 @@ export function formatSessionDetails(session: Session): string {
   lines.push(chalk.bold('Status: ') + formatStatus(session));
   lines.push(chalk.dim('  Directory: ') + session.directory);
   lines.push(chalk.dim('  PID: ') + (session.pid != null ? String(session.pid) : '–'));
+  lines.push(chalk.dim('  Pane: ') + (session.resources.tmux_pane ?? '–'));
   lines.push(chalk.dim('  Created: ') + session.created_at.toLocaleString());
   lines.push(chalk.dim('  Last active: ') + session.last_active_at.toLocaleString());
 
