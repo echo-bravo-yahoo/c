@@ -11,6 +11,7 @@ import { newCommand } from './commands/new.js';
 import { showCommand } from './commands/show.js';
 import { resumeCommand } from './commands/resume.js';
 import { archiveCommand } from './commands/archive.js';
+import { bankruptcyCommand } from './commands/bankruptcy.js';
 import { closeCommand } from './commands/close.js';
 import { linkCommand } from './commands/link.js';
 import { unlinkCommand } from './commands/unlink.js';
@@ -105,6 +106,15 @@ export function createProgram(): Command {
     .description('Archive sessions')
     .action(async (ids) => {
       await archiveCommand(ids.length ? ids : undefined);
+    });
+
+  // Bankruptcy
+  program
+    .command('bankruptcy')
+    .description('Archive all sessions')
+    .option('--skip <ids...>', 'Session IDs to skip')
+    .action(async (options) => {
+      await bankruptcyCommand({ skip: options.skip });
     });
 
   // Close
