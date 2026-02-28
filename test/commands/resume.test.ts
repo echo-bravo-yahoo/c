@@ -290,6 +290,91 @@ describe('c', () => {
         });
       });
 
+      describe('session name lookup', () => {
+        it('finds session by exact name', () => {
+          const sessions = [
+            createTestSession({ name: 'Auth Feature' }),
+            createTestSession({ name: 'Dashboard Work' }),
+          ];
+
+          const input = 'Auth Feature';
+          const matches = sessions.filter(s => s.name === input);
+
+          assert.strictEqual(matches.length, 1);
+          assert.strictEqual(matches[0].name, 'Auth Feature');
+        });
+
+        it('rejects partial name match', () => {
+          const sessions = [
+            createTestSession({ name: 'Auth Feature' }),
+          ];
+
+          const input = 'Auth';
+          const matches = sessions.filter(s => s.name === input);
+
+          assert.strictEqual(matches.length, 0);
+        });
+
+        it('handles multiple sessions with same name', () => {
+          const sessions = [
+            createTestSession({ id: 'abc12345-0000-0000-0000-000000000000', name: 'test session' }),
+            createTestSession({ id: 'def67890-0000-0000-0000-000000000000', name: 'test session' }),
+          ];
+
+          const input = 'test session';
+          const matches = sessions.filter(s => s.name === input);
+
+          assert.strictEqual(matches.length, 2);
+          assert.strictEqual(shortId(matches[0].id), 'abc12345');
+          assert.strictEqual(shortId(matches[1].id), 'def67890');
+        });
+
+        it('prefers ID match over name match', () => {
+          const sessions = [
+            createTestSession({ id: 'abc12345-0000-0000-0000-000000000000', name: 'unrelated' }),
+            createTestSession({ id: 'def67890-0000-0000-0000-000000000000', name: 'abc12345' }),
+          ];
+
+          // ID prefix lookup runs first — should match session 1 by ID, not session 2 by name
+          const prefix = 'abc1';
+          const idMatches = sessions.filter(
+            s => s.id.startsWith(prefix) || s.humanhash.startsWith(prefix)
+          );
+
+          assert.strictEqual(idMatches.length, 1);
+          assert.strictEqual(idMatches[0].id, 'abc12345-0000-0000-0000-000000000000');
+        });
+      });
+
+      describe('Claude store fallback', () => {
+        it('resolves session when Claude title matches but c name differs', () => {
+          // Simulate: Claude has customTitle "My Feature", c store has name "" for that session
+          const session = createTestSession({ id: 'aaa11111-0000-0000-0000-000000000000', name: '' });
+
+          // findClaudeSessionIdsByTitle("My Feature") would return ['aaa11111-...']
+          // getSession('aaa11111-...') resolves to `session`
+          const claudeIds = [session.id];
+          const resolved = claudeIds
+            .map(id => [session].find(s => s.id === id))
+            .filter((s): s is Session => s != null);
+
+          assert.strictEqual(resolved.length, 1);
+          assert.strictEqual(resolved[0].id, session.id);
+        });
+
+        it('skips Claude sessions not in c store', () => {
+          const session = createTestSession({ id: 'bbb22222-0000-0000-0000-000000000000' });
+
+          // Claude returns an ID that doesn't exist in c's store
+          const claudeIds = ['not-in-c-store'];
+          const resolved = claudeIds
+            .map(id => [session].find(s => s.id === id))
+            .filter((s): s is Session => s != null);
+
+          assert.strictEqual(resolved.length, 0);
+        });
+      });
+
       describe('session info for display', () => {
         it('uses name as display name', () => {
           const session = createTestSession({

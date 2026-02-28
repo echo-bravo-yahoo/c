@@ -248,6 +248,22 @@ export function getClaudeSessionTitles(
   return { customTitle: null, summary: null };
 }
 
+/**
+ * Find session IDs across all projects whose customTitle matches exactly
+ */
+export function findClaudeSessionIdsByTitle(title: string): string[] {
+  if (!fs.existsSync(PROJECTS_DIR)) return [];
+  const ids: string[] = [];
+  for (const projectDir of fs.readdirSync(PROJECTS_DIR)) {
+    const index = readClaudeSessionIndex(projectDir);
+    if (!index) continue;
+    for (const entry of index.entries) {
+      if (entry.customTitle === title) ids.push(entry.sessionId);
+    }
+  }
+  return ids;
+}
+
 const PLANS_DIR = path.join(CLAUDE_DIR, 'plans');
 
 /**

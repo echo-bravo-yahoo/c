@@ -4,23 +4,52 @@
 
 import { existsSync } from 'node:fs';
 import chalk from 'chalk';
-import { getSession, findSessions, updateIndex } from '../store/index.js';
-import { getClaudeSession } from '../claude/sessions.js';
+import { getSession, findSessions, findSessionsByName, updateIndex } from '../store/index.js';
+import { getClaudeSession, findClaudeSessionIdsByTitle } from '../claude/sessions.js';
 import { spawnInteractive, setTmuxPaneTitle } from '../util/exec.js';
 import { getDisplayName, shortId, highlightId } from '../util/format.js';
 
 export async function resumeCommand(idOrPrefix: string): Promise<void> {
-  const session = getSession(idOrPrefix);
+  let session = getSession(idOrPrefix);
 
   if (!session) {
-    const matches = findSessions(idOrPrefix);
-    if (matches.length >= 2) {
-      const ids = matches.map(m => highlightId(shortId(m.id), idOrPrefix.length));
-      console.error(chalk.red(`Cannot resume session - multiple sessions with an ID starting with ${idOrPrefix}: (${ids.join(', ')})`));
-    } else {
-      console.error(chalk.red(`Session not found: ${idOrPrefix}`));
+    // Try exact name match in c's store
+    const nameMatches = findSessionsByName(idOrPrefix);
+    if (nameMatches.length === 1) {
+      session = nameMatches[0];
+    } else if (nameMatches.length >= 2) {
+      const ids = nameMatches.map(m => shortId(m.id));
+      console.error(chalk.red(`Cannot resume session - multiple sessions named "${idOrPrefix}": (${ids.join(', ')})`));
+      process.exit(1);
     }
-    process.exit(1);
+
+    // Try Claude's customTitle fallback
+    if (!session) {
+      const claudeIds = findClaudeSessionIdsByTitle(idOrPrefix);
+      const resolved = claudeIds
+        .map(id => getSession(id))
+        .filter((s): s is NonNullable<typeof s> => s != null);
+
+      if (resolved.length === 1) {
+        session = resolved[0];
+      } else if (resolved.length >= 2) {
+        const ids = resolved.map(m => shortId(m.id));
+        console.error(chalk.red(`Cannot resume session - multiple sessions named "${idOrPrefix}": (${ids.join(', ')})`));
+        process.exit(1);
+      }
+    }
+
+    // No match found — show prefix collision or not-found error
+    if (!session) {
+      const matches = findSessions(idOrPrefix);
+      if (matches.length >= 2) {
+        const ids = matches.map(m => highlightId(shortId(m.id), idOrPrefix.length));
+        console.error(chalk.red(`Cannot resume session - multiple sessions with an ID starting with ${idOrPrefix}: (${ids.join(', ')})`));
+      } else {
+        console.error(chalk.red(`Session not found: ${idOrPrefix}`));
+      }
+      process.exit(1);
+    }
   }
 
   const displayName = getDisplayName(session);

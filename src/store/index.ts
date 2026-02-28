@@ -231,6 +231,14 @@ export function getSession(idOrPrefix: string): Session | undefined {
 }
 
 /**
+ * Find all sessions with an exact name match
+ */
+export function findSessionsByName(name: string): Session[] {
+  const index = readIndex();
+  return Object.values(index.sessions).filter(s => s.name === name);
+}
+
+/**
  * Find all sessions matching a prefix (by ID or humanhash)
  */
 export function findSessions(prefix: string): Session[] {
