@@ -1,182 +1,135 @@
 /**
- * Tests for clean command behavior
+ * Tests for clean command
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
-import type { Session } from '../../src/store/schema.js';
+import { mkdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+// Controlled list of Claude session IDs — tests configure this before running.
+let claudeSessionIds: string[] = [];
+
+// Mock claude/sessions.js BEFORE importing anything that depends on it.
+mock.module(resolve('src/claude/sessions.ts'), {
+  namedExports: {
+    getClaudeSession: (id: string) =>
+      claudeSessionIds.includes(id) ? { id } : undefined,
+    listClaudeSessions: () =>
+      claudeSessionIds.map((id) => ({ id, projectKey: '', directory: '', transcriptPath: '', historyPath: '', modifiedAt: new Date() })),
+    getClaudeSessionTitles: () => ({ customTitle: null, summary: null }),
+    getClaudeSessionsForDirectory: () => [],
+    readClaudeSessionIndex: () => null,
+    getPlanExecutionInfo: () => null,
+    decodeProjectKey: (k: string) => k,
+    encodeProjectKey: (d: string) => d,
+  },
+});
+
+// Dynamic import so the module graph loads AFTER mock.module registration
+const { setupCLI } = await import('../helpers/cli.js');
+type CLIHarness = import('../helpers/cli.js').CLIHarness;
 
 describe('c', () => {
   describe('commands', () => {
     describe('clean', () => {
+      let cli: CLIHarness;
       beforeEach(() => {
-        resetSessionCounter();
+        cli = setupCLI();
+        claudeSessionIds = [];
       });
+      afterEach(() => { cli.cleanup(); });
 
       describe('orphan detection', () => {
-        it('detects sessions missing from Claude', () => {
-          const indexSessions = [
-            createTestSession({ id: 'exists-1' }),
-            createTestSession({ id: 'orphan-1' }),
-            createTestSession({ id: 'exists-2' }),
-          ];
+        it('detects sessions missing from Claude', async () => {
+          claudeSessionIds = ['exists-1', 'exists-2'];
+          await cli.seed(
+            { id: 'exists-1', directory: cli.tmpDir },
+            { id: 'orphan-1', directory: cli.tmpDir },
+            { id: 'exists-2', directory: cli.tmpDir },
+          );
+          await cli.run('clean');
 
-          const claudeIds = new Set(['exists-1', 'exists-2']);
-
-          const orphaned = indexSessions.filter(s => !claudeIds.has(s.id));
-
-          assert.strictEqual(orphaned.length, 1);
-          assert.strictEqual(orphaned[0].id, 'orphan-1');
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('orphan-1'));
         });
 
-        it('reports clean when all sessions exist', () => {
-          const indexSessions = [
-            createTestSession({ id: 'exists-1' }),
-            createTestSession({ id: 'exists-2' }),
-          ];
+        it('reports clean when all sessions exist', async () => {
+          claudeSessionIds = ['exists-1', 'exists-2'];
+          await cli.seed(
+            { id: 'exists-1', directory: cli.tmpDir },
+            { id: 'exists-2', directory: cli.tmpDir },
+          );
+          await cli.run('clean');
 
-          const claudeIds = new Set(['exists-1', 'exists-2']);
-
-          const orphaned = indexSessions.filter(s => !claudeIds.has(s.id));
-
-          assert.strictEqual(orphaned.length, 0);
+          assert.ok(cli.console.logs.some(l => l.includes('No orphaned')));
         });
       });
 
       describe('missing directory detection', () => {
-        it('detects sessions with deleted directories', () => {
-          // Simulate directory existence check
-          const existingDirs = new Set(['/home/user/project-a', '/home/user/project-b']);
+        it('detects sessions with deleted directories', async () => {
+          const existingDir = join(cli.tmpDir, 'project-a');
+          mkdirSync(existingDir);
+          claudeSessionIds = ['s1', 's2'];
+          await cli.seed(
+            { id: 's1', directory: existingDir },
+            { id: 's2', directory: '/nonexistent/path' },
+          );
+          await cli.run('clean');
 
-          const sessions = [
-            createTestSession({ directory: '/home/user/project-a' }),
-            createTestSession({ directory: '/home/user/deleted' }),
-            createTestSession({ directory: '/home/user/project-b' }),
-          ];
-
-          const missingDirs = sessions.filter(s => !existingDirs.has(s.directory));
-
-          assert.strictEqual(missingDirs.length, 1);
-          assert.strictEqual(missingDirs[0].directory, '/home/user/deleted');
-        });
-
-        it('reports clean when all directories exist', () => {
-          const existingDirs = new Set(['/project-a', '/project-b']);
-
-          const sessions = [
-            createTestSession({ directory: '/project-a' }),
-            createTestSession({ directory: '/project-b' }),
-          ];
-
-          const missingDirs = sessions.filter(s => !existingDirs.has(s.directory));
-
-          assert.strictEqual(missingDirs.length, 0);
-        });
-      });
-
-      describe('combined orphan detection', () => {
-        it('combines Claude orphans and missing directories', () => {
-          const indexSessions = [
-            createTestSession({ id: 'claude-orphan', directory: '/existing' }),
-            createTestSession({ id: 'dir-missing', directory: '/deleted' }),
-            createTestSession({ id: 'both', directory: '/also-deleted' }),
-            createTestSession({ id: 'healthy', directory: '/existing' }),
-          ];
-
-          const claudeIds = new Set(['dir-missing', 'healthy']);
-          const existingDirs = new Set(['/existing']);
-
-          const orphanedFromClaude = indexSessions.filter(s => !claudeIds.has(s.id));
-          const missingDirs = indexSessions.filter(s => !existingDirs.has(s.directory));
-
-          // Create unique set of orphan IDs
-          const orphanIds = new Set([
-            ...orphanedFromClaude.map(s => s.id),
-            ...missingDirs.map(s => s.id),
-          ]);
-
-          assert.strictEqual(orphanIds.size, 3);
-          assert.ok(orphanIds.has('claude-orphan'));
-          assert.ok(orphanIds.has('dir-missing'));
-          assert.ok(orphanIds.has('both'));
-        });
-      });
-
-      describe('report without prune', () => {
-        it('shows count without deleting', () => {
-          const orphaned = [
-            createTestSession({ id: 'orphan-1' }),
-            createTestSession({ id: 'orphan-2' }),
-          ];
-
-          // Without prune, just count
-          assert.strictEqual(orphaned.length, 2);
-        });
-
-        it('reports "no orphans" when clean', () => {
-          const orphaned: Session[] = [];
-          const missingDirs: Session[] = [];
-
-          const hasOrphans = orphaned.length > 0 || missingDirs.length > 0;
-
-          assert.strictEqual(hasOrphans, false);
-          // Output: "No orphaned sessions found."
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('/nonexistent'));
+          assert.ok(output.includes('missing'));
         });
       });
 
       describe('prune behavior', () => {
-        it('removes orphans with --prune', () => {
-          const sessions: Record<string, Session> = {
-            'keep-1': createTestSession({ id: 'keep-1' }),
-            'orphan-1': createTestSession({ id: 'orphan-1' }),
-            'orphan-2': createTestSession({ id: 'orphan-2' }),
-          };
+        it('removes orphans with --prune', async () => {
+          claudeSessionIds = ['keep-1'];
+          await cli.seed(
+            { id: 'keep-1', directory: cli.tmpDir },
+            { id: 'orphan-1', directory: cli.tmpDir },
+            { id: 'orphan-2', directory: cli.tmpDir },
+          );
+          await cli.run('clean', '--prune');
 
-          const toDelete = new Set(['orphan-1', 'orphan-2']);
-
-          for (const id of toDelete) {
-            delete sessions[id];
-          }
-
-          assert.strictEqual(Object.keys(sessions).length, 1);
-          assert.ok(sessions['keep-1']);
-          assert.strictEqual(sessions['orphan-1'], undefined);
-          assert.strictEqual(sessions['orphan-2'], undefined);
+          const idx = cli.index();
+          assert.ok(idx.sessions['keep-1']);
+          assert.strictEqual(idx.sessions['orphan-1'], undefined);
+          assert.strictEqual(idx.sessions['orphan-2'], undefined);
+          assert.ok(cli.console.logs.some(l => l.includes('Pruned')));
         });
 
-        it('reports pruned count', () => {
-          const toDelete = new Set(['orphan-1', 'orphan-2', 'orphan-3']);
+        it('does not delete without --prune', async () => {
+          claudeSessionIds = [];
+          await cli.seed({ id: 'orphan-1', directory: cli.tmpDir });
+          await cli.run('clean');
 
-          // Output: "Pruned 3 sessions."
-          const message = `Pruned ${toDelete.size} sessions.`;
-          assert.ok(message.includes('3'));
+          const idx = cli.index();
+          assert.ok(idx.sessions['orphan-1']);
+          assert.ok(cli.console.logs.some(l => l.includes('--prune')));
         });
       });
 
-      describe('display output', () => {
-        it('shows short ID in orphan list', () => {
-          const session = createTestSession({ id: '12345678-1234-1234-1234-123456789012' });
+      describe('report output', () => {
+        it('reports "no orphans" when clean', async () => {
+          claudeSessionIds = ['s1'];
+          await cli.seed({ id: 's1', directory: cli.tmpDir });
+          await cli.run('clean');
 
-          const shortId = session.id.slice(0, 8);
-          assert.strictEqual(shortId, '12345678');
+          assert.ok(cli.console.logs.some(l => l.includes('No orphaned')));
         });
 
-        it('shows display name in orphan list', () => {
-          const session = createTestSession({
-            name: 'My Session',
-            humanhash: 'alpha-bravo',
-          });
+        it('shows pruned count', async () => {
+          claudeSessionIds = [];
+          await cli.seed(
+            { id: 'orphan-1', directory: cli.tmpDir },
+            { id: 'orphan-2', directory: cli.tmpDir },
+            { id: 'orphan-3', directory: cli.tmpDir },
+          );
+          await cli.run('clean', '--prune');
 
-          const displayName = session.name || session.humanhash;
-          assert.strictEqual(displayName, 'My Session');
-        });
-
-        it('shows directory for missing dir sessions', () => {
-          const session = createTestSession({ directory: '/deleted/project' });
-
-          // Output includes: "session-id name -> /deleted/project"
-          assert.ok(session.directory.includes('/deleted'));
+          assert.ok(cli.console.logs.some(l => l.includes('3')));
         });
       });
     });

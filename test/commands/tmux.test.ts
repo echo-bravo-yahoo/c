@@ -2,97 +2,74 @@
  * Tests for tmux command behaviors
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
+import { setupCLI, type CLIHarness } from '../helpers/cli.js';
 import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
 
 describe('c', () => {
   describe('commands', () => {
     describe('tmux-status', () => {
-      beforeEach(() => {
-        resetSessionCounter();
-      });
+      let cli: CLIHarness;
+      beforeEach(() => { cli = setupCLI(); });
+      afterEach(() => { cli.cleanup(); });
 
       describe('session counting', () => {
-        it('shows active session count', () => {
-          const sessions = [
-            createTestSession({ state: 'busy' }),
-            createTestSession({ state: 'idle' }),
-            createTestSession({ state: 'closed' }),
-          ];
+        it('shows active session count', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy' },
+            { id: 's2', state: 'idle' },
+            { id: 's3', state: 'closed' },
+          );
+          await cli.run('tmux-status');
 
-          const activeStates = ['busy', 'idle', 'waiting'];
-          const active = sessions.filter(s => activeStates.includes(s.state));
-          assert.strictEqual(active.length, 2);
+          // 2 active (busy + idle), closed excluded from active count
+          assert.ok(cli.stdout.output.some(o => o.includes('2')));
         });
 
-        it('counts waiting sessions', () => {
-          const sessions = [
-            createTestSession({ state: 'waiting' }),
-            createTestSession({ state: 'busy' }),
-            createTestSession({ state: 'waiting' }),
-          ];
+        it('counts waiting sessions', async () => {
+          await cli.seed(
+            { id: 's1', state: 'waiting' },
+            { id: 's2', state: 'busy' },
+            { id: 's3', state: 'waiting' },
+          );
+          await cli.run('tmux-status');
 
-          const waiting = sessions.filter(s => s.state === 'waiting');
-          assert.strictEqual(waiting.length, 2);
+          const output = cli.stdout.output.join('');
+          // Should show waiting count (2) and total active count (3)
+          assert.ok(output.includes('2'));
+          assert.ok(output.includes('3'));
         });
       });
 
       describe('output formatting', () => {
-        it('highlights waiting sessions', () => {
-          const waitingCount = 2;
-          const liveCount = 5;
+        it('highlights waiting sessions with yellow', async () => {
+          await cli.seed(
+            { id: 's1', state: 'waiting' },
+            { id: 's2', state: 'busy' },
+          );
+          await cli.run('tmux-status');
 
-          const parts: string[] = [];
-
-          if (waitingCount > 0) {
-            parts.push(`#[fg=yellow,bold]${waitingCount}#[default]`);
-          }
-          if (liveCount > 0) {
-            parts.push(`${liveCount}`);
-          }
-
-          assert.ok(parts[0].includes('yellow'));
-          assert.ok(parts[0].includes(String(waitingCount)));
+          const output = cli.stdout.output.join('');
+          assert.ok(output.includes('yellow'));
         });
 
-        it('outputs nothing without sessions', () => {
-          const sessions: never[] = [];
+        it('outputs nothing without sessions', async () => {
+          await cli.run('tmux-status');
 
-          const live = sessions.filter(() => false);
-          const waiting = sessions.filter(() => false);
-
-          const parts: string[] = [];
-          if (waiting.length > 0) {
-            parts.push(`waiting:${waiting.length}`);
-          }
-          if (live.length > 0) {
-            parts.push(`live:${live.length}`);
-          }
-
-          assert.strictEqual(parts.length, 0);
+          assert.strictEqual(cli.stdout.output.length, 0);
         });
 
-        it('omits waiting count when none waiting', () => {
-          const sessions = [
-            createTestSession({ state: 'busy' }),
-            createTestSession({ state: 'idle' }),
-          ];
+        it('omits waiting indicator when none waiting', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy' },
+            { id: 's2', state: 'idle' },
+          );
+          await cli.run('tmux-status');
 
-          const waiting = sessions.filter(s => s.state === 'waiting');
-          const activeStates = ['busy', 'idle', 'waiting'];
-          const active = sessions.filter(s => activeStates.includes(s.state));
-
-          const parts: string[] = [];
-          if (waiting.length > 0) {
-            parts.push(`waiting:${waiting.length}`);
-          }
-          if (active.length > 0) {
-            parts.push(`${active.length}`);
-          }
-
-          assert.strictEqual(parts.length, 1);
-          assert.strictEqual(parts[0], '2');
+          const output = cli.stdout.output.join('');
+          assert.ok(!output.includes('yellow'));
+          assert.ok(output.includes('2'));
         });
       });
     });
@@ -202,7 +179,6 @@ describe('c', () => {
           const sessions: never[] = [];
 
           assert.strictEqual(sessions.length, 0);
-          // Command would exit with error: "No sessions available."
         });
       });
     });

@@ -1,107 +1,89 @@
 /**
- * Tests for untag command behavior
+ * Tests for untag command
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
+import { setupCLI, type CLIHarness } from '../helpers/cli.js';
 
 describe('c', () => {
   describe('commands', () => {
     describe('untag', () => {
-      beforeEach(() => {
-        resetSessionCounter();
-      });
+      let cli: CLIHarness;
+      beforeEach(() => { cli = setupCLI(); });
+      afterEach(() => { cli.cleanup(); });
 
       describe('tag removal', () => {
-        it('removes tag from session', () => {
-          const session = createTestSession({ tags: ['important', 'wip'] });
-          const tag = 'important';
+        it('removes tag from session', async () => {
+          await cli.seed({ id: 'abc12345', tags: ['important', 'wip'] });
+          await cli.run('untag', 'important', 'abc12345');
 
-          session.tags.values = session.tags.values.filter(t => t !== tag);
-
-          assert.deepStrictEqual(session.tags.values, ['wip']);
+          const s = cli.session('abc12345')!;
+          assert.deepStrictEqual(s.tags.values, ['wip']);
         });
 
-        it('empties tag list when removing last tag', () => {
-          const session = createTestSession({ tags: ['only-one'] });
-          const tag = 'only-one';
+        it('empties tag list when removing last tag', async () => {
+          await cli.seed({ id: 'abc12345', tags: ['only-one'] });
+          await cli.run('untag', 'only-one', 'abc12345');
 
-          session.tags.values = session.tags.values.filter(t => t !== tag);
-
-          assert.deepStrictEqual(session.tags.values, []);
+          const s = cli.session('abc12345')!;
+          assert.deepStrictEqual(s.tags.values, []);
         });
 
-        it('ignores missing tag', () => {
-          const session = createTestSession({ tags: ['existing'] });
-          const tag = 'nonexistent';
+        it('ignores missing tag', async () => {
+          await cli.seed({ id: 'abc12345', tags: ['existing'] });
+          await cli.run('untag', 'nonexistent', 'abc12345');
 
-          session.tags.values = session.tags.values.filter(t => t !== tag);
-
-          assert.deepStrictEqual(session.tags.values, ['existing']);
+          const s = cli.session('abc12345')!;
+          assert.deepStrictEqual(s.tags.values, ['existing']);
         });
 
-        it('no-ops on empty tag list', () => {
-          const session = createTestSession({ tags: [] });
-          const tag = 'any';
+        it('no-ops on empty tag list', async () => {
+          await cli.seed({ id: 'abc12345', tags: [] });
+          await cli.run('untag', 'any', 'abc12345');
 
-          session.tags.values = session.tags.values.filter(t => t !== tag);
-
-          assert.deepStrictEqual(session.tags.values, []);
+          const s = cli.session('abc12345')!;
+          assert.deepStrictEqual(s.tags.values, []);
         });
       });
 
       describe('timestamp update', () => {
-        it('updates last_active_at', () => {
+        it('updates last_active_at', async () => {
           const oldDate = new Date('2024-01-01');
-          const session = createTestSession({
-            tags: ['important'],
-            last_active_at: oldDate,
-          });
-          const tag = 'important';
+          await cli.seed({ id: 'abc12345', tags: ['important'], last_active_at: oldDate });
+          await cli.run('untag', 'important', 'abc12345');
 
-          session.tags.values = session.tags.values.filter(t => t !== tag);
-          session.last_active_at = new Date();
-
-          assert.ok(session.last_active_at > oldDate);
+          const s = cli.session('abc12345')!;
+          assert.ok(s.last_active_at > oldDate);
         });
       });
 
       describe('session lookup', () => {
-        it('uses current session when no ID', () => {
-          const sessions = [
-            createTestSession({ directory: '/project', state: 'busy' }),
-            createTestSession({ directory: '/other', state: 'busy' }),
-          ];
+        it('finds session by ID prefix', async () => {
+          await cli.seed({ id: 'abc-123-full-uuid', tags: ['x'] });
+          await cli.run('untag', 'x', 'abc');
 
-          const cwd = '/project';
-          const activeStates = ['busy', 'idle', 'waiting'];
-          const current = sessions.find(
-            s => activeStates.includes(s.state) && s.directory === cwd
-          );
-
-          assert.ok(current);
+          const s = cli.session('abc-123-full-uuid')!;
+          assert.deepStrictEqual(s.tags.values, []);
         });
       });
 
       describe('error conditions', () => {
-        it('errors when session not found', () => {
-          const sessions: never[] = [];
-          const found = sessions.find(() => false);
+        it('exits 1 when session not found', async () => {
+          await cli.run('untag', 'deploy', 'nonexistent');
 
-          assert.strictEqual(found, undefined);
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.ok(cli.console.errors.some(l => l.includes('not found')));
         });
       });
 
       describe('output message', () => {
-        it('includes tag in success message', () => {
-          const tag = 'important';
-          const displayName = 'My Session';
+        it('includes tag in success message', async () => {
+          await cli.seed({ id: 'abc12345', tags: ['important'] });
+          await cli.run('untag', 'important', 'abc12345');
 
-          // Output: "Removed tag from My Session: important"
-          const message = `Removed tag from ${displayName}: ${tag}`;
-          assert.ok(message.includes(tag));
-          assert.ok(message.includes(displayName));
+          assert.ok(cli.console.logs.some(l => l.includes('important')));
+          assert.ok(cli.console.logs.some(l => l.includes('Removed tag')));
         });
       });
     });

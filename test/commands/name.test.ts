@@ -1,132 +1,81 @@
 /**
- * Tests for name command behavior
+ * Tests for name command
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
+import { setupCLI, type CLIHarness } from '../helpers/cli.js';
 
 describe('c', () => {
   describe('commands', () => {
     describe('name', () => {
-      beforeEach(() => {
-        resetSessionCounter();
-      });
+      let cli: CLIHarness;
+      beforeEach(() => { cli = setupCLI(); });
+      afterEach(() => { cli.cleanup(); });
 
       describe('name setting', () => {
-        it('sets session name', () => {
-          const session = createTestSession({ name: '' });
-          const name = 'My New Name';
+        it('sets session name', async () => {
+          await cli.seed({ id: 'abc12345', name: '' });
+          await cli.run('name', 'My New Name', 'abc12345');
 
-          session.name = name;
-
-          assert.strictEqual(session.name, name);
+          const s = cli.session('abc12345')!;
+          assert.strictEqual(s.name, 'My New Name');
         });
 
-        it('replaces existing name', () => {
-          const session = createTestSession({ name: 'Old Name' });
-          const name = 'New Name';
+        it('replaces existing name', async () => {
+          await cli.seed({ id: 'abc12345', name: 'Old Name' });
+          await cli.run('name', 'New Name', 'abc12345');
 
-          session.name = name;
-
-          assert.strictEqual(session.name, 'New Name');
+          const s = cli.session('abc12345')!;
+          assert.strictEqual(s.name, 'New Name');
         });
 
-        it('clears name with empty string', () => {
-          const session = createTestSession({ name: 'Existing' });
-          const name = '';
+        it('allows special characters', async () => {
+          await cli.seed({ id: 'abc12345', name: '' });
+          await cli.run('name', 'Fix: bug #123 (urgent!)', 'abc12345');
 
-          session.name = name;
-
-          assert.strictEqual(session.name, '');
-        });
-
-        it('allows special characters', () => {
-          const session = createTestSession({ name: '' });
-          const name = 'Fix: bug #123 (urgent!)';
-
-          session.name = name;
-
-          assert.strictEqual(session.name, 'Fix: bug #123 (urgent!)');
+          const s = cli.session('abc12345')!;
+          assert.strictEqual(s.name, 'Fix: bug #123 (urgent!)');
         });
       });
 
       describe('timestamp update', () => {
-        it('updates last_active_at', () => {
+        it('updates last_active_at', async () => {
           const oldDate = new Date('2024-01-01');
-          const session = createTestSession({ name: '', last_active_at: oldDate });
-          const name = 'New Name';
+          await cli.seed({ id: 'abc12345', name: '', last_active_at: oldDate });
+          await cli.run('name', 'New Name', 'abc12345');
 
-          session.name = name;
-          session.last_active_at = new Date();
-
-          assert.ok(session.last_active_at > oldDate);
+          const s = cli.session('abc12345')!;
+          assert.ok(s.last_active_at > oldDate);
         });
       });
 
       describe('session lookup', () => {
-        it('defaults to current directory session', () => {
-          const sessions = [
-            createTestSession({ directory: '/project', state: 'busy' }),
-            createTestSession({ directory: '/other', state: 'busy' }),
-          ];
+        it('finds session by ID prefix', async () => {
+          await cli.seed({ id: 'abc-123-full-uuid' });
+          await cli.run('name', 'Test', 'abc');
 
-          const cwd = '/project';
-          const activeStates = ['busy', 'idle', 'waiting'];
-          const current = sessions.find(
-            s => activeStates.includes(s.state) && s.directory === cwd
-          );
-
-          assert.ok(current);
-          assert.strictEqual(current.directory, '/project');
-        });
-
-        it('finds session by ID prefix', () => {
-          const sessions = [
-            createTestSession({ id: 'abc-123' }),
-            createTestSession({ id: 'def-456' }),
-          ];
-
-          const prefix = 'abc';
-          const found = sessions.find(s => s.id.startsWith(prefix));
-
-          assert.ok(found);
-          assert.strictEqual(found.id, 'abc-123');
+          const s = cli.session('abc-123-full-uuid')!;
+          assert.strictEqual(s.name, 'Test');
         });
       });
 
       describe('error conditions', () => {
-        it('errors when session not found by ID', () => {
-          const sessions: never[] = [];
-          const found = sessions.find(() => false);
+        it('exits 1 when session not found by ID', async () => {
+          await cli.run('name', 'Test', 'nonexistent');
 
-          assert.strictEqual(found, undefined);
-          // Command would exit: "Session not found: <id>"
-        });
-
-        it('errors when no active session in directory', () => {
-          const sessions = [
-            createTestSession({ directory: '/project', state: 'closed' }),
-          ];
-
-          const cwd = '/project';
-          const activeStates = ['busy', 'idle', 'waiting'];
-          const current = sessions.find(
-            s => activeStates.includes(s.state) && s.directory === cwd
-          );
-
-          assert.strictEqual(current, undefined);
-          // Command would exit: "No active session in current directory"
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.ok(cli.console.errors.some(l => l.includes('not found')));
         });
       });
 
       describe('output message', () => {
-        it('confirms name in success message', () => {
-          const name = 'My New Name';
+        it('confirms name in success message', async () => {
+          await cli.seed({ id: 'abc12345' });
+          await cli.run('name', 'My New Name', 'abc12345');
 
-          // Output: "Set name: My New Name"
-          const message = `Set name: ${name}`;
-          assert.ok(message.includes(name));
+          assert.ok(cli.console.logs.some(l => l.includes('My New Name')));
+          assert.ok(cli.console.logs.some(l => l.includes('Set name')));
         });
       });
     });

@@ -1,174 +1,133 @@
 /**
- * Tests for show command behavior
+ * Tests for show command
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
-import { formatSessionDetails } from '../../src/util/format.js';
-import type { Session } from '../../src/store/schema.js';
+import { setupCLI, type CLIHarness } from '../helpers/cli.js';
 
 describe('c', () => {
   describe('commands', () => {
     describe('show', () => {
-      beforeEach(() => {
-        resetSessionCounter();
-      });
+      let cli: CLIHarness;
+      beforeEach(() => { cli = setupCLI(); });
+      afterEach(() => { cli.cleanup(); });
 
       describe('session lookup', () => {
-        it('finds session by exact ID', () => {
-          const sessions: Record<string, Session> = {
-            'abc-123': createTestSession({ id: 'abc-123' }),
-            'def-456': createTestSession({ id: 'def-456' }),
-          };
+        it('finds session by exact ID', async () => {
+          await cli.seed({ id: 'abc-123' });
+          await cli.run('show', 'abc-123');
 
-          const found = sessions['abc-123'];
-          assert.ok(found);
-          assert.strictEqual(found.id, 'abc-123');
+          assert.strictEqual(cli.exit.exitCode, null);
+          assert.ok(cli.console.logs.some(l => l.includes('abc-123')));
         });
 
-        it('finds session by ID prefix', () => {
-          const sessions = [
-            createTestSession({ id: 'abc-123-full-uuid' }),
-            createTestSession({ id: 'def-456-full-uuid' }),
-          ];
+        it('finds session by ID prefix', async () => {
+          await cli.seed({ id: 'abc-123-full-uuid' });
+          await cli.run('show', 'abc');
 
-          const prefix = 'abc';
-          const matches = sessions.filter(
-            s => s.id.startsWith(prefix) || s.humanhash.startsWith(prefix)
-          );
-
-          assert.strictEqual(matches.length, 1);
-          assert.strictEqual(matches[0].id, 'abc-123-full-uuid');
+          assert.strictEqual(cli.exit.exitCode, null);
+          assert.ok(cli.console.logs.some(l => l.includes('abc-123-full-uuid')));
         });
 
-        it('returns undefined when session not found', () => {
-          const sessions: Record<string, Session> = {};
+        it('exits 1 when session not found', async () => {
+          await cli.run('show', 'nonexistent');
 
-          const found = sessions['nonexistent'];
-          assert.strictEqual(found, undefined);
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.ok(cli.console.errors.some(l => l.includes('not found')));
         });
       });
 
       describe('display fields', () => {
-        it('displays session ID', () => {
-          const session = createTestSession({ id: '12345678-uuid' });
-          assert.strictEqual(session.id, '12345678-uuid');
+        it('displays session ID', async () => {
+          await cli.seed({ id: '12345678-uuid' });
+          await cli.run('show', '12345678-uuid');
+
+          assert.ok(cli.console.logs.some(l => l.includes('12345678-uuid')));
         });
 
-        it('displays humanhash', () => {
-          const session = createTestSession({ humanhash: 'alpha-bravo-charlie' });
-          assert.strictEqual(session.humanhash, 'alpha-bravo-charlie');
+        it('displays humanhash', async () => {
+          await cli.seed({ id: 'abc12345', humanhash: 'alpha-bravo-charlie' });
+          await cli.run('show', 'abc12345');
+
+          assert.ok(cli.console.logs.some(l => l.includes('alpha-bravo-charlie')));
         });
 
-        it('displays state', () => {
-          const session = createTestSession({ state: 'busy' });
-          assert.strictEqual(session.state, 'busy');
+        it('displays state', async () => {
+          await cli.seed({ id: 'abc12345', state: 'busy' });
+          await cli.run('show', 'abc12345');
+
+          assert.ok(cli.console.logs.some(l => l.includes('busy')));
         });
 
-        it('displays directory path', () => {
-          const session = createTestSession({ directory: '/home/user/project' });
-          assert.strictEqual(session.directory, '/home/user/project');
+        it('displays directory path', async () => {
+          await cli.seed({ id: 'abc12345', directory: '/home/user/project' });
+          await cli.run('show', 'abc12345');
+
+          assert.ok(cli.console.logs.some(l => l.includes('/home/user/project')));
         });
 
-        it('displays timestamps', () => {
-          const date = new Date('2024-01-15T10:00:00Z');
-          const session = createTestSession({
-            created_at: date,
-            last_active_at: date,
+        it('displays resources when present', async () => {
+          await cli.seed({
+            id: 'abc12345',
+            resources: { branch: 'main', pr: 'https://github.com/o/r/pull/42', jira: 'MAC-123' },
           });
+          await cli.run('show', 'abc12345');
 
-          assert.strictEqual(session.created_at.toISOString(), '2024-01-15T10:00:00.000Z');
-          assert.strictEqual(session.last_active_at.toISOString(), '2024-01-15T10:00:00.000Z');
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('main'));
+          assert.ok(output.includes('pull/42'));
+          assert.ok(output.includes('MAC-123'));
         });
 
-        it('displays parent session ID when present', () => {
-          const session = createTestSession({ parent_session_id: 'parent-uuid' });
-          assert.strictEqual(session.parent_session_id, 'parent-uuid');
+        it('displays tags when present', async () => {
+          await cli.seed({ id: 'abc12345', tags: ['important', 'wip'] });
+          await cli.run('show', 'abc12345');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('important'));
+          assert.ok(output.includes('wip'));
         });
 
-        it('displays resources when present', () => {
-          const session = createTestSession({
-            resources: {
-              branch: 'main',
-              pr: 'https://github.com/o/r/pull/42',
-              jira: 'MAC-123',
-            },
-          });
+        it('displays meta when present', async () => {
+          await cli.seed({ id: 'abc12345', meta: { note: 'Test note', priority: 'high' } });
+          await cli.run('show', 'abc12345');
 
-          assert.strictEqual(session.resources.branch, 'main');
-          assert.strictEqual(session.resources.pr, 'https://github.com/o/r/pull/42');
-          assert.strictEqual(session.resources.jira, 'MAC-123');
-        });
-
-        it('displays tags when present', () => {
-          const session = createTestSession({ tags: ['important', 'wip'] });
-          assert.deepStrictEqual(session.tags.values, ['important', 'wip']);
-        });
-
-        it('displays meta when present', () => {
-          const session = createTestSession({ meta: { note: 'Test note', priority: 'high' } });
-          assert.strictEqual(session.meta.note, 'Test note');
-          assert.strictEqual(session.meta.priority, 'high');
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Test note'));
+          assert.ok(output.includes('high'));
         });
       });
 
       describe('pid display', () => {
-        it('shows PID when session has one', () => {
-          const session = createTestSession({ pid: 42567 });
-          const output = formatSessionDetails(session);
+        it('shows PID when session has one', async () => {
+          await cli.seed({ id: 'abc12345', pid: 42567 });
+          await cli.run('show', 'abc12345');
+
+          const output = cli.console.logs.join('\n');
           assert.match(output, /PID/);
           assert.match(output, /42567/);
         });
 
-        it('shows dash when session has no PID', () => {
-          const session = createTestSession();
-          const output = formatSessionDetails(session);
+        it('shows dash when session has no PID', async () => {
+          await cli.seed({ id: 'abc12345' });
+          await cli.run('show', 'abc12345');
+
+          const output = cli.console.logs.join('\n');
           assert.match(output, /PID/);
           assert.match(output, /–/);
         });
 
-        it('always includes PID line', () => {
+        it('always includes PID line', async () => {
           for (const state of ['busy', 'idle', 'waiting', 'closed', 'archived'] as const) {
-            const session = createTestSession({ state });
-            const output = formatSessionDetails(session);
+            const cli2 = setupCLI();
+            await cli2.seed({ id: 'abc12345', state });
+            await cli2.run('show', 'abc12345');
+
+            const output = cli2.console.logs.join('\n');
             assert.match(output, /PID/, `PID missing for state: ${state}`);
+            cli2.cleanup();
           }
-        });
-
-        it('shows different PIDs for different sessions', () => {
-          const s1 = createTestSession({ pid: 111 });
-          const s2 = createTestSession({ pid: 222 });
-          const out1 = formatSessionDetails(s1);
-          const out2 = formatSessionDetails(s2);
-          assert.match(out1, /111/);
-          assert.match(out2, /222/);
-          assert.doesNotMatch(out1, /222/);
-          assert.doesNotMatch(out2, /111/);
-        });
-      });
-
-      describe('optional fields', () => {
-        it('handles missing parent_session_id', () => {
-          const session = createTestSession();
-          assert.strictEqual(session.parent_session_id, undefined);
-        });
-
-        it('handles empty resources', () => {
-          const session = createTestSession({ resources: {} });
-          assert.strictEqual(session.resources.branch, undefined);
-          assert.strictEqual(session.resources.pr, undefined);
-          assert.strictEqual(session.resources.jira, undefined);
-        });
-
-        it('handles empty tags', () => {
-          const session = createTestSession({ tags: [] });
-          assert.deepStrictEqual(session.tags.values, []);
-        });
-
-        it('handles empty meta', () => {
-          const session = createTestSession({ meta: {} });
-          assert.deepStrictEqual(session.meta, {});
         });
       });
     });

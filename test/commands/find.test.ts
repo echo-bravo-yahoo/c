@@ -1,211 +1,155 @@
 /**
- * Tests for find command behavior
+ * Tests for find command
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
-import type { Session } from '../../src/store/schema.js';
-
-// Match logic from find command
-function matchSession(session: Session, query: string): boolean {
-  const q = query.toLowerCase();
-  const fields = [
-    session.id,
-    session.name,
-    session.humanhash,
-    session.directory,
-    session.resources.branch,
-    session.resources.pr,
-    session.resources.jira,
-    ...session.tags.values,
-    ...Object.keys(session.meta),
-    ...Object.values(session.meta),
-  ];
-
-  return fields.some(f => f?.toLowerCase().includes(q));
-}
+import { setupCLI, type CLIHarness } from '../helpers/cli.js';
 
 describe('c', () => {
   describe('commands', () => {
     describe('find', () => {
-      beforeEach(() => {
-        resetSessionCounter();
-      });
+      let cli: CLIHarness;
+      beforeEach(() => { cli = setupCLI(); });
+      afterEach(() => { cli.cleanup(); });
 
       describe('search fields', () => {
-        it('matches session ID', () => {
-          const session = createTestSession({ id: 'abc-123-uuid' });
-          const query = 'abc';
+        it('matches session ID', async () => {
+          await cli.seed({ id: 'abc-123-uuid' });
+          await cli.run('find', 'abc');
 
-          assert.strictEqual(matchSession(session, query), true);
+          assert.ok(cli.console.logs.some(l => l.includes('abc')));
         });
 
-        it('matches name', () => {
-          const session = createTestSession({ name: 'My Important Session' });
-          const query = 'important';
+        it('matches name', async () => {
+          await cli.seed({ id: 'sess1', name: 'My Important Session' });
+          await cli.run('find', 'important');
 
-          assert.strictEqual(matchSession(session, query), true);
+          assert.ok(cli.console.logs.some(l => l.includes('Important')));
         });
 
-        it('matches humanhash', () => {
-          const session = createTestSession({ humanhash: 'alpha-bravo-charlie' });
-          const query = 'bravo';
+        it('matches humanhash', async () => {
+          await cli.seed({ id: 'sess1', humanhash: 'alpha-bravo-charlie' });
+          await cli.run('find', 'bravo');
 
-          assert.strictEqual(matchSession(session, query), true);
+          assert.ok(cli.console.logs.some(l => l.includes('bravo')));
         });
 
-        it('matches directory', () => {
-          const session = createTestSession({ directory: '/home/user/myproject' });
-          const query = 'myproject';
+        it('matches directory', async () => {
+          await cli.seed({ id: 'sess1', directory: '/home/user/myproject' });
+          await cli.run('find', 'myproject');
 
-          assert.strictEqual(matchSession(session, query), true);
+          assert.ok(cli.console.logs.some(l => l.includes('myproject')));
         });
 
-        it('matches branch', () => {
-          const session = createTestSession({
-            resources: { branch: 'feature/awesome-thing' },
-          });
-          const query = 'awesome';
+        it('matches branch', async () => {
+          await cli.seed({ id: 'sess1', resources: { branch: 'feature/awesome-thing' } });
+          await cli.run('find', 'awesome');
 
-          assert.strictEqual(matchSession(session, query), true);
+          assert.ok(cli.console.logs.some(l => l.includes('awesome')));
         });
 
-        it('matches PR URL', () => {
-          const session = createTestSession({
-            resources: { pr: 'https://github.com/org/repo/pull/42' },
-          });
-          const query = 'pull/42';
+        it('matches PR URL', async () => {
+          await cli.seed({ id: 'sess1', resources: { pr: 'https://github.com/org/repo/pull/42' } });
+          await cli.run('find', 'pull/42');
 
-          assert.strictEqual(matchSession(session, query), true);
+          assert.ok(cli.console.logs.length > 0);
         });
 
-        it('matches JIRA ticket', () => {
-          const session = createTestSession({
-            resources: { jira: 'MAC-123' },
-          });
-          const query = 'mac-123';
+        it('matches JIRA ticket', async () => {
+          await cli.seed({ id: 'sess1', resources: { jira: 'MAC-123' } });
+          await cli.run('find', 'mac-123');
 
-          assert.strictEqual(matchSession(session, query), true);
+          assert.ok(cli.console.logs.length > 0);
         });
 
-        it('matches tags', () => {
-          const session = createTestSession({ tags: ['important', 'wip'] });
-          const query = 'important';
+        it('matches tags', async () => {
+          await cli.seed({ id: 'sess1', tags: ['important', 'wip'] });
+          await cli.run('find', 'important');
 
-          assert.strictEqual(matchSession(session, query), true);
+          assert.ok(cli.console.logs.length > 0);
         });
 
-        it('matches meta keys', () => {
-          const session = createTestSession({ meta: { priority: 'high' } });
-          const query = 'priority';
+        it('matches meta keys', async () => {
+          await cli.seed({ id: 'sess1', meta: { priority: 'high' } });
+          await cli.run('find', 'priority');
 
-          assert.strictEqual(matchSession(session, query), true);
+          assert.ok(cli.console.logs.length > 0);
         });
 
-        it('matches meta values', () => {
-          const session = createTestSession({ meta: { status: 'in-review' } });
-          const query = 'review';
+        it('matches meta values', async () => {
+          await cli.seed({ id: 'sess1', meta: { status: 'in-review' } });
+          await cli.run('find', 'review');
 
-          assert.strictEqual(matchSession(session, query), true);
+          assert.ok(cli.console.logs.length > 0);
         });
       });
 
       describe('case sensitivity', () => {
-        it('ignores case', () => {
-          const session = createTestSession({ name: 'My Important Session' });
+        it('ignores case', async () => {
+          await cli.seed({ id: 'sess1', name: 'My Important Session' });
 
-          assert.strictEqual(matchSession(session, 'IMPORTANT'), true);
-          assert.strictEqual(matchSession(session, 'Important'), true);
-          assert.strictEqual(matchSession(session, 'important'), true);
-        });
-
-        it('matches regardless of case', () => {
-          const session = createTestSession({
-            resources: { jira: 'MAC-123' },
-          });
-
-          assert.strictEqual(matchSession(session, 'Mac'), true);
-          assert.strictEqual(matchSession(session, 'MAC'), true);
-          assert.strictEqual(matchSession(session, 'mac'), true);
+          await cli.run('find', 'IMPORTANT');
+          assert.ok(cli.console.logs.length > 0);
         });
       });
 
       describe('partial matching', () => {
-        it('matches partial strings', () => {
-          const session = createTestSession({ name: 'authentication-feature' });
+        it('matches partial strings', async () => {
+          await cli.seed({ id: 'sess1', name: 'authentication-feature' });
+          await cli.run('find', 'auth');
 
-          assert.strictEqual(matchSession(session, 'auth'), true);
-          assert.strictEqual(matchSession(session, 'feature'), true);
-          assert.strictEqual(matchSession(session, 'tion-feat'), true);
+          assert.ok(cli.console.logs.length > 0);
         });
       });
 
       describe('no matches', () => {
-        it('returns nothing when query misses', () => {
-          const sessions = [
-            createTestSession({ name: 'Session A' }),
-            createTestSession({ name: 'Session B' }),
-          ];
+        it('returns nothing when query misses', async () => {
+          await cli.seed({ id: 'sess1', name: 'Session A' });
+          await cli.seed({ id: 'sess2', name: 'Session B' });
+          await cli.run('find', 'nonexistent');
 
-          const query = 'nonexistent';
-          const matches = sessions.filter(s => matchSession(s, query));
-
-          assert.strictEqual(matches.length, 0);
-        });
-
-        it('matches everything with empty query', () => {
-          const session = createTestSession({ name: 'Test' });
-          const query = '';
-
-          // Empty string matches everything (substring check)
-          assert.strictEqual(matchSession(session, query), true);
+          // When no matches, printSessionTable outputs "No sessions" or empty
+          const output = cli.console.logs.join('\n');
+          assert.ok(!output.includes('Session A'));
+          assert.ok(!output.includes('Session B'));
         });
       });
 
       describe('multiple matches', () => {
-        it('returns all matching sessions', () => {
-          const sessions = [
-            createTestSession({ name: 'Auth Feature' }),
-            createTestSession({ name: 'Authentication Bug' }),
-            createTestSession({ name: 'User Profile' }),
-          ];
+        it('returns all matching sessions', async () => {
+          await cli.seed({ id: 'sess1', name: 'Auth Feature' });
+          await cli.seed({ id: 'sess2', name: 'Authentication Bug' });
+          await cli.seed({ id: 'sess3', name: 'User Profile' });
+          await cli.run('find', 'auth');
 
-          const query = 'auth';
-          const matches = sessions.filter(s => matchSession(s, query));
-
-          assert.strictEqual(matches.length, 2);
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Auth'));
+          assert.ok(!output.includes('Profile'));
         });
       });
 
       describe('optional fields', () => {
-        it('tolerates missing branch', () => {
-          const session = createTestSession({ resources: {} });
-          const query = 'branch';
+        it('tolerates missing resources', async () => {
+          await cli.seed({ id: 'sess1', resources: {} });
+          await cli.run('find', 'branch');
 
-          // Should not crash on undefined
-          assert.strictEqual(matchSession(session, query), false);
+          // Should not crash
+          assert.strictEqual(cli.exit.exitCode, null);
         });
 
-        it('tolerates missing PR', () => {
-          const session = createTestSession({ resources: {} });
-          const query = 'pull';
+        it('tolerates empty meta', async () => {
+          await cli.seed({ id: 'sess1', meta: {} });
+          await cli.run('find', 'meta');
 
-          assert.strictEqual(matchSession(session, query), false);
+          assert.strictEqual(cli.exit.exitCode, null);
         });
 
-        it('tolerates empty meta', () => {
-          const session = createTestSession({ meta: {} });
-          const query = 'meta';
+        it('tolerates empty tags', async () => {
+          await cli.seed({ id: 'sess1', tags: [] });
+          await cli.run('find', 'tag');
 
-          assert.strictEqual(matchSession(session, query), false);
-        });
-
-        it('tolerates empty tags', () => {
-          const session = createTestSession({ tags: [] });
-          const query = 'tag';
-
-          assert.strictEqual(matchSession(session, query), false);
+          assert.strictEqual(cli.exit.exitCode, null);
         });
       });
     });

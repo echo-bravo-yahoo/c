@@ -10,8 +10,8 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "dev": "tsc && node dist/index.js",
-    "test": "node --import tsx --test test/**/*.test.ts",
-    "test:watch": "node --import tsx --test --watch test/**/*.test.ts"
+    "test": "node --import tsx --experimental-test-module-mocks --test test/**/*.test.ts",
+    "test:watch": "node --import tsx --experimental-test-module-mocks --test --watch test/**/*.test.ts"
   },
   "dependencies": {
     "@iarna/toml": "^3.0.0",

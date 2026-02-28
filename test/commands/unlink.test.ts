@@ -1,130 +1,107 @@
 /**
- * Tests for unlink command behavior
+ * Tests for unlink command
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
-import type { UnlinkOptions } from '../../src/commands/unlink.js';
+import { setupCLI, type CLIHarness } from '../helpers/cli.js';
 
 describe('c', () => {
   describe('commands', () => {
     describe('unlink', () => {
-      beforeEach(() => {
-        resetSessionCounter();
-      });
+      let cli: CLIHarness;
+      beforeEach(() => { cli = setupCLI(); });
+      afterEach(() => { cli.cleanup(); });
 
       describe('resource removal', () => {
-        it('detaches PR', () => {
-          const session = createTestSession({
-            resources: { pr: 'https://github.com/org/repo/pull/42' },
-          });
-          const options: UnlinkOptions = { pr: true };
+        it('detaches PR', async () => {
+          await cli.seed({ id: 'abc12345', resources: { pr: 'https://github.com/org/repo/pull/42' } });
+          await cli.run('unlink', '--pr', 'abc12345');
 
-          if (options.pr) delete session.resources.pr;
-
-          assert.strictEqual(session.resources.pr, undefined);
+          const s = cli.session('abc12345')!;
+          assert.strictEqual(s.resources.pr, undefined);
         });
 
-        it('detaches JIRA ticket', () => {
-          const session = createTestSession({
-            resources: { jira: 'MAC-123' },
-          });
-          const options: UnlinkOptions = { jira: true };
+        it('detaches JIRA ticket', async () => {
+          await cli.seed({ id: 'abc12345', resources: { jira: 'MAC-123' } });
+          await cli.run('unlink', '--jira', 'abc12345');
 
-          if (options.jira) delete session.resources.jira;
-
-          assert.strictEqual(session.resources.jira, undefined);
+          const s = cli.session('abc12345')!;
+          assert.strictEqual(s.resources.jira, undefined);
         });
 
-        it('detaches branch', () => {
-          const session = createTestSession({
-            resources: { branch: 'feature/thing' },
-          });
-          const options: UnlinkOptions = { branch: true };
+        it('detaches branch', async () => {
+          await cli.seed({ id: 'abc12345', resources: { branch: 'feature/thing' } });
+          await cli.run('unlink', '--branch', 'abc12345');
 
-          if (options.branch) delete session.resources.branch;
-
-          assert.strictEqual(session.resources.branch, undefined);
+          const s = cli.session('abc12345')!;
+          assert.strictEqual(s.resources.branch, undefined);
         });
 
-        it('detaches multiple resources', () => {
-          const session = createTestSession({
+        it('detaches multiple resources', async () => {
+          await cli.seed({
+            id: 'abc12345',
             resources: {
               pr: 'https://github.com/org/repo/pull/42',
               jira: 'MAC-123',
               branch: 'feature/thing',
             },
           });
-          const options: UnlinkOptions = { pr: true, jira: true };
+          await cli.run('unlink', '--pr', '--jira', 'abc12345');
 
-          if (options.pr) delete session.resources.pr;
-          if (options.jira) delete session.resources.jira;
-          if (options.branch) delete session.resources.branch;
-
-          assert.strictEqual(session.resources.pr, undefined);
-          assert.strictEqual(session.resources.jira, undefined);
-          assert.strictEqual(session.resources.branch, 'feature/thing'); // not deleted
+          const s = cli.session('abc12345')!;
+          assert.strictEqual(s.resources.pr, undefined);
+          assert.strictEqual(s.resources.jira, undefined);
+          assert.strictEqual(s.resources.branch, 'feature/thing');
         });
       });
 
       describe('no-op behavior', () => {
-        it('ignores missing resource', () => {
-          const session = createTestSession({ resources: {} });
-          const options: UnlinkOptions = { pr: true };
+        it('ignores missing resource', async () => {
+          await cli.seed({ id: 'abc12345', resources: {} });
+          await cli.run('unlink', '--pr', 'abc12345');
 
-          // delete on undefined property is a no-op
-          if (options.pr) delete session.resources.pr;
-
-          assert.strictEqual(session.resources.pr, undefined);
+          const s = cli.session('abc12345')!;
+          assert.strictEqual(s.resources.pr, undefined);
         });
       });
 
       describe('timestamp update', () => {
-        it('updates last_active_at', () => {
+        it('updates last_active_at', async () => {
           const oldDate = new Date('2024-01-01');
-          const session = createTestSession({
-            resources: { jira: 'MAC-123' },
-            last_active_at: oldDate,
-          });
-          const options: UnlinkOptions = { jira: true };
+          await cli.seed({ id: 'abc12345', resources: { jira: 'MAC-123' }, last_active_at: oldDate });
+          await cli.run('unlink', '--jira', 'abc12345');
 
-          if (options.jira) {
-            delete session.resources.jira;
-            session.last_active_at = new Date();
-          }
-
-          assert.ok(session.last_active_at > oldDate);
+          const s = cli.session('abc12345')!;
+          assert.ok(s.last_active_at > oldDate);
         });
       });
 
       describe('error conditions', () => {
-        it('requires at least one resource', () => {
-          const options: UnlinkOptions = {};
-          const hasResource = options.pr || options.jira || options.branch;
+        it('exits 1 when no resource specified', async () => {
+          await cli.seed({ id: 'abc12345' });
+          await cli.run('unlink', 'abc12345');
 
-          assert.strictEqual(hasResource, undefined);
-          // Command would exit with error: "Specify at least one: --pr, --jira, or --branch"
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.ok(cli.console.errors.some(l => l.includes('Specify at least one')));
         });
 
-        it('errors when session not found', () => {
-          const sessions: never[] = [];
-          const found = sessions.find(() => false);
+        it('exits 1 when session not found', async () => {
+          await cli.run('unlink', '--pr', 'nonexistent');
 
-          assert.strictEqual(found, undefined);
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.ok(cli.console.errors.some(l => l.includes('not found')));
         });
       });
 
       describe('output message', () => {
-        it('lists detached resources in output', () => {
-          const options: UnlinkOptions = { pr: true, jira: true };
+        it('lists detached resources in output', async () => {
+          await cli.seed({ id: 'abc12345', resources: { pr: 'http://x', jira: 'J-1' } });
+          await cli.run('unlink', '--pr', '--jira', 'abc12345');
 
-          const unlinked: string[] = [];
-          if (options.pr) unlinked.push('PR');
-          if (options.jira) unlinked.push('JIRA');
-          if (options.branch) unlinked.push('branch');
-
-          assert.deepStrictEqual(unlinked, ['PR', 'JIRA']);
+          assert.ok(cli.console.logs.some(l => l.includes('Unlinked')));
+          assert.ok(cli.console.logs.some(l => l.includes('PR')));
+          assert.ok(cli.console.logs.some(l => l.includes('JIRA')));
         });
       });
     });
