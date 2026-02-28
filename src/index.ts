@@ -258,5 +258,5 @@ if (isDirectRun) {
   if (args.length === 0 || args.every(a => a.startsWith('-'))) {
     process.argv.splice(2, 0, 'list');
   }
-  createProgram().parse();
+  createProgram().parseAsync();
 }
