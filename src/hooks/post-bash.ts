@@ -2,8 +2,11 @@
  * PostToolUse (Bash) hook - detect PRs and servers
  */
 
-import { updateIndex, getCurrentSession } from '../store/index.js';
+import { updateIndex, getCurrentSession, getSession } from '../store/index.js';
 import { extractPRFromOutput } from '../detection/pr.js';
+import { writeStatusCache } from '../store/status-cache.js';
+import { getRepoSlug, getWorktreeInfo } from '../detection/git.js';
+import type { StatusCacheData } from '../store/status-cache.js';
 import type { HookInput } from './index.js';
 
 export async function handlePostBash(
@@ -57,4 +60,23 @@ export async function handlePostBash(
       // Could be enhanced to scan lsof for actual port bindings
     }
   });
+
+  // Update status cache when PR is detected
+  if (prUrl) {
+    const session = getSession(targetId);
+    if (session) {
+      const repo = getRepoSlug(cwd);
+      const worktreeInfo = getWorktreeInfo(cwd);
+      const cache: StatusCacheData = {
+        branch: session.resources.branch,
+        repo,
+        jira: session.resources.jira,
+        jira_base: session.resources.jira ? 'https://machinify.atlassian.net' : undefined,
+        pr: session.resources.pr,
+        worktree: session.resources.worktree,
+        worktree_path: worktreeInfo?.path,
+      };
+      writeStatusCache(targetId, cache);
+    }
+  }
 }

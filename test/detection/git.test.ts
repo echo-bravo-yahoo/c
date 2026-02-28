@@ -6,7 +6,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { getCurrentBranch, getGitRoot, isWorktree, getWorktreeInfo, listWorktrees } from '../../src/detection/git.js';
+import { getCurrentBranch, getGitRoot, isWorktree, getWorktreeInfo, getRepoSlug, listWorktrees } from '../../src/detection/git.js';
 
 describe('c', () => {
   describe('detection', () => {
@@ -74,6 +74,47 @@ describe('c', () => {
           const match = '/repo/.claude/worktrees/my-branch'.match(regex);
           assert.ok(match);
           assert.strictEqual(match[1], 'my-branch');
+        });
+      });
+
+      describe('getRepoSlug', () => {
+        it('parses HTTPS URL', () => {
+          const regex = /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/;
+          const match = 'https://github.com/org/repo.git'.match(regex);
+          assert.ok(match);
+          assert.strictEqual(match[1], 'org/repo');
+        });
+
+        it('parses SSH URL', () => {
+          const regex = /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/;
+          const match = 'git@github.com:org/repo.git'.match(regex);
+          assert.ok(match);
+          assert.strictEqual(match[1], 'org/repo');
+        });
+
+        it('strips .git suffix', () => {
+          const regex = /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/;
+          const withGit = 'https://github.com/org/repo.git'.match(regex);
+          const withoutGit = 'https://github.com/org/repo'.match(regex);
+          assert.strictEqual(withGit?.[1], 'org/repo');
+          assert.strictEqual(withoutGit?.[1], 'org/repo');
+        });
+
+        it('returns undefined for non-GitHub remote', () => {
+          const regex = /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/;
+          const match = 'https://gitlab.com/org/repo.git'.match(regex);
+          assert.strictEqual(match, null);
+        });
+
+        it('returns undefined outside git repo', () => {
+          const slug = getRepoSlug('/tmp');
+          assert.strictEqual(slug, undefined);
+        });
+
+        it('returns slug for current repo', () => {
+          const slug = getRepoSlug();
+          assert.ok(slug, 'Should return a repo slug');
+          assert.ok(slug.includes('/'), 'Should contain org/repo separator');
         });
       });
 

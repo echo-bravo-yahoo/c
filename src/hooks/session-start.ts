@@ -5,9 +5,11 @@
 import { updateIndex, getSession, getSessions } from '../store/index.js';
 import { createSession } from '../store/schema.js';
 import { generateHumanhash } from '../util/humanhash.js';
-import { getCurrentBranch, getWorktreeInfo, listWorktrees } from '../detection/git.js';
+import { getCurrentBranch, getWorktreeInfo, getRepoSlug, listWorktrees } from '../detection/git.js';
 import { extractJiraFromBranch } from '../detection/jira.js';
 import { encodeProjectKey, getPlanExecutionInfo } from '../claude/sessions.js';
+import { writeStatusCache } from '../store/status-cache.js';
+import type { StatusCacheData } from '../store/status-cache.js';
 import type { HookInput } from './index.js';
 
 export async function handleSessionStart(
@@ -44,7 +46,7 @@ export async function handleSessionStart(
   // Check if session already exists (e.g., created by `c new`)
   const existing = getSession(sessionId);
   if (existing) {
-    await updateIndex((index) => {
+    const updatedIndex = await updateIndex((index) => {
       const s = index.sessions[sessionId];
       if (!s) return;
 
@@ -84,6 +86,11 @@ export async function handleSessionStart(
         s.resources.worktree = worktree.name;
       }
     });
+
+    const s = updatedIndex.sessions[sessionId];
+    if (s) {
+      writeCacheFromSession(sessionId, s, cwd);
+    }
     return;
   }
 
@@ -128,4 +135,25 @@ export async function handleSessionStart(
   await updateIndex((index) => {
     index.sessions[sessionId] = session;
   });
+
+  writeCacheFromSession(sessionId, session, cwd);
+}
+
+function writeCacheFromSession(
+  sessionId: string,
+  session: { resources: { branch?: string; worktree?: string; pr?: string; jira?: string } },
+  cwd: string
+): void {
+  const repo = getRepoSlug(cwd);
+  const worktreeInfo = getWorktreeInfo(cwd);
+  const cache: StatusCacheData = {
+    branch: session.resources.branch,
+    repo,
+    jira: session.resources.jira,
+    jira_base: session.resources.jira ? 'https://machinify.atlassian.net' : undefined,
+    pr: session.resources.pr,
+    worktree: session.resources.worktree,
+    worktree_path: worktreeInfo?.path,
+  };
+  writeStatusCache(sessionId, cache);
 }

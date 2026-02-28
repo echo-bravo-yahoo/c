@@ -51,6 +51,22 @@ export function getWorktreeInfo(cwd?: string): { name: string; path: string } | 
 /**
  * Get all worktrees for a repository
  */
+/**
+ * Get the org/repo slug from the GitHub remote URL
+ */
+export function getRepoSlug(cwd?: string): string | undefined {
+  const url = exec('git remote get-url origin', { cwd });
+  if (!url) return undefined;
+
+  // HTTPS: https://github.com/org/repo.git
+  // SSH: git@github.com:org/repo.git
+  const match = url.match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
+  return match?.[1];
+}
+
+/**
+ * Get all worktrees for a repository
+ */
 export function listWorktrees(cwd?: string): Array<{ path: string; branch: string }> {
   const output = exec('git worktree list --porcelain', { cwd });
   if (!output) return [];

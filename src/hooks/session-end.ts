@@ -3,6 +3,7 @@
  */
 
 import { updateIndex, getCurrentSession } from '../store/index.js';
+import { deleteStatusCache } from '../store/status-cache.js';
 import type { HookInput } from './index.js';
 
 export async function handleSessionEnd(
@@ -24,4 +25,6 @@ export async function handleSessionEnd(
       delete index.sessions[targetId].pid;
     }
   });
+
+  deleteStatusCache(targetId);
 }
