@@ -591,12 +591,18 @@ describe('c', () => {
         });
 
         it('assigns prefix length 1 for fully distinct short IDs', () => {
-          const sessions = [
+          const visible = [
             makeSession({ id: 'aaaa1111-0000-0000-0000-000000000000' }),
             makeSession({ id: 'bbbb2222-0000-0000-0000-000000000000' }),
           ];
-          const map = buildPrefixMap(sessions);
-          assert.strictEqual(map.get('aaaa1111-0000-0000-0000-000000000000'), 1);
+          // Hidden session shares "aaaa" prefix with the first visible session
+          const all = [
+            ...visible,
+            makeSession({ id: 'aaaa3333-0000-0000-0000-000000000000' }),
+          ];
+          const map = buildPrefixMap(visible, all);
+          // Must disambiguate "aaaa1" vs "aaaa3" — prefix length 5
+          assert.strictEqual(map.get('aaaa1111-0000-0000-0000-000000000000'), 5);
           assert.strictEqual(map.get('bbbb2222-0000-0000-0000-000000000000'), 1);
         });
 

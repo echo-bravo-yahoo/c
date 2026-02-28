@@ -3,7 +3,7 @@
  */
 
 import chalk from 'chalk';
-import { getSessions, reconcileStaleSessions } from '../store/index.js';
+import { getSessions, getAllSessions, reconcileStaleSessions } from '../store/index.js';
 import { printSessionTable, getDisplayName, shortId, highlightId, buildPrefixMap } from '../util/format.js';
 import type { SessionState } from '../store/schema.js';
 
@@ -54,7 +54,7 @@ export async function listCommand(options: ListOptions): Promise<void> {
   if (options.minWidth != null) terminalWidth = Math.max(terminalWidth, options.minWidth);
   if (options.maxWidth != null) terminalWidth = Math.min(terminalWidth, options.maxWidth);
 
-  printSessionTable(sessions, terminalWidth);
+  printSessionTable(sessions, terminalWidth, getAllSessions());
 }
 
 function listPRs(): void {
@@ -69,7 +69,7 @@ function listPRs(): void {
     return;
   }
 
-  const prefixMap = buildPrefixMap(withPRs);
+  const prefixMap = buildPrefixMap(withPRs, getAllSessions());
 
   console.log(chalk.dim('Session'.padEnd(30) + 'PR'));
   console.log(chalk.dim('─'.repeat(70)));
@@ -104,7 +104,7 @@ function listJira(): void {
     return;
   }
 
-  const prefixMap = buildPrefixMap(withJira);
+  const prefixMap = buildPrefixMap(withJira, getAllSessions());
 
   console.log(chalk.dim('Session'.padEnd(30) + 'JIRA'));
   console.log(chalk.dim('─'.repeat(60)));

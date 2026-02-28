@@ -90,12 +90,16 @@ export function highlightId(id: string, prefixLength: number): string {
 }
 
 /**
- * Pre-compute unique prefix lengths for a list of sessions (keyed by full session ID)
+ * Pre-compute unique prefix lengths for a list of sessions (keyed by full session ID).
+ * When allSessions is provided, uniqueness is computed against that full set
+ * so highlighted prefixes remain valid for resolution across the entire store.
  */
-export function buildPrefixMap(sessions: Session[]): Map<string, number> {
-  const shorts = sessions.map(s => shortId(s.id));
+export function buildPrefixMap(sessions: Session[], allSessions?: Session[]): Map<string, number> {
+  const allShorts = (allSessions ?? sessions).map(s => shortId(s.id));
   const map = new Map<string, number>();
-  sessions.forEach((s, i) => map.set(s.id, computeUniquePrefixLength(shorts[i], shorts)));
+  for (const s of sessions) {
+    map.set(s.id, computeUniquePrefixLength(shortId(s.id), allShorts));
+  }
   return map;
 }
 
@@ -488,7 +492,7 @@ function formatGapLine(count: number, depth: number): string {
 /**
  * Print a table of sessions
  */
-export function printSessionTable(sessions: Session[], terminalWidth?: number): void {
+export function printSessionTable(sessions: Session[], terminalWidth?: number, allSessions?: Session[]): void {
   if (sessions.length === 0) {
     console.log(chalk.dim('No sessions found.'));
     return;
@@ -497,7 +501,7 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number): 
   const width = terminalWidth ?? (process.stdout.columns || 80);
 
   // Pre-compute unique prefix lengths for ID highlighting
-  const prefixMap = buildPrefixMap(sessions);
+  const prefixMap = buildPrefixMap(sessions, allSessions);
 
   // Reorder so children appear under their parents, with gap markers
   const ordered = orderSessionsWithChildren(sessions);

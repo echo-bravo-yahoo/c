@@ -2,7 +2,7 @@
  * c find <query> - search sessions
  */
 
-import { getSessions } from '../store/index.js';
+import { getSessions, getAllSessions } from '../store/index.js';
 import { printSessionTable } from '../util/format.js';
 import type { Session } from '../store/schema.js';
 
@@ -12,7 +12,7 @@ export function findCommand(query: string): void {
 
   const matches = allSessions.filter((s) => matchSession(s, q));
 
-  printSessionTable(matches);
+  printSessionTable(matches, undefined, getAllSessions());
 }
 
 function matchSession(session: Session, query: string): boolean {
