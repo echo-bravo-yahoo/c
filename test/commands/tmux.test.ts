@@ -6,201 +6,205 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
 
-describe('c > commands > tmux-status', () => {
-  beforeEach(() => {
-    resetSessionCounter();
-  });
-
-  describe('session counting', () => {
-    it('shows active session count', () => {
-      const sessions = [
-        createTestSession({ state: 'busy' }),
-        createTestSession({ state: 'idle' }),
-        createTestSession({ state: 'closed' }),
-      ];
-
-      const activeStates = ['busy', 'idle', 'waiting'];
-      const active = sessions.filter(s => activeStates.includes(s.state));
-      assert.strictEqual(active.length, 2);
-    });
-
-    it('counts waiting sessions', () => {
-      const sessions = [
-        createTestSession({ state: 'waiting' }),
-        createTestSession({ state: 'busy' }),
-        createTestSession({ state: 'waiting' }),
-      ];
-
-      const waiting = sessions.filter(s => s.state === 'waiting');
-      assert.strictEqual(waiting.length, 2);
-    });
-  });
-
-  describe('output formatting', () => {
-    it('highlights waiting sessions', () => {
-      const waitingCount = 2;
-      const liveCount = 5;
-
-      const parts: string[] = [];
-
-      if (waitingCount > 0) {
-        parts.push(`#[fg=yellow,bold]${waitingCount}#[default]`);
-      }
-      if (liveCount > 0) {
-        parts.push(`${liveCount}`);
-      }
-
-      assert.ok(parts[0].includes('yellow'));
-      assert.ok(parts[0].includes(String(waitingCount)));
-    });
-
-    it('outputs empty when no sessions', () => {
-      const sessions: never[] = [];
-
-      const live = sessions.filter(() => false);
-      const waiting = sessions.filter(() => false);
-
-      const parts: string[] = [];
-      if (waiting.length > 0) {
-        parts.push(`waiting:${waiting.length}`);
-      }
-      if (live.length > 0) {
-        parts.push(`live:${live.length}`);
-      }
-
-      assert.strictEqual(parts.length, 0);
-    });
-
-    it('only shows active count when no waiting', () => {
-      const sessions = [
-        createTestSession({ state: 'busy' }),
-        createTestSession({ state: 'idle' }),
-      ];
-
-      const waiting = sessions.filter(s => s.state === 'waiting');
-      const activeStates = ['busy', 'idle', 'waiting'];
-      const active = sessions.filter(s => activeStates.includes(s.state));
-
-      const parts: string[] = [];
-      if (waiting.length > 0) {
-        parts.push(`waiting:${waiting.length}`);
-      }
-      if (active.length > 0) {
-        parts.push(`${active.length}`);
-      }
-
-      assert.strictEqual(parts.length, 1);
-      assert.strictEqual(parts[0], '2');
-    });
-  });
-});
-
-describe('c > commands > tmux-pick', () => {
-  beforeEach(() => {
-    resetSessionCounter();
-  });
-
-  describe('session formatting', () => {
-    it('formats sessions for fzf', () => {
-      const session = createTestSession({
-        id: '12345678-uuid',
-        name: 'My Session',
-        state: 'busy',
-        resources: { branch: 'main' },
+describe('c', () => {
+  describe('commands', () => {
+    describe('tmux-status', () => {
+      beforeEach(() => {
+        resetSessionCounter();
       });
 
-      const shortId = session.id.slice(0, 8);
-      const name = session.name || session.humanhash;
-      const status = session.state;
-      const branch = session.resources.branch ?? '';
+      describe('session counting', () => {
+        it('shows active session count', () => {
+          const sessions = [
+            createTestSession({ state: 'busy' }),
+            createTestSession({ state: 'idle' }),
+            createTestSession({ state: 'closed' }),
+          ];
 
-      const line = `${shortId}\t${name}\t${status}\t${branch}\t${session.id}`;
+          const activeStates = ['busy', 'idle', 'waiting'];
+          const active = sessions.filter(s => activeStates.includes(s.state));
+          assert.strictEqual(active.length, 2);
+        });
 
-      assert.ok(line.includes('12345678'));
-      assert.ok(line.includes('My Session'));
-      assert.ok(line.includes('busy'));
-      assert.ok(line.includes('main'));
-    });
+        it('counts waiting sessions', () => {
+          const sessions = [
+            createTestSession({ state: 'waiting' }),
+            createTestSession({ state: 'busy' }),
+            createTestSession({ state: 'waiting' }),
+          ];
 
-    it('uses humanhash when no name', () => {
-      const session = createTestSession({
-        name: '',
-        humanhash: 'alpha-bravo',
+          const waiting = sessions.filter(s => s.state === 'waiting');
+          assert.strictEqual(waiting.length, 2);
+        });
       });
 
-      const name = session.name || session.humanhash;
-      assert.strictEqual(name, 'alpha-bravo');
+      describe('output formatting', () => {
+        it('highlights waiting sessions', () => {
+          const waitingCount = 2;
+          const liveCount = 5;
+
+          const parts: string[] = [];
+
+          if (waitingCount > 0) {
+            parts.push(`#[fg=yellow,bold]${waitingCount}#[default]`);
+          }
+          if (liveCount > 0) {
+            parts.push(`${liveCount}`);
+          }
+
+          assert.ok(parts[0].includes('yellow'));
+          assert.ok(parts[0].includes(String(waitingCount)));
+        });
+
+        it('outputs nothing without sessions', () => {
+          const sessions: never[] = [];
+
+          const live = sessions.filter(() => false);
+          const waiting = sessions.filter(() => false);
+
+          const parts: string[] = [];
+          if (waiting.length > 0) {
+            parts.push(`waiting:${waiting.length}`);
+          }
+          if (live.length > 0) {
+            parts.push(`live:${live.length}`);
+          }
+
+          assert.strictEqual(parts.length, 0);
+        });
+
+        it('omits waiting count when none waiting', () => {
+          const sessions = [
+            createTestSession({ state: 'busy' }),
+            createTestSession({ state: 'idle' }),
+          ];
+
+          const waiting = sessions.filter(s => s.state === 'waiting');
+          const activeStates = ['busy', 'idle', 'waiting'];
+          const active = sessions.filter(s => activeStates.includes(s.state));
+
+          const parts: string[] = [];
+          if (waiting.length > 0) {
+            parts.push(`waiting:${waiting.length}`);
+          }
+          if (active.length > 0) {
+            parts.push(`${active.length}`);
+          }
+
+          assert.strictEqual(parts.length, 1);
+          assert.strictEqual(parts[0], '2');
+        });
+      });
     });
 
-    it('shows waiting state', () => {
-      const session = createTestSession({
-        state: 'waiting',
+    describe('tmux-pick', () => {
+      beforeEach(() => {
+        resetSessionCounter();
       });
 
-      const status = session.state;
-      assert.strictEqual(status, 'waiting');
-    });
+      describe('session formatting', () => {
+        it('formats sessions for fzf', () => {
+          const session = createTestSession({
+            id: '12345678-uuid',
+            name: 'My Session',
+            state: 'busy',
+            resources: { branch: 'main' },
+          });
 
-    it('handles missing branch', () => {
-      const session = createTestSession({ resources: {} });
+          const shortId = session.id.slice(0, 8);
+          const name = session.name || session.humanhash;
+          const status = session.state;
+          const branch = session.resources.branch ?? '';
 
-      const branch = session.resources.branch ?? '';
-      assert.strictEqual(branch, '');
-    });
-  });
+          const line = `${shortId}\t${name}\t${status}\t${branch}\t${session.id}`;
 
-  describe('session selection', () => {
-    it('extracts selected session ID from fzf output', () => {
-      const fzfOutput = '12345678\tMy Session\tlive\tmain\t12345678-uuid-full';
+          assert.ok(line.includes('12345678'));
+          assert.ok(line.includes('My Session'));
+          assert.ok(line.includes('busy'));
+          assert.ok(line.includes('main'));
+        });
 
-      const sessionId = fzfOutput.trim().split('\t').pop();
-      assert.strictEqual(sessionId, '12345678-uuid-full');
-    });
+        it('falls back to humanhash', () => {
+          const session = createTestSession({
+            name: '',
+            humanhash: 'alpha-bravo',
+          });
 
-    it('handles output with tabs', () => {
-      const fzfOutput = 'abc\tdef\tghi\tjkl\tfull-uuid-here';
+          const name = session.name || session.humanhash;
+          assert.strictEqual(name, 'alpha-bravo');
+        });
 
-      const parts = fzfOutput.split('\t');
-      const sessionId = parts[parts.length - 1];
+        it('shows waiting state', () => {
+          const session = createTestSession({
+            state: 'waiting',
+          });
 
-      assert.strictEqual(sessionId, 'full-uuid-here');
-    });
-  });
+          const status = session.state;
+          assert.strictEqual(status, 'waiting');
+        });
 
-  describe('filtering', () => {
-    it('includes active and closed sessions', () => {
-      const sessions = [
-        createTestSession({ state: 'busy' }),
-        createTestSession({ state: 'closed' }),
-        createTestSession({ state: 'archived' }),
-      ];
+        it('omits branch when unset', () => {
+          const session = createTestSession({ resources: {} });
 
-      const pickStates = ['busy', 'idle', 'waiting', 'closed'];
-      const filtered = sessions.filter(s => pickStates.includes(s.state));
+          const branch = session.resources.branch ?? '';
+          assert.strictEqual(branch, '');
+        });
+      });
 
-      assert.strictEqual(filtered.length, 2);
-    });
+      describe('session selection', () => {
+        it('extracts session ID from fzf selection', () => {
+          const fzfOutput = '12345678\tMy Session\tlive\tmain\t12345678-uuid-full';
 
-    it('excludes archived sessions', () => {
-      const sessions = [
-        createTestSession({ state: 'busy' }),
-        createTestSession({ state: 'archived' }),
-      ];
+          const sessionId = fzfOutput.trim().split('\t').pop();
+          assert.strictEqual(sessionId, '12345678-uuid-full');
+        });
 
-      const pickStates = ['busy', 'idle', 'waiting', 'closed'];
-      const filtered = sessions.filter(s => pickStates.includes(s.state));
+        it('parses tab-delimited fzf output', () => {
+          const fzfOutput = 'abc\tdef\tghi\tjkl\tfull-uuid-here';
 
-      assert.strictEqual(filtered.length, 1);
-      assert.strictEqual(filtered[0].state, 'busy');
-    });
-  });
+          const parts = fzfOutput.split('\t');
+          const sessionId = parts[parts.length - 1];
 
-  describe('empty state', () => {
-    it('handles no sessions available', () => {
-      const sessions: never[] = [];
+          assert.strictEqual(sessionId, 'full-uuid-here');
+        });
+      });
 
-      assert.strictEqual(sessions.length, 0);
-      // Command would exit with error: "No sessions available."
+      describe('filtering', () => {
+        it('includes active and closed sessions', () => {
+          const sessions = [
+            createTestSession({ state: 'busy' }),
+            createTestSession({ state: 'closed' }),
+            createTestSession({ state: 'archived' }),
+          ];
+
+          const pickStates = ['busy', 'idle', 'waiting', 'closed'];
+          const filtered = sessions.filter(s => pickStates.includes(s.state));
+
+          assert.strictEqual(filtered.length, 2);
+        });
+
+        it('excludes archived sessions', () => {
+          const sessions = [
+            createTestSession({ state: 'busy' }),
+            createTestSession({ state: 'archived' }),
+          ];
+
+          const pickStates = ['busy', 'idle', 'waiting', 'closed'];
+          const filtered = sessions.filter(s => pickStates.includes(s.state));
+
+          assert.strictEqual(filtered.length, 1);
+          assert.strictEqual(filtered[0].state, 'busy');
+        });
+      });
+
+      describe('empty state', () => {
+        it('handles empty session list', () => {
+          const sessions: never[] = [];
+
+          assert.strictEqual(sessions.length, 0);
+          // Command would exit with error: "No sessions available."
+        });
+      });
     });
   });
 });

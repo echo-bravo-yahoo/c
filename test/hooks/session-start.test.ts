@@ -10,610 +10,529 @@ import assert from 'node:assert';
 import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
 import type { Session } from '../../src/store/schema.js';
 
-describe('c > hooks > session-start', () => {
-  beforeEach(() => {
-    resetSessionCounter();
-  });
-
-  describe('concurrent session support', () => {
-    it('allows multiple active sessions in same directory', () => {
-      // Simulate the index state after starting multiple sessions
-      const sessions: Session[] = [
-        createTestSession({ id: 'sess-1', directory: '/project', state: 'busy' }),
-        createTestSession({ id: 'sess-2', directory: '/project', state: 'idle' }),
-        createTestSession({ id: 'sess-3', directory: '/project', state: 'waiting' }),
-      ];
-
-      const activeStates = ['busy', 'idle', 'waiting'];
-      const activeSessions = sessions.filter(
-        s => activeStates.includes(s.state) && s.directory === '/project'
-      );
-
-      // All three sessions remain active - no auto-closing
-      assert.strictEqual(activeSessions.length, 3);
-    });
-
-    it('does not modify existing sessions when new session starts', () => {
-      const existingSession = createTestSession({
-        id: 'existing',
-        directory: '/project',
-        state: 'idle',
+describe('c', () => {
+  describe('hooks', () => {
+    describe('session-start', () => {
+      beforeEach(() => {
+        resetSessionCounter();
       });
 
-      // Simulate starting a new session - existing session state unchanged
-      const newSession = createTestSession({
-        id: 'new-session',
-        directory: '/project',
-        state: 'busy',
+      describe('concurrent session support', () => {
+        it('allows multiple active sessions in same directory', () => {
+          // Simulate the index state after starting multiple sessions
+          const sessions: Session[] = [
+            createTestSession({ id: 'sess-1', directory: '/project', state: 'busy' }),
+            createTestSession({ id: 'sess-2', directory: '/project', state: 'idle' }),
+            createTestSession({ id: 'sess-3', directory: '/project', state: 'waiting' }),
+          ];
+
+          const activeStates = ['busy', 'idle', 'waiting'];
+          const activeSessions = sessions.filter(
+            s => activeStates.includes(s.state) && s.directory === '/project'
+          );
+
+          // All three sessions remain active - no auto-closing
+          assert.strictEqual(activeSessions.length, 3);
+        });
+
+        it('preserves existing sessions on start', () => {
+          const existingSession = createTestSession({
+            id: 'existing',
+            directory: '/project',
+            state: 'idle',
+          });
+
+          // Simulate starting a new session - existing session state unchanged
+          const newSession = createTestSession({
+            id: 'new-session',
+            directory: '/project',
+            state: 'busy',
+          });
+
+          // Existing session remains idle (not closed)
+          assert.strictEqual(existingSession.state, 'idle');
+          assert.strictEqual(newSession.state, 'busy');
+        });
+
+        it('sessions only close via SessionEnd hook', () => {
+          const sessions: Session[] = [
+            createTestSession({ id: 'sess-1', directory: '/project', state: 'busy' }),
+            createTestSession({ id: 'sess-2', directory: '/project', state: 'idle' }),
+          ];
+
+          // Simulate SessionEnd for sess-1 only
+          const sessionEndFired = (id: string) => {
+            const s = sessions.find(s => s.id === id);
+            if (s) s.state = 'closed';
+          };
+
+          sessionEndFired('sess-1');
+
+          // Only sess-1 is closed, sess-2 remains active
+          assert.strictEqual(sessions[0].state, 'closed');
+          assert.strictEqual(sessions[1].state, 'idle');
+        });
+
+        it('orphaned sessions persist until manually closed', () => {
+          // Session where SessionEnd never fired (Ctrl-C, crash)
+          const orphanedSession = createTestSession({
+            id: 'orphaned',
+            directory: '/project',
+            state: 'busy',
+            last_active_at: new Date(Date.now() - 24 * 60 * 60 * 1000), // 24 hours ago
+          });
+
+          // New session starts in same directory
+          const newSession = createTestSession({
+            id: 'new',
+            directory: '/project',
+            state: 'busy',
+          });
+
+          // Orphaned session is NOT auto-closed
+          assert.strictEqual(orphanedSession.state, 'busy');
+          assert.strictEqual(newSession.state, 'busy');
+        });
       });
 
-      // Existing session remains idle (not closed)
-      assert.strictEqual(existingSession.state, 'idle');
-      assert.strictEqual(newSession.state, 'busy');
-    });
+      describe('recent session detection for parent linking', () => {
+        it('finds recently closed sessions within threshold', () => {
+          const now = Date.now();
+          const threshold = 30 * 1000; // 30 seconds
+          const currentId = 'new-session';
+          const cwd = '/project';
 
-    it('sessions only close via SessionEnd hook', () => {
-      const sessions: Session[] = [
-        createTestSession({ id: 'sess-1', directory: '/project', state: 'busy' }),
-        createTestSession({ id: 'sess-2', directory: '/project', state: 'idle' }),
-      ];
+          const sessions: Session[] = [
+            createTestSession({
+              id: 'recent',
+              directory: cwd,
+              state: 'closed',
+              last_active_at: new Date(now - 10 * 1000), // 10 seconds ago
+            }),
+            createTestSession({
+              id: 'old',
+              directory: cwd,
+              state: 'closed',
+              last_active_at: new Date(now - 60 * 1000), // 60 seconds ago
+            }),
+          ];
 
-      // Simulate SessionEnd for sess-1 only
-      const sessionEndFired = (id: string) => {
-        const s = sessions.find(s => s.id === id);
-        if (s) s.state = 'closed';
-      };
+          const recent = sessions.filter(
+            s =>
+              s.state === 'closed' &&
+              s.directory === cwd &&
+              s.id !== currentId &&
+              now - s.last_active_at.getTime() < threshold
+          );
 
-      sessionEndFired('sess-1');
-
-      // Only sess-1 is closed, sess-2 remains active
-      assert.strictEqual(sessions[0].state, 'closed');
-      assert.strictEqual(sessions[1].state, 'idle');
-    });
-
-    it('orphaned sessions persist until manually closed', () => {
-      // Session where SessionEnd never fired (Ctrl-C, crash)
-      const orphanedSession = createTestSession({
-        id: 'orphaned',
-        directory: '/project',
-        state: 'busy',
-        last_active_at: new Date(Date.now() - 24 * 60 * 60 * 1000), // 24 hours ago
+          assert.strictEqual(recent.length, 1);
+          assert.strictEqual(recent[0].id, 'recent');
+        });
       });
 
-      // New session starts in same directory
-      const newSession = createTestSession({
-        id: 'new',
-        directory: '/project',
-        state: 'busy',
+      describe('git info merging', () => {
+        it('preserves existing branch', () => {
+          const session = createTestSession({
+            resources: { branch: 'existing-branch' },
+          });
+
+          const newBranch = 'detected-branch';
+
+          // Logic: only set branch if not already set
+          if (!session.resources.branch) {
+            session.resources.branch = newBranch;
+          }
+
+          assert.strictEqual(session.resources.branch, 'existing-branch');
+        });
+
+        it('sets branch when not present', () => {
+          const session = createTestSession({ resources: {} });
+
+          const newBranch = 'detected-branch';
+
+          if (!session.resources.branch) {
+            session.resources.branch = newBranch;
+          }
+
+          assert.strictEqual(session.resources.branch, 'detected-branch');
+        });
+
+        it('extracts JIRA from branch when setting', () => {
+          const session = createTestSession({ resources: {} });
+          const branch = 'feature/MAC-123-add-login';
+
+          session.resources.branch = branch;
+
+          // Simulate JIRA extraction
+          const match = branch.match(/\b([A-Z]{2,10}-\d+)\b/);
+          if (match && !session.resources.jira) {
+            session.resources.jira = match[1];
+          }
+
+          assert.strictEqual(session.resources.jira, 'MAC-123');
+        });
+
+        it('preserves existing JIRA', () => {
+          const session = createTestSession({
+            resources: { jira: 'EXISTING-999' },
+          });
+          const branch = 'feature/MAC-123-add-login';
+
+          session.resources.branch = branch;
+
+          const match = branch.match(/\b([A-Z]{2,10}-\d+)\b/);
+          if (match && !session.resources.jira) {
+            session.resources.jira = match[1];
+          }
+
+          assert.strictEqual(session.resources.jira, 'EXISTING-999');
+        });
       });
 
-      // Orphaned session is NOT auto-closed
-      assert.strictEqual(orphanedSession.state, 'busy');
-      assert.strictEqual(newSession.state, 'busy');
-    });
-  });
+      describe('parent session linking', () => {
+        it('sets parent_session_id when plan execution detected', () => {
+          const session = createTestSession();
+          const parentId = 'parent-uuid';
 
-  describe('recent session detection for parent linking', () => {
-    it('finds recently closed sessions within threshold', () => {
-      const now = Date.now();
-      const threshold = 30 * 1000; // 30 seconds
-      const currentId = 'new-session';
-      const cwd = '/project';
+          session.parent_session_id = parentId;
 
-      const sessions: Session[] = [
-        createTestSession({
-          id: 'recent',
-          directory: cwd,
-          state: 'closed',
-          last_active_at: new Date(now - 10 * 1000), // 10 seconds ago
-        }),
-        createTestSession({
-          id: 'old',
-          directory: cwd,
-          state: 'closed',
-          last_active_at: new Date(now - 60 * 1000), // 60 seconds ago
-        }),
-      ];
+          assert.strictEqual(session.parent_session_id, parentId);
+        });
 
-      const recent = sessions.filter(
-        s =>
-          s.state === 'closed' &&
-          s.directory === cwd &&
-          s.id !== currentId &&
-          now - s.last_active_at.getTime() < threshold
-      );
+        it('sets name from plan slug when available', () => {
+          const session = createTestSession();
+          const planSlug = 'implement-feature';
 
-      assert.strictEqual(recent.length, 1);
-      assert.strictEqual(recent[0].id, 'recent');
-    });
-  });
+          session.name = planSlug;
 
-  describe('git info merging', () => {
-    it('does not overwrite existing branch', () => {
-      const session = createTestSession({
-        resources: { branch: 'existing-branch' },
+          assert.strictEqual(session.name, 'implement-feature');
+        });
       });
 
-      const newBranch = 'detected-branch';
+      describe('existing session update', () => {
+        it('updates last_active_at when session exists', () => {
+          const oldDate = new Date('2024-01-01');
+          const session = createTestSession({ last_active_at: oldDate });
 
-      // Logic: only set branch if not already set
-      if (!session.resources.branch) {
-        session.resources.branch = newBranch;
-      }
+          const newDate = new Date('2024-01-15');
+          session.last_active_at = newDate;
 
-      assert.strictEqual(session.resources.branch, 'existing-branch');
-    });
+          assert.strictEqual(session.last_active_at, newDate);
+        });
 
-    it('sets branch when not present', () => {
-      const session = createTestSession({ resources: {} });
+        it('sets state to busy when resuming', () => {
+          const session = createTestSession({ state: 'closed' });
 
-      const newBranch = 'detected-branch';
+          session.state = 'busy';
 
-      if (!session.resources.branch) {
-        session.resources.branch = newBranch;
-      }
-
-      assert.strictEqual(session.resources.branch, 'detected-branch');
-    });
-
-    it('extracts JIRA from branch when setting', () => {
-      const session = createTestSession({ resources: {} });
-      const branch = 'feature/MAC-123-add-login';
-
-      session.resources.branch = branch;
-
-      // Simulate JIRA extraction
-      const match = branch.match(/\b([A-Z]{2,10}-\d+)\b/);
-      if (match && !session.resources.jira) {
-        session.resources.jira = match[1];
-      }
-
-      assert.strictEqual(session.resources.jira, 'MAC-123');
-    });
-
-    it('does not extract JIRA if already set', () => {
-      const session = createTestSession({
-        resources: { jira: 'EXISTING-999' },
+          assert.strictEqual(session.state, 'busy');
+        });
       });
-      const branch = 'feature/MAC-123-add-login';
 
-      session.resources.branch = branch;
+      describe('worktree branch resolution', () => {
+        /**
+         * Simulate listWorktrees() output format
+         */
+        type WorktreeInfo = { path: string; branch: string };
 
-      const match = branch.match(/\b([A-Z]{2,10}-\d+)\b/);
-      if (match && !session.resources.jira) {
-        session.resources.jira = match[1];
-      }
+        /**
+         * Replicate the worktree resolution logic from session-start hook
+         */
+        function resolveWorktreeBranch(
+          session: Session,
+          worktrees: WorktreeInfo[]
+        ): string | undefined {
+          if (!session.resources.worktree) {
+            return undefined;
+          }
 
-      assert.strictEqual(session.resources.jira, 'EXISTING-999');
-    });
-  });
+          const wt = worktrees.find(
+            (w) =>
+              w.path.endsWith(`/${session.resources.worktree}`) ||
+              w.branch === session.resources.worktree
+          );
 
-  describe('parent session linking', () => {
-    it('sets parent_session_id when plan execution detected', () => {
-      const session = createTestSession();
-      const parentId = 'parent-uuid';
-
-      session.parent_session_id = parentId;
-
-      assert.strictEqual(session.parent_session_id, parentId);
-    });
-
-    it('sets name from plan slug when available', () => {
-      const session = createTestSession();
-      const planSlug = 'implement-feature';
-
-      session.name = planSlug;
-
-      assert.strictEqual(session.name, 'implement-feature');
-    });
-  });
-
-  describe('existing session update', () => {
-    it('updates last_active_at when session exists', () => {
-      const oldDate = new Date('2024-01-01');
-      const session = createTestSession({ last_active_at: oldDate });
-
-      const newDate = new Date('2024-01-15');
-      session.last_active_at = newDate;
-
-      assert.strictEqual(session.last_active_at, newDate);
-    });
-
-    it('sets state to busy when resuming', () => {
-      const session = createTestSession({ state: 'closed' });
-
-      session.state = 'busy';
-
-      assert.strictEqual(session.state, 'busy');
-    });
-  });
-
-  describe('worktree branch resolution', () => {
-    /**
-     * Simulate listWorktrees() output format
-     */
-    type WorktreeInfo = { path: string; branch: string };
-
-    /**
-     * Replicate the worktree resolution logic from session-start hook
-     */
-    function resolveWorktreeBranch(
-      session: Session,
-      worktrees: WorktreeInfo[]
-    ): string | undefined {
-      if (!session.resources.worktree) {
-        return undefined;
-      }
-
-      const wt = worktrees.find(
-        (w) =>
-          w.path.endsWith(`/${session.resources.worktree}`) ||
-          w.branch === session.resources.worktree
-      );
-
-      return wt?.branch;
-    }
-
-    it('resolves branch from worktree path match', () => {
-      const session = createTestSession({
-        resources: { worktree: 'my-feature' },
-      });
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo', branch: 'main' },
-        { path: '/repo/.worktrees/my-feature', branch: 'my-feature' },
-      ];
-
-      const branch = resolveWorktreeBranch(session, worktrees);
-
-      assert.strictEqual(branch, 'my-feature');
-    });
-
-    it('resolves branch from branch name match', () => {
-      const session = createTestSession({
-        resources: { worktree: 'feature/cool-thing' },
-      });
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo', branch: 'main' },
-        { path: '/worktrees/cool-thing', branch: 'feature/cool-thing' },
-      ];
-
-      const branch = resolveWorktreeBranch(session, worktrees);
-
-      assert.strictEqual(branch, 'feature/cool-thing');
-    });
-
-    it('returns undefined when no worktree matches', () => {
-      const session = createTestSession({
-        resources: { worktree: 'nonexistent' },
-      });
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo', branch: 'main' },
-        { path: '/repo/.worktrees/other', branch: 'other' },
-      ];
-
-      const branch = resolveWorktreeBranch(session, worktrees);
-
-      assert.strictEqual(branch, undefined);
-    });
-
-    it('returns undefined when session has no worktree set', () => {
-      const session = createTestSession({ resources: {} });
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo', branch: 'main' },
-      ];
-
-      const branch = resolveWorktreeBranch(session, worktrees);
-
-      assert.strictEqual(branch, undefined);
-    });
-
-    it('prefers path match over branch match', () => {
-      const session = createTestSession({
-        resources: { worktree: 'bugfix' },
-      });
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo/.worktrees/bugfix', branch: 'bugfix-v2' },
-        { path: '/other/worktrees/different', branch: 'bugfix' },
-      ];
-
-      // Path match comes first in find(), so bugfix-v2 is returned
-      const branch = resolveWorktreeBranch(session, worktrees);
-
-      assert.strictEqual(branch, 'bugfix-v2');
-    });
-
-    it('sets branch on session when resolved', () => {
-      const session = createTestSession({
-        resources: { worktree: 'my-feature' },
-      });
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo/.worktrees/my-feature', branch: 'my-feature' },
-      ];
-
-      const resolvedBranch = resolveWorktreeBranch(session, worktrees);
-      if (resolvedBranch && !session.resources.branch) {
-        session.resources.branch = resolvedBranch;
-      }
-
-      assert.strictEqual(session.resources.branch, 'my-feature');
-    });
-
-    it('does not overwrite existing branch', () => {
-      const session = createTestSession({
-        resources: { worktree: 'my-feature', branch: 'main' },
-      });
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo/.worktrees/my-feature', branch: 'my-feature' },
-      ];
-
-      const resolvedBranch = resolveWorktreeBranch(session, worktrees);
-      if (resolvedBranch && !session.resources.branch) {
-        session.resources.branch = resolvedBranch;
-      }
-
-      // Branch unchanged - was already 'main'
-      assert.strictEqual(session.resources.branch, 'main');
-    });
-  });
-
-  describe('worktree branch resolution - before/after fix comparison', () => {
-    /**
-     * These tests demonstrate the bug fix by comparing old vs new behavior.
-     * The OLD logic would have gotten the wrong branch; the NEW logic gets it right.
-     */
-
-    type WorktreeInfo = { path: string; branch: string };
-
-    // Simulate git branch detection per directory
-    type BranchByPath = Record<string, string>;
-
-    /**
-     * OLD BEHAVIOR (before fix):
-     * Always use hook's cwd directly for branch detection.
-     * This was wrong when cwd is the original repo but Claude is in a worktree.
-     */
-    function detectBranchOld(
-      cwd: string,
-      _session: Session,
-      _worktrees: WorktreeInfo[],
-      branchByPath: BranchByPath
-    ): string | undefined {
-      // Old logic: just use cwd directly
-      return branchByPath[cwd];
-    }
-
-    /**
-     * NEW BEHAVIOR (after fix):
-     * When session has worktree set, resolve the actual worktree path
-     * and use that for branch detection.
-     */
-    function detectBranchNew(
-      cwd: string,
-      session: Session,
-      worktrees: WorktreeInfo[],
-      branchByPath: BranchByPath
-    ): string | undefined {
-      let branchCwd = cwd;
-
-      // New logic: resolve worktree path if session has worktree set
-      if (session.resources.worktree) {
-        const wt = worktrees.find(
-          (w) =>
-            w.path.endsWith(`/${session.resources.worktree}`) ||
-            w.branch === session.resources.worktree
-        );
-        if (wt) {
-          branchCwd = wt.path;
+          return wt?.branch;
         }
-      }
 
-      return branchByPath[branchCwd];
-    }
+        it('resolves branch from worktree path match', () => {
+          const session = createTestSession({
+            resources: { worktree: 'my-feature' },
+          });
+          const worktrees: WorktreeInfo[] = [
+            { path: '/repo', branch: 'main' },
+            { path: '/repo/.worktrees/my-feature', branch: 'my-feature' },
+          ];
 
-    it('OLD behavior gets wrong branch for worktree session', () => {
-      // Scenario: `c new billing-fix` run from /repo, creates worktree at /repo/.worktrees/billing-fix
-      // Hook receives cwd=/repo (original repo), but Claude is working in the worktree
-      const session = createTestSession({
-        directory: '/repo',
-        resources: { worktree: 'billing-fix' },
+          const branch = resolveWorktreeBranch(session, worktrees);
+
+          assert.strictEqual(branch, 'my-feature');
+        });
+
+        it('resolves branch from branch name match', () => {
+          const session = createTestSession({
+            resources: { worktree: 'feature/cool-thing' },
+          });
+          const worktrees: WorktreeInfo[] = [
+            { path: '/repo', branch: 'main' },
+            { path: '/worktrees/cool-thing', branch: 'feature/cool-thing' },
+          ];
+
+          const branch = resolveWorktreeBranch(session, worktrees);
+
+          assert.strictEqual(branch, 'feature/cool-thing');
+        });
+
+        it('returns undefined when no worktree matches', () => {
+          const session = createTestSession({
+            resources: { worktree: 'nonexistent' },
+          });
+          const worktrees: WorktreeInfo[] = [
+            { path: '/repo', branch: 'main' },
+            { path: '/repo/.worktrees/other', branch: 'other' },
+          ];
+
+          const branch = resolveWorktreeBranch(session, worktrees);
+
+          assert.strictEqual(branch, undefined);
+        });
+
+        it('returns undefined when session has no worktree set', () => {
+          const session = createTestSession({ resources: {} });
+          const worktrees: WorktreeInfo[] = [
+            { path: '/repo', branch: 'main' },
+          ];
+
+          const branch = resolveWorktreeBranch(session, worktrees);
+
+          assert.strictEqual(branch, undefined);
+        });
+
+        it('prefers path match over branch match', () => {
+          const session = createTestSession({
+            resources: { worktree: 'bugfix' },
+          });
+          const worktrees: WorktreeInfo[] = [
+            { path: '/repo/.worktrees/bugfix', branch: 'bugfix-v2' },
+            { path: '/other/worktrees/different', branch: 'bugfix' },
+          ];
+
+          // Path match comes first in find(), so bugfix-v2 is returned
+          const branch = resolveWorktreeBranch(session, worktrees);
+
+          assert.strictEqual(branch, 'bugfix-v2');
+        });
+
+        it('sets branch on session when resolved', () => {
+          const session = createTestSession({
+            resources: { worktree: 'my-feature' },
+          });
+          const worktrees: WorktreeInfo[] = [
+            { path: '/repo/.worktrees/my-feature', branch: 'my-feature' },
+          ];
+
+          const resolvedBranch = resolveWorktreeBranch(session, worktrees);
+          if (resolvedBranch && !session.resources.branch) {
+            session.resources.branch = resolvedBranch;
+          }
+
+          assert.strictEqual(session.resources.branch, 'my-feature');
+        });
+
+        it('preserves existing branch', () => {
+          const session = createTestSession({
+            resources: { worktree: 'my-feature', branch: 'main' },
+          });
+          const worktrees: WorktreeInfo[] = [
+            { path: '/repo/.worktrees/my-feature', branch: 'my-feature' },
+          ];
+
+          const resolvedBranch = resolveWorktreeBranch(session, worktrees);
+          if (resolvedBranch && !session.resources.branch) {
+            session.resources.branch = resolvedBranch;
+          }
+
+          // Branch unchanged - was already 'main'
+          assert.strictEqual(session.resources.branch, 'main');
+        });
       });
 
-      const cwd = '/repo'; // Hook's cwd is original repo
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo', branch: 'main' },
-        { path: '/repo/.worktrees/billing-fix', branch: 'billing-fix' },
-      ];
-      const branchByPath: BranchByPath = {
-        '/repo': 'main',
-        '/repo/.worktrees/billing-fix': 'billing-fix',
-      };
+      describe('worktree branch resolution', () => {
+        type WorktreeInfo = { path: string; branch: string };
 
-      const oldResult = detectBranchOld(cwd, session, worktrees, branchByPath);
+        type BranchByPath = Record<string, string>;
 
-      // OLD: Returns 'main' (WRONG - this is the bug!)
-      assert.strictEqual(oldResult, 'main');
-    });
+        /**
+         * Resolve the actual branch for a session by checking its worktree path.
+         */
+        function detectBranch(
+          cwd: string,
+          session: Session,
+          worktrees: WorktreeInfo[],
+          branchByPath: BranchByPath
+        ): string | undefined {
+          let branchCwd = cwd;
 
-    it('NEW behavior gets correct branch for worktree session', () => {
-      // Same scenario as above
-      const session = createTestSession({
-        directory: '/repo',
-        resources: { worktree: 'billing-fix' },
+          if (session.resources.worktree) {
+            const wt = worktrees.find(
+              (w) =>
+                w.path.endsWith(`/${session.resources.worktree}`) ||
+                w.branch === session.resources.worktree
+            );
+            if (wt) {
+              branchCwd = wt.path;
+            }
+          }
+
+          return branchByPath[branchCwd];
+        }
+
+        it('resolves correct branch for worktree session', () => {
+          const session = createTestSession({
+            directory: '/repo',
+            resources: { worktree: 'billing-fix' },
+          });
+
+          const cwd = '/repo';
+          const worktrees: WorktreeInfo[] = [
+            { path: '/repo', branch: 'main' },
+            { path: '/repo/.worktrees/billing-fix', branch: 'billing-fix' },
+          ];
+          const branchByPath: BranchByPath = {
+            '/repo': 'main',
+            '/repo/.worktrees/billing-fix': 'billing-fix',
+          };
+
+          const result = detectBranch(cwd, session, worktrees, branchByPath);
+
+          assert.strictEqual(result, 'billing-fix');
+        });
+
+        it('resolves feature branch when worktree name differs', () => {
+          const session = createTestSession({
+            directory: '/project',
+            resources: { worktree: 'cool-feature' },
+          });
+
+          const cwd = '/project';
+          const worktrees: WorktreeInfo[] = [
+            { path: '/project', branch: 'develop' },
+            { path: '/project/.worktrees/cool-feature', branch: 'feature/cool-feature' },
+          ];
+          const branchByPath: BranchByPath = {
+            '/project': 'develop',
+            '/project/.worktrees/cool-feature': 'feature/cool-feature',
+          };
+
+          const result = detectBranch(cwd, session, worktrees, branchByPath);
+
+          assert.strictEqual(result, 'feature/cool-feature');
+        });
+
+        it('resolves JIRA branch for worktree session', () => {
+          const session = createTestSession({
+            directory: '/work/repo',
+            resources: { worktree: 'MAC-123-fix' },
+          });
+
+          const cwd = '/work/repo';
+          const worktrees: WorktreeInfo[] = [
+            { path: '/work/repo', branch: 'main' },
+            { path: '/work/repo/.worktrees/MAC-123-fix', branch: 'MAC-123-fix' },
+          ];
+          const branchByPath: BranchByPath = {
+            '/work/repo': 'main',
+            '/work/repo/.worktrees/MAC-123-fix': 'MAC-123-fix',
+          };
+
+          const result = detectBranch(cwd, session, worktrees, branchByPath);
+
+          assert.strictEqual(result, 'MAC-123-fix');
+        });
+
+        it('uses cwd branch when no worktree set', () => {
+          const session = createTestSession({
+            directory: '/repo',
+            resources: {},
+          });
+
+          const cwd = '/repo';
+          const worktrees: WorktreeInfo[] = [
+            { path: '/repo', branch: 'main' },
+          ];
+          const branchByPath: BranchByPath = {
+            '/repo': 'main',
+          };
+
+          const result = detectBranch(cwd, session, worktrees, branchByPath);
+
+          assert.strictEqual(result, 'main');
+        });
+
+        it('uses cwd branch when cwd is the worktree', () => {
+          const session = createTestSession({
+            directory: '/repo/.worktrees/feature',
+            resources: { worktree: 'feature' },
+          });
+
+          const cwd = '/repo/.worktrees/feature';
+          const worktrees: WorktreeInfo[] = [
+            { path: '/repo', branch: 'main' },
+            { path: '/repo/.worktrees/feature', branch: 'feature' },
+          ];
+          const branchByPath: BranchByPath = {
+            '/repo': 'main',
+            '/repo/.worktrees/feature': 'feature',
+          };
+
+          const result = detectBranch(cwd, session, worktrees, branchByPath);
+
+          assert.strictEqual(result, 'feature');
+        });
+
+        it('falls back to cwd when worktree not found', () => {
+          const session = createTestSession({
+            directory: '/repo',
+            resources: { worktree: 'deleted-worktree' },
+          });
+
+          const cwd = '/repo';
+          const worktrees: WorktreeInfo[] = [
+            { path: '/repo', branch: 'main' },
+          ];
+          const branchByPath: BranchByPath = {
+            '/repo': 'main',
+          };
+
+          const result = detectBranch(cwd, session, worktrees, branchByPath);
+
+          assert.strictEqual(result, 'main');
+        });
+
+        it('updates session branch from worktree resolution', () => {
+          const cwd = '/repo';
+          const worktrees: WorktreeInfo[] = [
+            { path: '/repo', branch: 'main' },
+            { path: '/repo/.worktrees/my-feature', branch: 'my-feature' },
+          ];
+          const branchByPath: BranchByPath = {
+            '/repo': 'main',
+            '/repo/.worktrees/my-feature': 'my-feature',
+          };
+
+          const session = createTestSession({
+            directory: '/repo',
+            resources: { worktree: 'my-feature' },
+          });
+          const branch = detectBranch(cwd, session, worktrees, branchByPath);
+          if (branch && !session.resources.branch) {
+            session.resources.branch = branch;
+          }
+
+          assert.strictEqual(session.resources.branch, 'my-feature');
+        });
       });
-
-      const cwd = '/repo';
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo', branch: 'main' },
-        { path: '/repo/.worktrees/billing-fix', branch: 'billing-fix' },
-      ];
-      const branchByPath: BranchByPath = {
-        '/repo': 'main',
-        '/repo/.worktrees/billing-fix': 'billing-fix',
-      };
-
-      const newResult = detectBranchNew(cwd, session, worktrees, branchByPath);
-
-      // NEW: Returns 'billing-fix' (CORRECT!)
-      assert.strictEqual(newResult, 'billing-fix');
-    });
-
-    it('demonstrates fix for feature branch naming', () => {
-      // Scenario: worktree name differs from branch name
-      // `c new cool-feature` creates worktree, but branch is feature/cool-feature
-      const session = createTestSession({
-        directory: '/project',
-        resources: { worktree: 'cool-feature' },
-      });
-
-      const cwd = '/project';
-      const worktrees: WorktreeInfo[] = [
-        { path: '/project', branch: 'develop' },
-        { path: '/project/.worktrees/cool-feature', branch: 'feature/cool-feature' },
-      ];
-      const branchByPath: BranchByPath = {
-        '/project': 'develop',
-        '/project/.worktrees/cool-feature': 'feature/cool-feature',
-      };
-
-      const oldResult = detectBranchOld(cwd, session, worktrees, branchByPath);
-      const newResult = detectBranchNew(cwd, session, worktrees, branchByPath);
-
-      // OLD gets wrong branch
-      assert.strictEqual(oldResult, 'develop');
-      // NEW gets correct branch
-      assert.strictEqual(newResult, 'feature/cool-feature');
-    });
-
-    it('demonstrates fix for JIRA branch pattern', () => {
-      // Scenario: `c new MAC-123-fix` creates worktree with JIRA ticket branch
-      const session = createTestSession({
-        directory: '/work/repo',
-        resources: { worktree: 'MAC-123-fix' },
-      });
-
-      const cwd = '/work/repo';
-      const worktrees: WorktreeInfo[] = [
-        { path: '/work/repo', branch: 'main' },
-        { path: '/work/repo/.worktrees/MAC-123-fix', branch: 'MAC-123-fix' },
-      ];
-      const branchByPath: BranchByPath = {
-        '/work/repo': 'main',
-        '/work/repo/.worktrees/MAC-123-fix': 'MAC-123-fix',
-      };
-
-      const oldResult = detectBranchOld(cwd, session, worktrees, branchByPath);
-      const newResult = detectBranchNew(cwd, session, worktrees, branchByPath);
-
-      assert.strictEqual(oldResult, 'main'); // Wrong
-      assert.strictEqual(newResult, 'MAC-123-fix'); // Correct
-    });
-
-    it('both behaviors match when no worktree is set', () => {
-      // For sessions without worktree, both behaviors should be identical
-      const session = createTestSession({
-        directory: '/repo',
-        resources: {}, // No worktree
-      });
-
-      const cwd = '/repo';
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo', branch: 'main' },
-      ];
-      const branchByPath: BranchByPath = {
-        '/repo': 'main',
-      };
-
-      const oldResult = detectBranchOld(cwd, session, worktrees, branchByPath);
-      const newResult = detectBranchNew(cwd, session, worktrees, branchByPath);
-
-      // Both return the same (correct) result
-      assert.strictEqual(oldResult, 'main');
-      assert.strictEqual(newResult, 'main');
-    });
-
-    it('both behaviors match when cwd is already the worktree', () => {
-      // If Claude's cwd is already the worktree path, both should work
-      const session = createTestSession({
-        directory: '/repo/.worktrees/feature',
-        resources: { worktree: 'feature' },
-      });
-
-      const cwd = '/repo/.worktrees/feature'; // Hook provides worktree path
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo', branch: 'main' },
-        { path: '/repo/.worktrees/feature', branch: 'feature' },
-      ];
-      const branchByPath: BranchByPath = {
-        '/repo': 'main',
-        '/repo/.worktrees/feature': 'feature',
-      };
-
-      const oldResult = detectBranchOld(cwd, session, worktrees, branchByPath);
-      const newResult = detectBranchNew(cwd, session, worktrees, branchByPath);
-
-      // Both get the correct result when cwd is already correct
-      assert.strictEqual(oldResult, 'feature');
-      assert.strictEqual(newResult, 'feature');
-    });
-
-    it('new behavior falls back to cwd when worktree not found', () => {
-      // Edge case: worktree set but not found in list (maybe deleted)
-      const session = createTestSession({
-        directory: '/repo',
-        resources: { worktree: 'deleted-worktree' },
-      });
-
-      const cwd = '/repo';
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo', branch: 'main' },
-        // Note: 'deleted-worktree' not in list
-      ];
-      const branchByPath: BranchByPath = {
-        '/repo': 'main',
-      };
-
-      const newResult = detectBranchNew(cwd, session, worktrees, branchByPath);
-
-      // Falls back to cwd branch
-      assert.strictEqual(newResult, 'main');
-    });
-
-    it('demonstrates the full session update flow', () => {
-      // End-to-end test of how session.resources.branch gets set
-      const cwd = '/repo';
-      const worktrees: WorktreeInfo[] = [
-        { path: '/repo', branch: 'main' },
-        { path: '/repo/.worktrees/my-feature', branch: 'my-feature' },
-      ];
-      const branchByPath: BranchByPath = {
-        '/repo': 'main',
-        '/repo/.worktrees/my-feature': 'my-feature',
-      };
-
-      // Simulate OLD behavior updating session
-      const sessionOld = createTestSession({
-        directory: '/repo',
-        resources: { worktree: 'my-feature' },
-      });
-      const branchOld = detectBranchOld(cwd, sessionOld, worktrees, branchByPath);
-      if (branchOld && !sessionOld.resources.branch) {
-        sessionOld.resources.branch = branchOld;
-      }
-
-      // Simulate NEW behavior updating session
-      const sessionNew = createTestSession({
-        directory: '/repo',
-        resources: { worktree: 'my-feature' },
-      });
-      const branchNew = detectBranchNew(cwd, sessionNew, worktrees, branchByPath);
-      if (branchNew && !sessionNew.resources.branch) {
-        sessionNew.resources.branch = branchNew;
-      }
-
-      // OLD: Session gets wrong branch
-      assert.strictEqual(sessionOld.resources.branch, 'main');
-      // NEW: Session gets correct branch
-      assert.strictEqual(sessionNew.resources.branch, 'my-feature');
     });
   });
 });

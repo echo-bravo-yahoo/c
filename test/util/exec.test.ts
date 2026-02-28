@@ -9,114 +9,120 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { exec, setTmuxPaneTitle, spawnInteractive } from '../../src/util/exec.js';
 
-describe('c > util > exec > exec', () => {
-  it('returns trimmed stdout', () => {
-    const result = exec('echo "hello world"');
-    assert.strictEqual(result, 'hello world');
-  });
+describe('c', () => {
+  describe('util', () => {
+    describe('exec', () => {
+      describe('exec', () => {
+        it('returns trimmed stdout', () => {
+          const result = exec('echo "hello world"');
+          assert.strictEqual(result, 'hello world');
+        });
 
-  it('trims leading whitespace', () => {
-    const result = exec('echo "  leading"');
-    assert.strictEqual(result, 'leading');
-  });
+        it('trims leading whitespace', () => {
+          const result = exec('echo "  leading"');
+          assert.strictEqual(result, 'leading');
+        });
 
-  it('trims trailing whitespace', () => {
-    const result = exec('echo "trailing  "');
-    assert.strictEqual(result, 'trailing');
-  });
+        it('trims trailing whitespace', () => {
+          const result = exec('echo "trailing  "');
+          assert.strictEqual(result, 'trailing');
+        });
 
-  it('returns empty string on failure', () => {
-    const result = exec('nonexistent_command_xyz 2>/dev/null');
-    assert.strictEqual(result, '');
-  });
+        it('returns empty string on failure', () => {
+          const result = exec('nonexistent_command_xyz 2>/dev/null');
+          assert.strictEqual(result, '');
+        });
 
-  it('returns empty string on error exit code', () => {
-    const result = exec('exit 1');
-    assert.strictEqual(result, '');
-  });
+        it('returns empty string on error exit code', () => {
+          const result = exec('exit 1');
+          assert.strictEqual(result, '');
+        });
 
-  it('respects cwd option', () => {
-    const result = exec('pwd', { cwd: '/tmp' });
-    assert.ok(result.includes('tmp') || result.includes('private/tmp')); // macOS uses /private/tmp
-  });
+        it('respects cwd option', () => {
+          const result = exec('pwd', { cwd: '/tmp' });
+          assert.ok(result.includes('tmp') || result.includes('private/tmp')); // macOS uses /private/tmp
+        });
 
-  it('handles multiline output', () => {
-    const result = exec('printf "line1\\nline2"');
-    assert.strictEqual(result, 'line1\nline2');
-  });
-});
+        it('handles multiline output', () => {
+          const result = exec('printf "line1\\nline2"');
+          assert.strictEqual(result, 'line1\nline2');
+        });
+      });
 
-describe('c > util > exec > setTmuxPaneTitle', () => {
-  let originalTmux: string | undefined;
+      describe('setTmuxPaneTitle', () => {
+        let originalTmux: string | undefined;
 
-  beforeEach(() => {
-    originalTmux = process.env.TMUX;
-  });
+        beforeEach(() => {
+          originalTmux = process.env.TMUX;
+        });
 
-  afterEach(() => {
-    if (originalTmux === undefined) {
-      delete process.env.TMUX;
-    } else {
-      process.env.TMUX = originalTmux;
-    }
-  });
+        afterEach(() => {
+          if (originalTmux === undefined) {
+            delete process.env.TMUX;
+          } else {
+            process.env.TMUX = originalTmux;
+          }
+        });
 
-  it('sets title and locks it when TMUX is set', () => {
-    process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
-    const commands: string[] = [];
-    const mockExec = (cmd: string) => { commands.push(cmd); };
+        it('sets title and locks it when TMUX is set', () => {
+          process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
+          const commands: string[] = [];
+          const mockExec = (cmd: string) => { commands.push(cmd); };
 
-    setTmuxPaneTitle('My Session', mockExec);
+          setTmuxPaneTitle('My Session', mockExec);
 
-    assert.strictEqual(commands.length, 2);
-    assert.strictEqual(commands[0], 'tmux select-pane -T "My Session"');
-    assert.strictEqual(commands[1], 'tmux set -p allow-set-title off');
-  });
+          assert.strictEqual(commands.length, 2);
+          assert.strictEqual(commands[0], 'tmux select-pane -T "My Session"');
+          assert.strictEqual(commands[1], 'tmux set -p allow-set-title off');
+        });
 
-  it('does not call tmux when TMUX is not set', () => {
-    delete process.env.TMUX;
-    const commands: string[] = [];
-    const mockExec = (cmd: string) => { commands.push(cmd); };
+        it('no-ops outside tmux', () => {
+          delete process.env.TMUX;
+          const commands: string[] = [];
+          const mockExec = (cmd: string) => { commands.push(cmd); };
 
-    setTmuxPaneTitle('My Session', mockExec);
+          setTmuxPaneTitle('My Session', mockExec);
 
-    assert.strictEqual(commands.length, 0);
-  });
+          assert.strictEqual(commands.length, 0);
+        });
 
-  it('escapes special characters in title', () => {
-    process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
-    const commands: string[] = [];
-    const mockExec = (cmd: string) => { commands.push(cmd); };
+        it('escapes special characters in title', () => {
+          process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
+          const commands: string[] = [];
+          const mockExec = (cmd: string) => { commands.push(cmd); };
 
-    setTmuxPaneTitle('Session "with" quotes', mockExec);
+          setTmuxPaneTitle('Session "with" quotes', mockExec);
 
-    assert.strictEqual(commands[0], 'tmux select-pane -T "Session \\"with\\" quotes"');
-  });
+          assert.strictEqual(commands[0], 'tmux select-pane -T "Session \\"with\\" quotes"');
+        });
 
-  it('does not throw when tmux command fails', () => {
-    process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
-    const mockExec = () => { throw new Error('tmux not found'); };
+        it('swallows tmux errors', () => {
+          process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
+          const mockExec = () => { throw new Error('tmux not found'); };
 
-    // Should not throw
-    assert.doesNotThrow(() => {
-      setTmuxPaneTitle('My Session', mockExec);
+          // Should not throw
+          assert.doesNotThrow(() => {
+            setTmuxPaneTitle('My Session', mockExec);
+          });
+        });
+      });
+
+      describe('spawnInteractive', () => {
+        it('returns 0 on success', async () => {
+          const code = await spawnInteractive('node', ['-e', 'process.exit(0)']);
+          assert.strictEqual(code, 0);
+        });
+
+        it('returns non-zero on failure', async () => {
+          const code = await spawnInteractive('node', ['-e', 'process.exit(1)']);
+          assert.strictEqual(code, 1);
+        });
+
+        it('preserves exact exit code', async () => {
+          const code = await spawnInteractive('node', ['-e', 'process.exit(42)']);
+          assert.strictEqual(code, 42);
+        });
+      });
     });
-  });
-});
-
-describe('c > util > exec > spawnInteractive', () => {
-  it('returns 0 on successful child', async () => {
-    const code = await spawnInteractive('node', ['-e', 'process.exit(0)']);
-    assert.strictEqual(code, 0);
-  });
-
-  it('returns non-zero exit code on child failure', async () => {
-    const code = await spawnInteractive('node', ['-e', 'process.exit(1)']);
-    assert.strictEqual(code, 1);
-  });
-
-  it('returns specific exit code', async () => {
-    const code = await spawnInteractive('node', ['-e', 'process.exit(42)']);
-    assert.strictEqual(code, 42);
   });
 });

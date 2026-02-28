@@ -21,31 +21,35 @@ function run(...args: string[]) {
   });
 }
 
-describe('c > cli > routing', () => {
-  it('rejects unknown command with exit code 1', () => {
-    const result = run('nonexistent');
-    assert.strictEqual(result.status, 1);
-    assert.match(result.stderr, /unknown command/i);
-  });
+describe('c', () => {
+  describe('cli', () => {
+    describe('routing', () => {
+      it('exits 1 on unknown command', () => {
+        const result = run('nonexistent');
+        assert.strictEqual(result.status, 1);
+        assert.match(result.stderr, /unknown command/i);
+      });
 
-  it('rejects "prune" as unknown command', () => {
-    const result = run('prune');
-    assert.strictEqual(result.status, 1);
-    assert.match(result.stderr, /unknown command/i);
-  });
+      it('rejects "prune"', () => {
+        const result = run('prune');
+        assert.strictEqual(result.status, 1);
+        assert.match(result.stderr, /unknown command/i);
+      });
 
-  it('runs list with exit code 0', () => {
-    const result = run('list');
-    assert.strictEqual(result.status, 0);
-  });
+      it('runs list', () => {
+        const result = run('list');
+        assert.strictEqual(result.status, 0);
+      });
 
-  it('runs --help with exit code 0', () => {
-    const result = run('--help');
-    assert.strictEqual(result.status, 0);
-  });
+      it('runs --help', () => {
+        const result = run('--help');
+        assert.strictEqual(result.status, 0);
+      });
 
-  it('runs --version with exit code 0', () => {
-    const result = run('--version');
-    assert.strictEqual(result.status, 0);
+      it('runs --version', () => {
+        const result = run('--version');
+        assert.strictEqual(result.status, 0);
+      });
+    });
   });
 });
