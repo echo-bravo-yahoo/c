@@ -30,7 +30,7 @@ export async function linkCommand(options: LinkOptions, idOrPrefix?: string): Pr
   }
 
   if (!options.pr && !options.jira && !options.branch) {
-    console.error(chalk.red('Specify at least one: --pr, --jira, or --branch'));
+    console.error(chalk.red('Specify at least one: --pr, --jira, or --branch.'));
     process.exit(1);
   }
 
@@ -50,5 +50,5 @@ export async function linkCommand(options: LinkOptions, idOrPrefix?: string): Pr
   if (options.jira) linked.push(`JIRA: ${options.jira}`);
   if (options.branch) linked.push(`branch: ${options.branch}`);
 
-  console.log(chalk.green(`✓ Linked to ${getDisplayName(session)}: ${linked.join(', ')}`));
+  console.log(chalk.green(`Linked to ${getDisplayName(session)}: ${linked.join(', ')}.`));
 }

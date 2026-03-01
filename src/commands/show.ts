@@ -10,7 +10,7 @@ export function showCommand(idOrPrefix: string): void {
   const session = getSession(idOrPrefix);
 
   if (!session) {
-    console.error(chalk.red(`Session not found: ${idOrPrefix}`));
+    console.error(chalk.red(`Session not found: ${idOrPrefix}.`));
     process.exit(1);
   }
 

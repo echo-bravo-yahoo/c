@@ -31,5 +31,5 @@ export async function untagCommand(tag: string, idOrPrefix?: string): Promise<vo
     s.last_active_at = new Date();
   });
 
-  console.log(chalk.green(`✓ Removed tag from ${getDisplayName(session)}: ${tag}`));
+  console.log(chalk.green(`Removed tag from ${getDisplayName(session)}: ${tag}.`));
 }

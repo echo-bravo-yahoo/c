@@ -33,5 +33,5 @@ export async function tagCommand(tag: string, idOrPrefix?: string): Promise<void
     s.last_active_at = new Date();
   });
 
-  console.log(chalk.green(`✓ Tagged ${getDisplayName(session)} with: ${tag}`));
+  console.log(chalk.green(`Tagged ${getDisplayName(session)} with: ${tag}.`));
 }

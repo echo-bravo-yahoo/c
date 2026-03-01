@@ -26,7 +26,7 @@ export async function cleanCommand(options: CleanOptions): Promise<void> {
   );
 
   if (orphaned.length === 0 && missingDirs.length === 0) {
-    console.log(chalk.green('✓ No orphaned sessions found.'));
+    console.log(chalk.green('No orphaned sessions found.'));
     return;
   }
 
@@ -53,7 +53,7 @@ export async function cleanCommand(options: CleanOptions): Promise<void> {
       }
     });
 
-    console.log(chalk.green(`\n✓ Pruned ${toDelete.size} sessions.`));
+    console.log(chalk.green(`\nPruned ${toDelete.size} session${toDelete.size === 1 ? '' : 's'}.`));
   } else {
     console.log(chalk.dim('\nRun with --prune to remove these sessions.'));
   }

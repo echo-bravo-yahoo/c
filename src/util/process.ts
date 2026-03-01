@@ -31,7 +31,7 @@ export async function signalSession(pid: number | undefined): Promise<void> {
     process.kill(pid, 'SIGINT');
     const exited = await waitForExit(pid);
     if (!exited) {
-      console.log(chalk.yellow(`Process ${pid} did not exit within timeout`));
+      console.log(chalk.yellow(`Process ${pid} did not exit within timeout.`));
     }
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code !== 'ESRCH') throw err;

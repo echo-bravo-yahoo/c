@@ -43,5 +43,5 @@ export async function nameCommand(name: string, idOrPrefix?: string): Promise<vo
   if (!idOrPrefix) {
     setTmuxPaneTitle(name, session?.resources.tmux_pane);
   }
-  console.log(chalk.green(`✓ Set name: ${name}`));
+  console.log(chalk.green(`Set name: ${name}.`));
 }

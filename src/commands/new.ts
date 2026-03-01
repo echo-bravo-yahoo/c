@@ -69,7 +69,7 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   });
 
   const displayName = name || humanhash;
-  console.log(chalk.dim(`Starting session: ${displayName}`));
+  console.log(chalk.dim(`Starting session: ${displayName}.`));
   setTmuxPaneTitle(displayName);
 
   const args = ['--session-id', sessionId];

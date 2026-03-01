@@ -30,7 +30,7 @@ export async function unlinkCommand(options: UnlinkOptions, idOrPrefix?: string)
   }
 
   if (!options.pr && !options.jira && !options.branch) {
-    console.error(chalk.red('Specify at least one: --pr, --jira, or --branch'));
+    console.error(chalk.red('Specify at least one: --pr, --jira, or --branch.'));
     process.exit(1);
   }
 
@@ -50,5 +50,5 @@ export async function unlinkCommand(options: UnlinkOptions, idOrPrefix?: string)
   if (options.jira) unlinked.push('JIRA');
   if (options.branch) unlinked.push('branch');
 
-  console.log(chalk.green(`✓ Unlinked from ${getDisplayName(session)}: ${unlinked.join(', ')}`));
+  console.log(chalk.green(`Unlinked from ${getDisplayName(session)}: ${unlinked.join(', ')}.`));
 }

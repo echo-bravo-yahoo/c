@@ -12,7 +12,7 @@ export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
   if (!idsOrPrefixes || idsOrPrefixes.length === 0) {
     const session = getCurrentSession();
     if (!session) {
-      console.error(chalk.red('No active session in current directory'));
+      console.error(chalk.red('No active session in current directory.'));
       process.exit(1);
     }
 
@@ -26,7 +26,7 @@ export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
       }
     });
 
-    console.log(chalk.green(`Archived session "${getDisplayName(session)}" (${session.id.slice(0, 8)})`));
+    console.log(chalk.green(`Archived session "${getDisplayName(session)}" (${session.id.slice(0, 8)}).`));
     return;
   }
 
@@ -35,7 +35,7 @@ export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
     const session = getSession(idOrPrefix);
 
     if (!session) {
-      console.error(chalk.red(`Session not found: ${idOrPrefix}`));
+      console.error(chalk.red(`Session not found: ${idOrPrefix}.`));
       continue;
     }
 
@@ -49,6 +49,6 @@ export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
       }
     });
 
-    console.log(chalk.green(`Archived session "${getDisplayName(session)}" (${session.id.slice(0, 8)})`));
+    console.log(chalk.green(`Archived session "${getDisplayName(session)}" (${session.id.slice(0, 8)}).`));
   }
 }

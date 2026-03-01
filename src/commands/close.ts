@@ -18,12 +18,12 @@ export async function closeCommand(
   if (!idsOrPrefixes || idsOrPrefixes.length === 0) {
     const session = getCurrentSession();
     if (!session) {
-      console.error(chalk.red('No active session in current directory'));
+      console.error(chalk.red('No active session in current directory.'));
       process.exit(1);
     }
 
     if (session.state === 'closed' || session.state === 'archived') {
-      console.error(chalk.red(`Session is already ${session.state}`));
+      console.error(chalk.red(`Session is already ${session.state}.`));
       process.exit(1);
     }
 
@@ -37,7 +37,7 @@ export async function closeCommand(
       }
     });
 
-    console.log(chalk.green(`${verb} session "${getDisplayName(session)}" (${session.id.slice(0, 8)})`));
+    console.log(chalk.green(`${verb} session "${getDisplayName(session)}" (${session.id.slice(0, 8)}).`));
     return;
   }
 
@@ -46,12 +46,12 @@ export async function closeCommand(
     const session = getSession(idOrPrefix);
 
     if (!session) {
-      console.error(chalk.red(`Session not found: ${idOrPrefix}`));
+      console.error(chalk.red(`Session not found: ${idOrPrefix}.`));
       continue;
     }
 
     if (session.state === 'closed' || session.state === 'archived') {
-      console.error(chalk.red(`Session ${getDisplayName(session)} is already ${session.state}`));
+      console.error(chalk.red(`Session ${getDisplayName(session)} is already ${session.state}.`));
       continue;
     }
 
@@ -65,6 +65,6 @@ export async function closeCommand(
       }
     });
 
-    console.log(chalk.green(`${verb} session "${getDisplayName(session)}" (${session.id.slice(0, 8)})`));
+    console.log(chalk.green(`${verb} session "${getDisplayName(session)}" (${session.id.slice(0, 8)}).`));
   }
 }

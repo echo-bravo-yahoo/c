@@ -3,6 +3,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import chalk from 'chalk';
 import { getSessions } from '../../store/index.js';
 import { getDisplayName, shortId } from '../../util/format.js';
 
@@ -10,7 +11,7 @@ export function tmuxPickCommand(): void {
   const sessions = getSessions({ state: ['busy', 'idle', 'waiting', 'closed'] });
 
   if (sessions.length === 0) {
-    console.error('No sessions available.');
+    console.error(chalk.red('No sessions available.'));
     process.exit(1);
   }
 

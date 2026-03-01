@@ -17,7 +17,7 @@ export async function bankruptcyCommand(options: { skip?: string[] }): Promise<v
       if (session) {
         skipIds.add(session.id);
       } else {
-        console.error(chalk.red(`Skip target not found: ${idOrPrefix}`));
+        console.error(chalk.red(`Skip target not found: ${idOrPrefix}.`));
       }
     }
   }
@@ -26,7 +26,7 @@ export async function bankruptcyCommand(options: { skip?: string[] }): Promise<v
     .filter(s => s.state !== 'archived' && !skipIds.has(s.id));
 
   if (active.length === 0) {
-    console.log('No sessions to archive.');
+    console.log(chalk.dim('No sessions to archive.'));
     return;
   }
 
@@ -46,5 +46,5 @@ export async function bankruptcyCommand(options: { skip?: string[] }): Promise<v
     }
   });
 
-  console.log(chalk.green(`Archived ${active.length} session${active.length === 1 ? '' : 's'}`));
+  console.log(chalk.green(`Archived ${active.length} session${active.length === 1 ? '' : 's'}.`));
 }

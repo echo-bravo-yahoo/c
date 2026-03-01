@@ -30,7 +30,7 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
       session = nameMatches[0];
     } else if (nameMatches.length >= 2) {
       const ids = nameMatches.map(m => shortId(m.id));
-      console.error(chalk.red(`Cannot resume session - multiple sessions named "${idOrPrefix}": (${ids.join(', ')})`));
+      console.error(chalk.red(`Multiple sessions named "${idOrPrefix}": ${ids.join(', ')}.`));
       process.exit(1);
     }
 
@@ -45,7 +45,7 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
         session = resolved[0];
       } else if (resolved.length >= 2) {
         const ids = resolved.map(m => shortId(m.id));
-        console.error(chalk.red(`Cannot resume session - multiple sessions named "${idOrPrefix}": (${ids.join(', ')})`));
+        console.error(chalk.red(`Multiple sessions named "${idOrPrefix}": ${ids.join(', ')}.`));
         process.exit(1);
       }
     }
@@ -55,9 +55,9 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
       const matches = findSessions(idOrPrefix);
       if (matches.length >= 2) {
         const ids = matches.map(m => highlightId(shortId(m.id), idOrPrefix.length));
-        console.error(chalk.red(`Cannot resume session - multiple sessions with an ID starting with ${idOrPrefix}: (${ids.join(', ')})`));
+        console.error(chalk.red(`Multiple sessions starting with ${idOrPrefix}: ${ids.join(', ')}.`));
       } else {
-        console.error(chalk.red(`Session not found: ${idOrPrefix}`));
+        console.error(chalk.red(`Session not found: ${idOrPrefix}.`));
       }
       process.exit(1);
     }
@@ -75,7 +75,7 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
         delete index.sessions[session!.id].pid;
       }
     });
-    console.error(chalk.red(`Session ${displayName} no longer exists in Claude's storage`));
+    console.error(chalk.red(`Session ${displayName} no longer exists in Claude's storage.`));
     console.error(chalk.dim(`Archived stale session. Run ${chalk.cyan('c new')} to start fresh.`));
     process.exit(1);
   }
@@ -85,8 +85,8 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
     const repoMatch = session.directory.match(/^(.+?)\/\.(?:claude\/)?worktrees\//);
     if (repoMatch && existsSync(repoMatch[1])) {
       const repoRoot = repoMatch[1];
-      console.error(chalk.yellow(`Worktree directory no longer exists: ${session.directory}`));
-      console.error(chalk.dim(`Resuming from ${repoRoot} instead`));
+      console.error(chalk.yellow(`Worktree directory no longer exists: ${session.directory}.`));
+      console.error(chalk.dim(`Resuming from ${repoRoot} instead.`));
       await updateIndex((index) => {
         const s = index.sessions[session!.id];
         if (s) {
@@ -105,7 +105,7 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
           delete s.pid;
         }
       });
-      console.error(chalk.red(`Session directory no longer exists: ${session.directory}`));
+      console.error(chalk.red(`Session directory no longer exists: ${session.directory}.`));
       console.error(chalk.dim(`Archived stale session. Run ${chalk.cyan('c new')} to start fresh.`));
       process.exit(1);
     }
@@ -153,7 +153,7 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
     exitCode = await spawnInteractive('claude', resumeArgs, { cwd: session.directory });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(chalk.red(`Failed to launch Claude: ${msg}`));
+    console.error(chalk.red(`Failed to launch Claude: ${msg}.`));
     await updateIndex((index) => {
       const s = index.sessions[session!.id];
       if (s) {

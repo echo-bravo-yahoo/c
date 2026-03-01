@@ -9,7 +9,7 @@ import { getDisplayName } from '../util/format.js';
 export async function metaCommand(keyValue: string, idOrPrefix?: string): Promise<void> {
   const eqIndex = keyValue.indexOf('=');
   if (eqIndex === -1) {
-    console.error(chalk.red('Format: key=value'));
+    console.error(chalk.red('Format: key=value.'));
     process.exit(1);
   }
 
@@ -45,8 +45,8 @@ export async function metaCommand(keyValue: string, idOrPrefix?: string): Promis
   });
 
   if (value) {
-    console.log(chalk.green(`✓ Set ${key}=${value} on ${getDisplayName(session)}`));
+    console.log(chalk.green(`Set ${key}=${value} on ${getDisplayName(session)}.`));
   } else {
-    console.log(chalk.green(`✓ Removed ${key} from ${getDisplayName(session)}`));
+    console.log(chalk.green(`Removed ${key} from ${getDisplayName(session)}.`));
   }
 }
