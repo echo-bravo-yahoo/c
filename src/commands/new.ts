@@ -25,7 +25,7 @@ export interface NewOptions {
   passthroughArgs?: string[];
 }
 
-export async function newCommand(name: string | undefined, options: NewOptions): Promise<never> {
+export async function newCommand(name: string | undefined, options: NewOptions): Promise<void> {
   const sessionId = randomUUID();
   const cwd = process.cwd();
   const projectKey = encodeProjectKey(cwd);
@@ -81,5 +81,14 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   if (options.effort) args.push('--effort', options.effort);
   if (options.agent) args.push('--agent', options.agent);
   if (options.passthroughArgs) args.push(...options.passthroughArgs);
-  execReplace('claude', args, { cwd });
+
+  let exitCode: number;
+  try {
+    exitCode = await execReplace('claude', args, { cwd });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(chalk.red(`Failed to launch Claude: ${msg}.`));
+    process.exit(1);
+  }
+  process.exit(exitCode);
 }

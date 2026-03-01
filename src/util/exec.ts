@@ -43,35 +43,42 @@ export function setTmuxPaneTitle(
 }
 
 /**
- * Execute a command and replace the current process
+ * Execute a command, forwarding stdio, and return the exit code.
+ * Callers should follow up with process.exit(code).
+ *
+ * Uses the same Promise-based pattern as spawnInteractive to avoid
+ * hanging when signal listeners keep the event loop alive.
  */
-export function execReplace(command: string, args: string[], options?: { cwd?: string }): never {
-  const child = spawn(command, args, {
-    stdio: 'inherit',
-    cwd: options?.cwd,
-  });
+export function execReplace(
+  command: string,
+  args: string[],
+  options?: { cwd?: string }
+): Promise<number> {
+  const debug = !!process.env.C_DEBUG;
 
-  child.on('error', (err) => {
-    console.error(err.message);
-    process.exit(1);
-  });
+  return new Promise((resolve, reject) => {
+    if (debug) console.error(`[c:debug] spawn ${command} ${args.join(' ')}`);
 
-  child.on('close', (code) => {
-    process.exit(code ?? 0);
-  });
+    const child = spawn(command, args, {
+      stdio: 'inherit',
+      cwd: options?.cwd,
+    });
 
-  // Keep the process running until child exits
-  // This prevents the parent from exiting before the child
-  process.on('SIGINT', () => {
-    child.kill('SIGINT');
-  });
+    child.on('error', (err) => {
+      if (debug) console.error(`[c:debug] child error: ${err.message}`);
+      reject(err);
+    });
 
-  process.on('SIGTERM', () => {
-    child.kill('SIGTERM');
-  });
+    child.on('close', (code) => {
+      if (debug) console.error(`[c:debug] child close: code=${code}`);
+      resolve(code ?? 1);
+    });
 
-  // Return never type - process will exit via child.on('close')
-  return undefined as never;
+    const onSigint = () => child.kill('SIGINT');
+    const onSigterm = () => child.kill('SIGTERM');
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
+  });
 }
 
 /**
