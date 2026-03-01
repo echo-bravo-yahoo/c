@@ -48,6 +48,20 @@ const { setupCLI } = await import('../helpers/cli.js');
 ### Commands that spawn external processes
 Commands that exec/spawn (`new`, `resume`, `tmux-pick`) cannot be tested through `parseAsync()`. Test their pre-spawn logic directly as unit tests.
 
+## Known behaviors
+
+### `c new "name"` with existing worktree
+When `c new "bugfixes"` is run and a worktree named `bugfixes` already exists, Claude CLI handles the conflict — it either reuses the existing worktree or errors. `c` does not pre-check for worktree name collisions.
+
+### `c new "name"` outside a git repo
+Skips `--worktree` and prints a dim warning. The session is created normally without a worktree.
+
+### `c archive` with a running worktree session
+Sends SIGINT to the session process (5s timeout), marks the session archived, but does **not** remove the worktree directory. Worktree cleanup is left to the user or `git worktree prune`.
+
+### `--no-worktree` flag
+`c new "name" --no-worktree` creates a named session without passing `--worktree` to Claude, even inside a git repo. Useful for sessions that don't need branch isolation.
+
 ## Notes
 - `/rename` titles are read directly from Claude's transcript files
 - Interactive Claude TUI cannot be tested from within a Claude session — `spawn('claude', ..., { stdio: 'inherit' })` deadlocks on TTY. Use `--print` mode for non-interactive flag/arg testing; test interactive launch from a separate terminal.
