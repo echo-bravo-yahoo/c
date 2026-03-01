@@ -18,6 +18,11 @@ export interface NewOptions {
   note?: string;
   meta?: string[];
   noWorktree?: boolean;
+  model?: string;
+  permissionMode?: string;
+  effort?: string;
+  agent?: string;
+  passthroughArgs?: string[];
 }
 
 export async function newCommand(name: string | undefined, options: NewOptions): Promise<never> {
@@ -71,5 +76,10 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   if (useWorktree) {
     args.push('--worktree', name);
   }
+  if (options.model) args.push('--model', options.model);
+  if (options.permissionMode) args.push('--permission-mode', options.permissionMode);
+  if (options.effort) args.push('--effort', options.effort);
+  if (options.agent) args.push('--agent', options.agent);
+  if (options.passthroughArgs) args.push(...options.passthroughArgs);
   execReplace('claude', args, { cwd });
 }

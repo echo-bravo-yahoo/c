@@ -8,8 +8,19 @@ import { getSession, findSessions, findSessionsByName, updateIndex } from '../st
 import { getClaudeSession, findClaudeSessionIdsByTitle } from '../claude/sessions.js';
 import { spawnInteractive, setTmuxPaneTitle } from '../util/exec.js';
 import { getDisplayName, shortId, highlightId } from '../util/format.js';
+import { getGitRoot } from '../detection/git.js';
 
-export async function resumeCommand(idOrPrefix: string): Promise<void> {
+export interface ResumeOptions {
+  model?: string;
+  permissionMode?: string;
+  effort?: string;
+  agent?: string;
+  forkSession?: boolean;
+  worktree?: string | true;
+  passthroughArgs?: string[];
+}
+
+export async function resumeCommand(idOrPrefix: string, options: ResumeOptions = {}): Promise<void> {
   let session = getSession(idOrPrefix);
 
   if (!session) {
@@ -114,9 +125,32 @@ export async function resumeCommand(idOrPrefix: string): Promise<void> {
   setTmuxPaneTitle(displayName);
   process.env.C_SESSION_ID = session.id;
 
+  const resumeArgs = ['-r', session.id];
+  if (options.model) resumeArgs.push('--model', options.model);
+  if (options.permissionMode) resumeArgs.push('--permission-mode', options.permissionMode);
+  if (options.effort) resumeArgs.push('--effort', options.effort);
+  if (options.agent) resumeArgs.push('--agent', options.agent);
+  if (options.forkSession) resumeArgs.push('--fork-session');
+  if (options.worktree) {
+    const inGitRepo = !!getGitRoot(session.directory);
+    if (inGitRepo) {
+      const wtName = typeof options.worktree === 'string'
+        ? options.worktree
+        : session.resources.worktree;
+      if (wtName) {
+        resumeArgs.push('--worktree', wtName);
+      } else {
+        resumeArgs.push('--worktree');
+      }
+    } else {
+      console.log(chalk.dim('Not in a git repository. Skipping worktree creation.'));
+    }
+  }
+  if (options.passthroughArgs) resumeArgs.push(...options.passthroughArgs);
+
   let exitCode: number;
   try {
-    exitCode = await spawnInteractive('claude', ['-r', session.id], { cwd: session.directory });
+    exitCode = await spawnInteractive('claude', resumeArgs, { cwd: session.directory });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(chalk.red(`Failed to launch Claude: ${msg}`));

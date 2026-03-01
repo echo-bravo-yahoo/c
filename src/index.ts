@@ -27,6 +27,17 @@ import { handleHook } from './hooks/index.js';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+/**
+ * Extract passthrough args (everything after '--' in raw argv).
+ * Commander's command.args includes parsed positionals and unknown options,
+ * so filter out the known positional (name/id) and known parsed options.
+ */
+function parsePassthroughArgs(): string[] {
+  const dashDash = process.argv.indexOf('--');
+  if (dashDash === -1) return [];
+  return process.argv.slice(dashDash + 1);
+}
+
 export function createProgram(): Command {
   const program = new Command();
 
@@ -72,8 +83,18 @@ export function createProgram(): Command {
     .option('--note <text>', 'Add a note')
     .option('--meta <key=value...>', 'Set metadata (repeatable)')
     .option('--no-worktree', 'Skip worktree creation even when named')
+    .option('--model <model>', 'Claude model to use')
+    .option('--permission-mode <mode>', 'Permission mode')
+    .option('--effort <level>', 'Effort level (low, medium, high)')
+    .option('--agent <agent>', 'Named agent')
+    .allowUnknownOption()
     .action(async (name, options) => {
-      await newCommand(name, { ...options, noWorktree: options.worktree === false });
+      const passthroughArgs = parsePassthroughArgs();
+      await newCommand(name, {
+        ...options,
+        noWorktree: options.worktree === false,
+        passthroughArgs: passthroughArgs.length ? passthroughArgs : undefined,
+      });
     });
 
   // Waiting (alias for list --waiting)
@@ -97,8 +118,24 @@ export function createProgram(): Command {
     .command('resume <id>')
     .alias('r')
     .description('Resume a Claude session')
-    .action(async (id) => {
-      await resumeCommand(id);
+    .option('--model <model>', 'Claude model to use')
+    .option('--permission-mode <mode>', 'Permission mode')
+    .option('--effort <level>', 'Effort level (low, medium, high)')
+    .option('--agent <agent>', 'Named agent')
+    .option('--fork-session', 'Create a new session ID on resume')
+    .option('--worktree [name]', 'Create or reuse a worktree')
+    .allowUnknownOption()
+    .action(async (id, options) => {
+      const passthroughArgs = parsePassthroughArgs();
+      await resumeCommand(id, {
+        model: options.model,
+        permissionMode: options.permissionMode,
+        effort: options.effort,
+        agent: options.agent,
+        forkSession: options.forkSession,
+        worktree: options.worktree,
+        passthroughArgs: passthroughArgs.length ? passthroughArgs : undefined,
+      });
     });
 
   // Archive

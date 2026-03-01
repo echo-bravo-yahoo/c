@@ -229,7 +229,15 @@ describe('c', () => {
         function buildClaudeArgs(
           sessionId: string,
           name: string | undefined,
-          opts: { inGitRepo?: boolean; noWorktree?: boolean } = {}
+          opts: {
+            inGitRepo?: boolean;
+            noWorktree?: boolean;
+            model?: string;
+            permissionMode?: string;
+            effort?: string;
+            agent?: string;
+            passthroughArgs?: string[];
+          } = {}
         ): string[] {
           const { inGitRepo = true, noWorktree = false } = opts;
           const args = ['--session-id', sessionId];
@@ -237,6 +245,11 @@ describe('c', () => {
           if (useWorktree) {
             args.push('--worktree', name);
           }
+          if (opts.model) args.push('--model', opts.model);
+          if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
+          if (opts.effort) args.push('--effort', opts.effort);
+          if (opts.agent) args.push('--agent', opts.agent);
+          if (opts.passthroughArgs) args.push(...opts.passthroughArgs);
           return args;
         }
 
@@ -295,6 +308,56 @@ describe('c', () => {
           assert.strictEqual(args[1], 'abc-123');
           assert.strictEqual(args[2], '--worktree');
           assert.strictEqual(args[3], 'my-feature');
+        });
+
+        it('appends --model when provided', () => {
+          const args = buildClaudeArgs('abc-123', undefined, { model: 'haiku' });
+
+          assert.ok(args.includes('--model'));
+          assert.ok(args.includes('haiku'));
+        });
+
+        it('appends --permission-mode when provided', () => {
+          const args = buildClaudeArgs('abc-123', undefined, { permissionMode: 'plan' });
+
+          assert.ok(args.includes('--permission-mode'));
+          assert.ok(args.includes('plan'));
+        });
+
+        it('appends --effort when provided', () => {
+          const args = buildClaudeArgs('abc-123', undefined, { effort: 'low' });
+
+          assert.ok(args.includes('--effort'));
+          assert.ok(args.includes('low'));
+        });
+
+        it('appends --agent when provided', () => {
+          const args = buildClaudeArgs('abc-123', undefined, { agent: 'my-agent' });
+
+          assert.ok(args.includes('--agent'));
+          assert.ok(args.includes('my-agent'));
+        });
+
+        it('appends passthrough args', () => {
+          const args = buildClaudeArgs('abc-123', undefined, {
+            passthroughArgs: ['--add-dir', '/tmp'],
+          });
+
+          assert.ok(args.includes('--add-dir'));
+          assert.ok(args.includes('/tmp'));
+        });
+
+        it('combines all flags', () => {
+          const args = buildClaudeArgs('abc-123', 'feat', {
+            model: 'haiku',
+            effort: 'high',
+            passthroughArgs: ['--verbose'],
+          });
+
+          assert.ok(args.includes('--worktree'));
+          assert.ok(args.includes('--model'));
+          assert.ok(args.includes('--effort'));
+          assert.ok(args.includes('--verbose'));
         });
       });
     });
