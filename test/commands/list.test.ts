@@ -18,8 +18,11 @@ mock.module(resolve('src/claude/sessions.ts'), {
     getPlanExecutionInfo: () => null,
     findTranscriptPath: () => null,
     getCustomTitleFromTranscriptTail: () => null,
+    findClaudeSessionIdsByTitle: () => [],
     decodeProjectKey: (k: string) => k,
     encodeProjectKey: (d: string) => d,
+    CLAUDE_DIR: '/tmp/mock-claude',
+    PROJECTS_DIR: '/tmp/mock-claude/projects',
   },
 });
 
