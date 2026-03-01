@@ -7,6 +7,9 @@ import { Session } from '../store/schema.js';
 import { getClaudeSessionTitles } from '../claude/sessions.js';
 import { getAllSessions } from '../store/index.js';
 import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.js';
+import { getRepoSlug } from '../detection/git.js';
+import { buildJiraUrl } from '../detection/jira.js';
+import { hyperlink } from './hyperlink.js';
 import { computeColumnLayout, ID_FIXED_WIDTH, type ColumnKey, type ColumnLayout } from './layout.js';
 
 const USER_ICON = '󰇘';
@@ -240,7 +243,7 @@ export function getBranchDisplay(session: Session): { text: string; color: 'cyan
 /**
  * Format a session as a single line for list views
  */
-export function formatSessionLine(session: Session, layout: ColumnLayout, depth = 0, prefixMap?: Map<string, number>): string {
+export function formatSessionLine(session: Session, layout: ColumnLayout, depth = 0, prefixMap?: Map<string, number>, repoSlug?: string): string {
   const parts: string[] = [];
 
   // ID column (always visible when idName is visible)
@@ -273,15 +276,25 @@ export function formatSessionLine(session: Session, layout: ColumnLayout, depth 
   // Repo column
   if (layout.visible.has('repo')) {
     const repoName = getRepoName(session.directory);
-    parts.push(chalk.blue(fixedWidth(repoName, layout.repo)));
+    const repoText = repoSlug
+      ? hyperlink(`https://github.com/${repoSlug}`, repoName)
+      : repoName;
+    parts.push(chalk.blue(fixedWidth(repoText, layout.repo)));
   }
 
   // Worktree/Branch column
   if (layout.visible.has('branch')) {
     const branch = getBranchDisplay(session);
+    let branchText = branch.text;
+    if (branchText && repoSlug && session.resources.branch) {
+      branchText = hyperlink(
+        `https://github.com/${repoSlug}/tree/${session.resources.branch}`,
+        branchText
+      );
+    }
     const branchCol = branch.color === 'dim'
-      ? chalk.dim(fixedWidth(branch.text, layout.branch))
-      : chalk[branch.color](fixedWidth(branch.text, layout.branch));
+      ? chalk.dim(fixedWidth(branchText, layout.branch))
+      : chalk[branch.color](fixedWidth(branchText, layout.branch));
     parts.push(branchCol);
   }
 
@@ -300,8 +313,8 @@ export function formatSessionLine(session: Session, layout: ColumnLayout, depth 
       } else {
         const prNum = session.resources.pr?.match(/\/pull\/(\d+)/)?.[1];
         const coloredParts = [
-          prNum ? chalk.green(`#${prNum}`) : '',
-          session.resources.jira ? chalk.yellow(session.resources.jira) : '',
+          prNum ? chalk.green(hyperlink(session.resources.pr!, `#${prNum}`)) : '',
+          session.resources.jira ? chalk.yellow(hyperlink(buildJiraUrl(session.resources.jira), session.resources.jira)) : '',
           session.tags.values.length > 0 ? chalk.cyan(session.tags.values[0]) : '',
         ].filter(Boolean).join(' ');
         resourceCol = coloredParts + ' '.repeat(Math.max(0, layout.resources - displayWidth(resourceText)));
@@ -332,7 +345,7 @@ export function formatSessionDetails(session: Session): string {
   }
   lines.push('');
   lines.push(chalk.bold('Status: ') + formatStatus(session));
-  lines.push(chalk.dim('  Directory: ') + session.directory);
+  lines.push(chalk.dim('  Directory: ') + hyperlink(`file://${session.directory}`, session.directory));
   lines.push(chalk.dim('  PID: ') + (session.pid != null ? String(session.pid) : '–'));
   lines.push(chalk.dim('  Pane: ') + (session.resources.tmux_pane ?? '–'));
   lines.push(chalk.dim('  Created: ') + session.created_at.toLocaleString());
@@ -341,17 +354,22 @@ export function formatSessionDetails(session: Session): string {
   // Resources
   lines.push('');
   lines.push(chalk.bold('Resources:'));
+  const slug = getRepoSlug(session.directory);
   if (session.resources.branch) {
-    lines.push('  Branch: ' + chalk.magenta(abbreviateBranch(session.resources.branch)));
+    const branchDisplay = abbreviateBranch(session.resources.branch);
+    const branchLinked = slug
+      ? hyperlink(`https://github.com/${slug}/tree/${session.resources.branch}`, branchDisplay)
+      : branchDisplay;
+    lines.push('  Branch: ' + chalk.magenta(branchLinked));
   }
   if (session.resources.worktree) {
     lines.push('  Worktree: ' + session.resources.worktree);
   }
   if (session.resources.pr) {
-    lines.push('  PR: ' + chalk.green(session.resources.pr));
+    lines.push('  PR: ' + chalk.green(hyperlink(session.resources.pr, session.resources.pr)));
   }
   if (session.resources.jira) {
-    lines.push('  JIRA: ' + chalk.yellow(session.resources.jira));
+    lines.push('  JIRA: ' + chalk.yellow(hyperlink(buildJiraUrl(session.resources.jira), session.resources.jira)));
   }
   if (Object.keys(session.resources).length === 0) {
     lines.push(chalk.dim('  (none)'));
@@ -540,11 +558,18 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
   console.log(chalk.dim(headerParts.join('')));
   console.log(chalk.dim('─'.repeat(layout.totalWidth)));
 
+  // Cache repo slugs by directory to avoid repeated git calls
+  const slugCache = new Map<string, string | undefined>();
+  function getSlug(dir: string): string | undefined {
+    if (!slugCache.has(dir)) slugCache.set(dir, getRepoSlug(dir));
+    return slugCache.get(dir);
+  }
+
   for (const row of ordered) {
     if (row.type === 'gap') {
       console.log(formatGapLine(row.count, row.depth));
     } else if (row.type === 'session') {
-      console.log(formatSessionLine(row.session, layout, row.depth, prefixMap));
+      console.log(formatSessionLine(row.session, layout, row.depth, prefixMap, getSlug(row.session.directory)));
     }
   }
 }

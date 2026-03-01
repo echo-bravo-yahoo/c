@@ -5,6 +5,8 @@
 import chalk from 'chalk';
 import { getSessions, getAllSessions, reconcileStaleSessions } from '../store/index.js';
 import { printSessionTable, getDisplayName, shortId, highlightId, buildPrefixMap } from '../util/format.js';
+import { hyperlink } from '../util/hyperlink.js';
+import { buildJiraUrl } from '../detection/jira.js';
 import type { SessionState } from '../store/schema.js';
 
 export interface ListOptions {
@@ -77,7 +79,9 @@ function listPRs(): void {
   for (const session of withPRs) {
     const name = getDisplayName(session);
     const prNum = session.resources.pr!.match(/\/pull\/(\d+)/)?.[1];
-    const prDisplay = prNum ? chalk.green(`#${prNum}`) : session.resources.pr!;
+    const prDisplay = prNum
+      ? chalk.green(hyperlink(session.resources.pr!, `#${prNum}`))
+      : hyperlink(session.resources.pr!, session.resources.pr!);
     const id = shortId(session.id);
 
     console.log(
@@ -87,7 +91,7 @@ function listPRs(): void {
         '  ' +
         prDisplay +
         '  ' +
-        chalk.dim(session.resources.pr!)
+        chalk.dim(hyperlink(session.resources.pr!, session.resources.pr!))
     );
   }
 }
@@ -118,7 +122,7 @@ function listJira(): void {
         '  ' +
         name.padEnd(20) +
         '  ' +
-        chalk.yellow(session.resources.jira!)
+        chalk.yellow(hyperlink(buildJiraUrl(session.resources.jira!), session.resources.jira!))
     );
   }
 }
