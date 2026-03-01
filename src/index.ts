@@ -71,8 +71,9 @@ export function createProgram(): Command {
     .option('--branch <name>', 'Link branch name')
     .option('--note <text>', 'Add a note')
     .option('--meta <key=value...>', 'Set metadata (repeatable)')
+    .option('--no-worktree', 'Skip worktree creation even when named')
     .action(async (name, options) => {
-      await newCommand(name, options);
+      await newCommand(name, { ...options, noWorktree: options.worktree === false });
     });
 
   // Waiting (alias for list --waiting)

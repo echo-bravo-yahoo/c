@@ -226,9 +226,15 @@ describe('c', () => {
         /**
          * Helper to build Claude CLI args matching newCommand logic
          */
-        function buildClaudeArgs(sessionId: string, name: string | undefined): string[] {
+        function buildClaudeArgs(
+          sessionId: string,
+          name: string | undefined,
+          opts: { inGitRepo?: boolean; noWorktree?: boolean } = {}
+        ): string[] {
+          const { inGitRepo = true, noWorktree = false } = opts;
           const args = ['--session-id', sessionId];
-          if (name) {
+          const useWorktree = name && !noWorktree && inGitRepo;
+          if (useWorktree) {
             args.push('--worktree', name);
           }
           return args;
@@ -240,10 +246,22 @@ describe('c', () => {
           assert.deepStrictEqual(args, ['--session-id', 'abc-123']);
         });
 
-        it('passes --worktree with name', () => {
-          const args = buildClaudeArgs('abc-123', 'my-feature');
+        it('passes --worktree with name in git repo', () => {
+          const args = buildClaudeArgs('abc-123', 'my-feature', { inGitRepo: true });
 
           assert.deepStrictEqual(args, ['--session-id', 'abc-123', '--worktree', 'my-feature']);
+        });
+
+        it('omits --worktree when not in git repo', () => {
+          const args = buildClaudeArgs('abc-123', 'my-feature', { inGitRepo: false });
+
+          assert.deepStrictEqual(args, ['--session-id', 'abc-123']);
+        });
+
+        it('omits --worktree when --no-worktree is set', () => {
+          const args = buildClaudeArgs('abc-123', 'my-feature', { noWorktree: true });
+
+          assert.deepStrictEqual(args, ['--session-id', 'abc-123']);
         });
 
         it('omits --worktree when undefined', () => {
