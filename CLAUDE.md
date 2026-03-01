@@ -7,6 +7,62 @@ npm run build
 - Hooks in `src/hooks/` handle Claude Code lifecycle events
 - Session state stored via `src/store/`
 
+```mermaid
+graph TD
+    subgraph "CLI Commands (src/commands/)"
+        NEW[new] --> |spawn claude| CLAUDE[Claude CLI]
+        RESUME[resume] --> |spawn claude| CLAUDE
+        LIST[list / show / find]
+        MUTATE[archive / close / bankruptcy<br>link / unlink / tag / untag<br>name / meta / clean]
+    end
+
+    subgraph "Hooks (src/hooks/)"
+        H_START[session-start]
+        H_STOP[stop]
+        H_END[session-end]
+        H_BASH[post-bash]
+        H_PROMPT[user-prompt]
+        H_NOTIF[notification]
+    end
+
+    subgraph "Store (src/store/)"
+        INDEX[index.ts<br>readIndex / updateIndex]
+        SCHEMA[schema.ts<br>Session, IndexFile]
+        CACHE[status-cache.ts<br>bash-sourceable cache]
+    end
+
+    subgraph "Detection (src/detection/)"
+        GIT[git.ts<br>branch, worktree, repo slug]
+        PR[pr.ts<br>PR extraction]
+        JIRA[jira.ts<br>ticket extraction]
+        GH[github.ts<br>username]
+    end
+
+    subgraph "Session State Machine"
+        BUSY((busy)) --> |hook: stop| IDLE((idle))
+        IDLE --> |hook: user-prompt| WAITING((waiting))
+        WAITING --> |hook: session-start| BUSY
+        IDLE --> |hook: session-end| CLOSED((closed))
+        BUSY --> |hook: session-end| CLOSED
+        CLOSED --> |cmd: archive| ARCHIVED((archived))
+        BUSY --> |cmd: archive| ARCHIVED
+        IDLE --> |cmd: archive| ARCHIVED
+        WAITING --> |cmd: archive| ARCHIVED
+    end
+
+    CLAUDE --> |lifecycle events| H_START & H_STOP & H_END & H_BASH & H_PROMPT & H_NOTIF
+    H_START & H_STOP & H_END & H_BASH --> INDEX
+    H_START & H_BASH --> GIT & PR & JIRA
+    H_BASH --> CACHE
+    LIST --> INDEX
+    MUTATE --> INDEX
+    NEW & RESUME --> INDEX
+```
+
+### Data flow
+- **Hooks → Detection → Store**: Claude lifecycle events trigger hooks, which use detection utilities to discover git branches, PRs, and JIRA tickets, then persist state to the index and status cache.
+- **Commands → Store → Format**: CLI commands read from the index, format output via `src/util/format.ts`, and display to the user.
+
 ## Testing
 
 ### Command tests
