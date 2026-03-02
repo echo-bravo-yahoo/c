@@ -31,7 +31,7 @@ describe('c', () => {
       describe('computeColumnLayout', () => {
         it('shows all columns at wide terminal', () => {
           const layout = computeColumnLayout(emptyWidths(), 200);
-          assert.strictEqual(layout.visible.size, 6);
+          assert.strictEqual(layout.visible.size, 7);
           for (const spec of COLUMN_SPECS) {
             assert.ok(layout.visible.has(spec.key), `${spec.key} should be visible`);
           }
@@ -41,28 +41,30 @@ describe('c', () => {
           const minTerminal = ALL_MIN + GUTTER;
           const layout = computeColumnLayout(emptyWidths(), minTerminal);
 
-          assert.strictEqual(layout.visible.size, 6);
+          assert.strictEqual(layout.visible.size, 7);
           assert.strictEqual(layout.status, 7);
           assert.strictEqual(layout.id + layout.name, 20); // idName min
           assert.strictEqual(layout.repo, 6);
           assert.strictEqual(layout.branch, 6);
           assert.strictEqual(layout.time, 6);
+          assert.strictEqual(layout.size, 5);
           assert.strictEqual(layout.resources, 4);
         });
 
         it('drops lowest-priority column first', () => {
-          // Just below the point where all 6 fit
+          // Just below the point where all 7 fit
           const tooNarrow = ALL_MIN + GUTTER - 1;
           const layout = computeColumnLayout(emptyWidths(), tooNarrow);
 
-          // resources (priority 6) should be dropped
+          // resources (priority 7) should be dropped
           assert.ok(!layout.visible.has('resources'), 'resources should be dropped');
-          assert.strictEqual(layout.visible.size, 5);
+          assert.strictEqual(layout.visible.size, 6);
           assert.ok(layout.visible.has('status'));
           assert.ok(layout.visible.has('idName'));
           assert.ok(layout.visible.has('repo'));
           assert.ok(layout.visible.has('branch'));
           assert.ok(layout.visible.has('time'));
+          assert.ok(layout.visible.has('size'));
         });
 
         it('multiple columns drop progressively', () => {
@@ -74,6 +76,7 @@ describe('c', () => {
           assert.ok(layout.visible.has('repo'));
           assert.ok(!layout.visible.has('branch'), 'branch should be dropped');
           assert.ok(!layout.visible.has('time'), 'time should be dropped');
+          assert.ok(!layout.visible.has('size'), 'size should be dropped');
           assert.ok(!layout.visible.has('resources'), 'resources should be dropped');
         });
 
@@ -112,6 +115,7 @@ describe('c', () => {
           assert.strictEqual(layout.repo, 6);
           assert.strictEqual(layout.branch, 6);
           assert.strictEqual(layout.time, 6);
+          assert.strictEqual(layout.size, 5);
           assert.strictEqual(layout.resources, 4);
         });
 
@@ -123,6 +127,7 @@ describe('c', () => {
             repo: 20,
             branch: 30,
             time: 12,
+            size: 9,
             resources: 24,
           });
 
@@ -137,6 +142,7 @@ describe('c', () => {
           assert.strictEqual(layout.repo, 6);
           assert.strictEqual(layout.branch, 6);
           assert.strictEqual(layout.time, 6);
+          assert.strictEqual(layout.size, 5);
           assert.strictEqual(layout.resources, 4);
         });
 
@@ -159,6 +165,7 @@ describe('c', () => {
             repo: 100,
             branch: 100,
             time: 100,
+            size: 100,
             resources: 100,
           });
 
@@ -169,6 +176,7 @@ describe('c', () => {
           assert.ok(layout.repo <= 20, 'repo capped at max 20');
           assert.ok(layout.branch <= 30, 'branch capped at max 30');
           assert.ok(layout.time <= 12, 'time capped at max 12');
+          assert.ok(layout.size <= 9, 'size capped at max 9');
           assert.ok(layout.resources <= 24, 'resources capped at max 24');
         });
 
@@ -180,6 +188,7 @@ describe('c', () => {
             repo: 6,
             branch: 6,
             time: 6,
+            size: 5,
             resources: 4,
           });
 
@@ -199,6 +208,7 @@ describe('c', () => {
             layout.repo +
             layout.branch +
             layout.time +
+            layout.size +
             layout.resources;
 
           assert.strictEqual(layout.totalWidth, sumOfWidths + GUTTER);
@@ -213,6 +223,7 @@ describe('c', () => {
           assert.strictEqual(layout.repo, 0);
           assert.strictEqual(layout.branch, 0);
           assert.strictEqual(layout.time, 0);
+          assert.strictEqual(layout.size, 0);
           assert.strictEqual(layout.resources, 0);
         });
       });

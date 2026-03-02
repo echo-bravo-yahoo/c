@@ -2,7 +2,7 @@
  * Dynamic column layout for session tables
  */
 
-export type ColumnKey = 'status' | 'idName' | 'repo' | 'branch' | 'time' | 'resources';
+export type ColumnKey = 'status' | 'idName' | 'repo' | 'branch' | 'time' | 'resources' | 'size';
 
 export interface ColumnSpec {
   key: ColumnKey;
@@ -19,6 +19,7 @@ export interface ColumnLayout {
   repo: number;
   branch: number;
   resources: number;
+  size: number;
   time: number;
   visible: Set<ColumnKey>;
   totalWidth: number;
@@ -33,7 +34,8 @@ export const COLUMN_SPECS: readonly ColumnSpec[] = [
   { key: 'repo',      label: 'Repo',            min:  6, max: 20, priority: 3 },
   { key: 'branch',    label: 'Worktree/Branch', min:  6, max: 30, priority: 4 },
   { key: 'time',      label: 'Last Active',     min:  6, max: 12, priority: 5 },
-  { key: 'resources', label: 'Resources',       min:  4, max: 24, priority: 6 },
+  { key: 'size',      label: 'Size',            min:  5, max:  9, priority: 6 },
+  { key: 'resources', label: 'Resources',       min:  4, max: 24, priority: 7 },
 ];
 
 /**
@@ -106,6 +108,7 @@ export function computeColumnLayout(
     repo: widths.get('repo') ?? 0,
     branch: widths.get('branch') ?? 0,
     resources: widths.get('resources') ?? 0,
+    size: widths.get('size') ?? 0,
     time: widths.get('time') ?? 0,
     visible,
     totalWidth,

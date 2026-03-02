@@ -7,7 +7,8 @@ import assert from 'node:assert';
 import { useFakeTime } from '../setup.js';
 
 // These are pure functions we can test directly
-import { relativeTime, shortId, displayWidth, getRepoName, getBranchDisplay, formatSessionLine, computeUniquePrefixLength, highlightId, buildPrefixMap } from '../../src/util/format.js';
+import { relativeTime, shortId, displayWidth, fixedWidth, getRepoName, getBranchDisplay, formatSessionLine, formatFileSize, computeUniquePrefixLength, highlightId, buildPrefixMap } from '../../src/util/format.js';
+import { hyperlink } from '../../src/util/hyperlink.js';
 import type { Session } from '../../src/store/schema.js';
 import type { ColumnLayout } from '../../src/util/layout.js';
 import chalk from 'chalk';
@@ -138,6 +139,56 @@ describe('c', () => {
 
         it('handles empty string', () => {
           assert.strictEqual(displayWidth(''), 0);
+        });
+      });
+
+      describe('formatFileSize', () => {
+        it('formats bytes', () => {
+          assert.strictEqual(formatFileSize(500), '500 B');
+        });
+
+        it('formats kilobytes', () => {
+          assert.strictEqual(formatFileSize(1536), '1.5 KB');
+        });
+
+        it('formats megabytes', () => {
+          assert.strictEqual(formatFileSize(2621440), '2.5 MB');
+        });
+
+        it('formats zero', () => {
+          assert.strictEqual(formatFileSize(0), '0 B');
+        });
+      });
+
+      describe('hyperlink column alignment', () => {
+        let savedTTY: boolean | undefined;
+
+        beforeEach(() => {
+          savedTTY = process.stdout.isTTY;
+          // Force TTY mode so hyperlink() emits escape sequences
+          Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
+        });
+
+        afterEach(() => {
+          Object.defineProperty(process.stdout, 'isTTY', { value: savedTTY, configurable: true });
+        });
+
+        it('hyperlink text has same displayWidth as plain text', () => {
+          const plain = 'hello';
+          const linked = hyperlink('https://example.com', plain);
+          assert.strictEqual(displayWidth(linked), displayWidth(plain));
+        });
+
+        it('fixedWidth with hyperlinked text produces correct visual width', () => {
+          const linked = hyperlink('https://x.com', 'hi');
+          const fixed = fixedWidth(linked, 10);
+          assert.strictEqual(displayWidth(fixed), 10);
+        });
+
+        it('fixedWidth truncates hyperlinked text correctly', () => {
+          const linked = hyperlink('https://x.com', 'a-very-long-string');
+          const fixed = fixedWidth(linked, 10);
+          assert.strictEqual(displayWidth(fixed), 10);
         });
       });
 
@@ -486,17 +537,18 @@ describe('c', () => {
           repo: 0,
           branch: 0,
           resources: 0,
+          size: 0,
           time: 0,
           visible: new Set(['idName', 'status']),
           totalWidth: 50,
         };
 
-        it('renders humanhash name as dim', () => {
+        it('renders empty name as dim', () => {
           const session = makeSession();
           const line = formatSessionLine(session, layout);
           // dim = \x1b[2m, bold = \x1b[1m
-          assert.ok(line.includes('\x1b[2m'), 'humanhash name should use dim escape code');
-          assert.ok(!line.includes('\x1b[1m'), 'humanhash name should not use bold escape code');
+          assert.ok(line.includes('\x1b[2m'), 'empty name should use dim escape code');
+          assert.ok(!line.includes('\x1b[1m'), 'empty name should not use bold escape code');
         });
 
         it('renders explicit name as whiteBright', () => {

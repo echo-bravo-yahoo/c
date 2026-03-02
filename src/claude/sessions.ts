@@ -16,6 +16,7 @@ export interface ClaudeSession {
   transcriptPath: string;
   historyPath: string;
   modifiedAt: Date;
+  fileSize: number;
 }
 
 /**
@@ -103,6 +104,7 @@ export function listClaudeSessions(): ClaudeSession[] {
         transcriptPath,
         historyPath: fs.existsSync(historyPath) ? historyPath : '',
         modifiedAt: fileStat.mtime,
+        fileSize: fileStat.size,
       });
     }
   }

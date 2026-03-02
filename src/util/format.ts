@@ -4,7 +4,7 @@
 
 import chalk from 'chalk';
 import { Session } from '../store/schema.js';
-import { getClaudeSessionTitles } from '../claude/sessions.js';
+import { getClaudeSessionTitles, getClaudeSession, listClaudeSessions } from '../claude/sessions.js';
 import { getAllSessions } from '../store/index.js';
 import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.js';
 import { getRepoSlug } from '../detection/git.js';
@@ -13,6 +13,15 @@ import { hyperlink } from './hyperlink.js';
 import { computeColumnLayout, ID_FIXED_WIDTH, type ColumnKey, type ColumnLayout } from './layout.js';
 
 const USER_ICON = '󰇘';
+
+/**
+ * Format a file size in bytes to human-readable form
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 /**
  * Abbreviate branch name by replacing username prefix with icon
@@ -108,10 +117,13 @@ export function buildPrefixMap(sessions: Session[], allSessions?: Session[]): Ma
 /**
  * Calculate visual display width of a string
  * Accounts for surrogate pairs (like 󰇘) that have length 2 but width 1
+ * Strips ANSI escape sequences and OSC 8 hyperlink sequences before counting
  */
 export function displayWidth(str: string): number {
+  // Strip OSC 8 hyperlink sequences: \x1b]8;;URL\x1b\\ ... \x1b]8;;\x1b\\
+  const stripped = str.replace(/\x1b\]8;;[^\x1b]*\x1b\\/g, '');
   // Spread handles surrogate pairs correctly (1 visual char = 1 array element)
-  return [...str].length;
+  return [...stripped].length;
 }
 
 /**
@@ -170,7 +182,7 @@ export function buildResourceText(session: Session): string {
 /**
  * Measure max content width per column across all sessions
  */
-export function measureColumns(sessions: Session[]): Map<ColumnKey, number> {
+export function measureColumns(sessions: Session[], sizeMap?: Map<string, number>): Map<ColumnKey, number> {
   const widths = new Map<ColumnKey, number>();
 
   for (const session of sessions) {
@@ -196,6 +208,15 @@ export function measureColumns(sessions: Session[]): Map<ColumnKey, number> {
     // time
     const timeWidth = relativeTime(session.last_active_at).length + 1;
     widths.set('time', Math.max(widths.get('time') ?? 0, timeWidth));
+
+    // size
+    if (sizeMap) {
+      const fileSize = sizeMap.get(session.id);
+      if (fileSize != null) {
+        const sizeWidth = formatFileSize(fileSize).length + 1;
+        widths.set('size', Math.max(widths.get('size') ?? 0, sizeWidth));
+      }
+    }
 
     // resources
     const resourceWidth = displayWidth(buildResourceText(session)) + 1;
@@ -242,7 +263,7 @@ export function getBranchDisplay(session: Session): { text: string; color: 'cyan
 /**
  * Format a session as a single line for list views
  */
-export function formatSessionLine(session: Session, layout: ColumnLayout, depth = 0, prefixMap?: Map<string, number>, repoSlug?: string): string {
+export function formatSessionLine(session: Session, layout: ColumnLayout, depth = 0, prefixMap?: Map<string, number>, repoSlug?: string, sizeMap?: Map<string, number>): string {
   const parts: string[] = [];
 
   // ID column (always visible when idName is visible)
@@ -275,25 +296,23 @@ export function formatSessionLine(session: Session, layout: ColumnLayout, depth 
   // Repo column
   if (layout.visible.has('repo')) {
     const repoName = getRepoName(session.directory);
+    const repoFixed = fixedWidth(repoName, layout.repo);
     const repoText = repoSlug
-      ? hyperlink(`https://github.com/${repoSlug}`, repoName)
-      : repoName;
-    parts.push(chalk.blue(fixedWidth(repoText, layout.repo)));
+      ? hyperlink(`https://github.com/${repoSlug}`, repoFixed)
+      : repoFixed;
+    parts.push(chalk.blue(repoText));
   }
 
   // Worktree/Branch column
   if (layout.visible.has('branch')) {
     const branch = getBranchDisplay(session);
-    let branchText = branch.text;
-    if (branchText && repoSlug && session.resources.branch) {
-      branchText = hyperlink(
-        `https://github.com/${repoSlug}/tree/${session.resources.branch}`,
-        branchText
-      );
-    }
+    const branchFixed = fixedWidth(branch.text, layout.branch);
+    const branchFormatted = (branch.text && repoSlug && session.resources.branch)
+      ? hyperlink(`https://github.com/${repoSlug}/tree/${session.resources.branch}`, branchFixed)
+      : branchFixed;
     const branchCol = branch.color === 'dim'
-      ? chalk.dim(fixedWidth(branchText, layout.branch))
-      : chalk[branch.color](fixedWidth(branchText, layout.branch));
+      ? chalk.dim(branchFormatted)
+      : chalk[branch.color](branchFormatted);
     parts.push(branchCol);
   }
 
@@ -322,6 +341,17 @@ export function formatSessionLine(session: Session, layout: ColumnLayout, depth 
     parts.push(resourceCol);
   }
 
+  // Size column
+  if (layout.visible.has('size') && sizeMap) {
+    const fileSize = sizeMap.get(session.id);
+    if (fileSize != null) {
+      const sizeText = formatFileSize(fileSize);
+      parts.push(chalk.dim(fixedWidth(sizeText, layout.size)));
+    } else {
+      parts.push(fixedWidth('', layout.size));
+    }
+  }
+
   // Time column
   if (layout.visible.has('time')) {
     parts.push(chalk.dim(relativeTime(session.last_active_at)));
@@ -348,6 +378,10 @@ export function formatSessionDetails(session: Session): string {
   lines.push(chalk.dim('  Pane: ') + (session.resources.tmux_pane ?? '–'));
   lines.push(chalk.dim('  Created: ') + session.created_at.toLocaleString());
   lines.push(chalk.dim('  Last active: ') + session.last_active_at.toLocaleString());
+  const claudeSession = getClaudeSession(session.id);
+  if (claudeSession) {
+    lines.push(chalk.dim('  Session size: ') + formatFileSize(claudeSession.fileSize));
+  }
 
   // Resources
   lines.push('');
@@ -522,8 +556,15 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
   // Reorder so children appear under their parents, with gap markers
   const ordered = orderSessionsWithChildren(sessions);
 
+  // Build size map from Claude's session files
+  const sizeMap = new Map<string, number>();
+  const claudeSessions = listClaudeSessions();
+  for (const cs of claudeSessions) {
+    sizeMap.set(cs.id, cs.fileSize);
+  }
+
   // Measure content and compute layout, accounting for nesting depth
-  const contentWidths = measureColumns(sessions);
+  const contentWidths = measureColumns(sessions, sizeMap);
   for (const row of ordered) {
     if (row.type !== 'session') continue;
     const nameLen = displayWidth(getDisplayName(row.session));
@@ -549,6 +590,9 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
   if (layout.visible.has('resources')) {
     headerParts.push(fixedWidth('Resources', layout.resources));
   }
+  if (layout.visible.has('size')) {
+    headerParts.push(fixedWidth('Size', layout.size));
+  }
   if (layout.visible.has('time')) {
     headerParts.push('Last Active');
   }
@@ -567,7 +611,7 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
     if (row.type === 'gap') {
       console.log(formatGapLine(row.count, row.depth));
     } else if (row.type === 'session') {
-      console.log(formatSessionLine(row.session, layout, row.depth, prefixMap, getSlug(row.session.directory)));
+      console.log(formatSessionLine(row.session, layout, row.depth, prefixMap, getSlug(row.session.directory), sizeMap));
     }
   }
 }

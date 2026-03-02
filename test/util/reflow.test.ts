@@ -73,13 +73,13 @@ describe('c', () => {
       }
 
       describe('column visibility at various widths', () => {
-        it('shows all 6 columns at 200 width', () => {
+        it('shows all 7 columns at 200 width', () => {
           const sessions = makeSessions();
           const layout = layoutAt(sessions, 200);
 
-          assert.strictEqual(layout.visible.size, 6);
+          assert.strictEqual(layout.visible.size, 7);
           const line = renderLine(sessions[0], sessions, 200);
-          // Should contain all parts: ID, name, status, repo, branch, time
+          // Should contain all parts: ID, name, status, repo, branch, size, time
           assert.ok(line.includes('test-uui'), 'has ID');
           assert.ok(line.includes('auth-refactor'), 'has name');
           assert.ok(line.includes('busy'), 'has status');
@@ -90,12 +90,12 @@ describe('c', () => {
 
         it('drops resources first at narrower width', () => {
           const sessions = makeSessions();
-          // Just below the point where all 6 columns fit at minimums
+          // Just below the point where all 7 columns fit at minimums
           const narrow = ALL_MIN + GUTTER - 1;
           const layout = layoutAt(sessions, narrow);
 
           assert.ok(!layout.visible.has('resources'), 'resources dropped');
-          assert.strictEqual(layout.visible.size, 5);
+          assert.strictEqual(layout.visible.size, 6);
         });
 
         it('drops time and resources at very narrow width', () => {
@@ -108,6 +108,7 @@ describe('c', () => {
           assert.ok(layout.visible.has('repo'));
           assert.ok(layout.visible.has('branch'));
           assert.ok(!layout.visible.has('time'), 'time dropped');
+          assert.ok(!layout.visible.has('size'), 'size dropped');
           assert.ok(!layout.visible.has('resources'), 'resources dropped');
         });
 
