@@ -108,7 +108,6 @@ function parseSession(raw: Record<string, unknown>): Session {
   const session: Session = {
     id: String(raw.id ?? ''),
     name: String(raw.name ?? ''),
-    humanhash: String(raw.humanhash ?? ''),
     directory: String(raw.directory ?? ''),
     project_key: String(raw.project_key ?? ''),
     created_at: parseDate(raw.created_at),
@@ -220,7 +219,7 @@ export function getSession(idOrPrefix: string): Session | undefined {
 
   // Prefix match
   const matches = Object.values(index.sessions).filter(
-    (s) => s.id.startsWith(idOrPrefix) || s.humanhash.startsWith(idOrPrefix)
+    (s) => s.id.startsWith(idOrPrefix)
   );
 
   if (matches.length === 1) {
@@ -239,13 +238,13 @@ export function findSessionsByName(name: string): Session[] {
 }
 
 /**
- * Find all sessions matching a prefix (by ID or humanhash)
+ * Find all sessions matching a prefix (by ID)
  */
 export function findSessions(prefix: string): Session[] {
   const index = readIndex();
   if (index.sessions[prefix]) return [index.sessions[prefix]];
   return Object.values(index.sessions).filter(
-    (s) => s.id.startsWith(prefix) || s.humanhash.startsWith(prefix)
+    (s) => s.id.startsWith(prefix)
   );
 }
 

@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import { updateIndex } from '../store/index.js';
 import { createSession } from '../store/schema.js';
 import { encodeProjectKey } from '../claude/sessions.js';
-import { generateHumanhash } from '../util/humanhash.js';
+import { shortId } from '../util/format.js';
 import { execReplace, setTmuxPaneTitle } from '../util/exec.js';
 import { getGitRoot } from '../detection/git.js';
 
@@ -29,9 +29,8 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   const sessionId = randomUUID();
   const cwd = process.cwd();
   const projectKey = encodeProjectKey(cwd);
-  const humanhash = generateHumanhash(sessionId);
 
-  const session = createSession(sessionId, cwd, projectKey, humanhash);
+  const session = createSession(sessionId, cwd, projectKey);
   if (name) session.name = name;
 
   // Populate resources
@@ -68,7 +67,7 @@ export async function newCommand(name: string | undefined, options: NewOptions):
     }
   });
 
-  const displayName = name || humanhash;
+  const displayName = name || shortId(sessionId);
   console.log(chalk.dim(`Starting session: ${displayName}.`));
   setTmuxPaneTitle(displayName);
 

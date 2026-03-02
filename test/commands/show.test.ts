@@ -46,13 +46,6 @@ describe('c', () => {
           assert.ok(cli.console.logs.some(l => l.includes('12345678-uuid')));
         });
 
-        it('displays humanhash', async () => {
-          await cli.seed({ id: 'abc12345', humanhash: 'alpha-bravo-charlie' });
-          await cli.run('show', 'abc12345');
-
-          assert.ok(cli.console.logs.some(l => l.includes('alpha-bravo-charlie')));
-        });
-
         it('displays state', async () => {
           await cli.seed({ id: 'abc12345', state: 'busy' });
           await cli.run('show', 'abc12345');

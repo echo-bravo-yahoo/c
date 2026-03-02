@@ -18,26 +18,20 @@ describe('c', () => {
       describe('session creation', () => {
         it('assigns UUID as session ID', () => {
           const id = '12345678-1234-1234-1234-123456789012';
-          const session = createSession(id, '/home/user/project', '-home-user-project', 'alpha-bravo');
+          const session = createSession(id, '/home/user/project', '-home-user-project');
 
           assert.strictEqual(session.id, id);
           assert.ok(/^[0-9a-f-]{36}$/.test(session.id));
         });
 
-        it('assigns humanhash', () => {
-          const session = createSession('uuid', '/path', 'key', 'alpha-bravo-charlie-delta');
-
-          assert.strictEqual(session.humanhash, 'alpha-bravo-charlie-delta');
-        });
-
         it('sets directory from cwd', () => {
-          const session = createSession('uuid', '/home/user/project', 'key', 'hash');
+          const session = createSession('uuid', '/home/user/project', 'key');
 
           assert.strictEqual(session.directory, '/home/user/project');
         });
 
         it('applies provided name', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const name = 'My Custom Session';
           session.name = name;
 
@@ -47,7 +41,7 @@ describe('c', () => {
 
       describe('resource linking', () => {
         it('attaches --jira', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const options: NewOptions = { jira: 'MAC-123' };
 
           if (options.jira) session.resources.jira = options.jira;
@@ -56,7 +50,7 @@ describe('c', () => {
         });
 
         it('attaches --pr', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const options: NewOptions = { pr: 'https://github.com/o/r/pull/42' };
 
           if (options.pr) session.resources.pr = options.pr;
@@ -65,7 +59,7 @@ describe('c', () => {
         });
 
         it('attaches --branch', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const options: NewOptions = { branch: 'feature/new-thing' };
 
           if (options.branch) session.resources.branch = options.branch;
@@ -74,7 +68,7 @@ describe('c', () => {
         });
 
         it('attaches multiple resources', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const options: NewOptions = {
             jira: 'MAC-123',
             pr: 'https://github.com/o/r/pull/42',
@@ -93,7 +87,7 @@ describe('c', () => {
 
       describe('meta parsing', () => {
         it('parses --meta key=value', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const options: NewOptions = { meta: ['priority=high'] };
 
           if (options.meta) {
@@ -109,7 +103,7 @@ describe('c', () => {
         });
 
         it('parses multiple --meta options', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const options: NewOptions = { meta: ['priority=high', 'team=backend'] };
 
           if (options.meta) {
@@ -126,7 +120,7 @@ describe('c', () => {
         });
 
         it('handles value with equals sign', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const options: NewOptions = { meta: ['url=https://example.com?foo=bar'] };
 
           if (options.meta) {
@@ -142,7 +136,7 @@ describe('c', () => {
         });
 
         it('stores --note in meta', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const options: NewOptions = { note: 'This is a test note' };
 
           if (options.note) session.meta.note = options.note;
@@ -153,13 +147,13 @@ describe('c', () => {
 
       describe('session defaults', () => {
         it('defaults to busy', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
 
           assert.strictEqual(session.state, 'busy');
         });
 
         it('defaults to unnamed', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
 
           assert.strictEqual(session.name, '');
         });
@@ -167,7 +161,7 @@ describe('c', () => {
 
       describe('worktree integration', () => {
         it('records worktree name', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const name = 'my-feature';
 
           if (name) session.resources.worktree = name;
@@ -176,7 +170,7 @@ describe('c', () => {
         });
 
         it('omits worktree when undefined', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const name: string | undefined = undefined;
 
           if (name) session.resources.worktree = name;
@@ -185,7 +179,7 @@ describe('c', () => {
         });
 
         it('omits worktree when empty', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const name = '';
 
           if (name) session.resources.worktree = name;
@@ -194,7 +188,7 @@ describe('c', () => {
         });
 
         it('uses session name as worktree name', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const name = 'feature/cool-thing';
           session.name = name;
 
@@ -204,7 +198,7 @@ describe('c', () => {
         });
 
         it('allows special characters in worktree name', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const name = 'feature/MAC-123-add-thing';
 
           if (name) session.resources.worktree = name;
@@ -213,7 +207,7 @@ describe('c', () => {
         });
 
         it('allows spaces in worktree name', () => {
-          const session = createSession('uuid', '/path', 'key', 'hash');
+          const session = createSession('uuid', '/path', 'key');
           const name = 'my cool feature';
 
           if (name) session.resources.worktree = name;

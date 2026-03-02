@@ -48,7 +48,7 @@ export function relativeTime(date: Date): string {
 
 /**
  * Get display name for a session
- * Priority: Claude's customTitle > c's name > Claude's summary > humanhash
+ * Priority: Claude's customTitle > c's name > Claude's summary
  */
 export function getDisplayName(session: Session): string {
   // Check Claude's session index for titles
@@ -63,8 +63,7 @@ export function getDisplayName(session: Session): string {
   // summary = Claude-generated summary
   if (summary) return summary;
 
-  // fallback to humanhash
-  return session.humanhash;
+  return '';
 }
 
 /**
@@ -260,9 +259,9 @@ export function formatSessionLine(session: Session, layout: ColumnLayout, depth 
     // Name column (shrink by indent to maintain alignment)
     const name = getDisplayName(session);
     const nameWidth = layout.name - (depth * 2);
-    const nameCol = name === session.humanhash
-      ? chalk.dim(fixedWidth(name, nameWidth))
-      : chalk.whiteBright(fixedWidth(name, nameWidth));
+    const nameCol = name
+      ? chalk.whiteBright(fixedWidth(name, nameWidth))
+      : chalk.dim(fixedWidth(name, nameWidth));
     parts.push(nameCol);
   }
 
@@ -339,7 +338,6 @@ export function formatSessionDetails(session: Session): string {
 
   lines.push(chalk.bold('Session: ') + getDisplayName(session));
   lines.push(chalk.dim('  ID: ') + session.id);
-  lines.push(chalk.dim('  Humanhash: ') + session.humanhash);
   if (session.parent_session_id) {
     lines.push(chalk.dim('  Parent: ') + chalk.cyan(session.parent_session_id.slice(0, 8)));
   }

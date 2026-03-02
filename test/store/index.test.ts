@@ -106,7 +106,6 @@ describe('c', () => {
           const session = createTestSession({
             id: 'abc-123',
             name: 'My Session',
-            humanhash: 'alpha-bravo',
             directory: '/home/user/project',
             project_key: '-home-user-project',
             state: 'waiting',
@@ -139,7 +138,6 @@ describe('c', () => {
           const s = sessions['abc-123'];
 
           assert.strictEqual(s.name, 'My Session');
-          assert.strictEqual(s.humanhash, 'alpha-bravo');
           assert.strictEqual(s.directory, '/home/user/project');
           assert.strictEqual(s.state, 'waiting');
 
@@ -201,17 +199,6 @@ describe('c', () => {
           const matches = sessions.filter(s => s.id.startsWith(prefix));
           assert.strictEqual(matches.length, 1);
           assert.strictEqual(matches[0].id, 'abc-123-full-uuid');
-        });
-
-        it('finds humanhash prefix match', () => {
-          const sessions = [
-            createTestSession({ humanhash: 'alpha-bravo-charlie' }),
-            createTestSession({ humanhash: 'delta-echo-foxtrot' }),
-          ];
-
-          const prefix = 'alpha';
-          const matches = sessions.filter(s => s.humanhash.startsWith(prefix));
-          assert.strictEqual(matches.length, 1);
         });
 
         it('returns undefined for ambiguous prefix', () => {

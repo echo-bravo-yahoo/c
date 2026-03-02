@@ -400,7 +400,6 @@ describe('c', () => {
           return {
             id: 'test-id',
             name: '',
-            humanhash: 'test-hash',
             directory: '/Users/testuser/workspace/myproject',
             project_key: 'key',
             created_at: new Date(),
@@ -467,7 +466,6 @@ describe('c', () => {
           return {
             id: 'test-id-00-0000-0000-000000000000',
             name: '',
-            humanhash: 'robin-happy-alaska-vermont',
             directory: '/tmp/test',
             project_key: 'key',
             created_at: new Date(),
@@ -567,7 +565,6 @@ describe('c', () => {
           return {
             id: overrides.id ?? 'test-id',
             name: '',
-            humanhash: 'test-hash',
             directory: '/tmp/test',
             project_key: 'key',
             created_at: new Date(),

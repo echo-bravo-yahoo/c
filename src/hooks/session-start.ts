@@ -4,7 +4,6 @@
 
 import { updateIndex, getSession, getSessions } from '../store/index.js';
 import { createSession } from '../store/schema.js';
-import { generateHumanhash } from '../util/humanhash.js';
 import { getCurrentBranch, getWorktreeInfo, getRepoSlug, listWorktrees } from '../detection/git.js';
 import { extractJiraFromBranch } from '../detection/jira.js';
 import { encodeProjectKey, getPlanExecutionInfo, findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.js';
@@ -119,10 +118,9 @@ export async function handleSessionStart(
 
   // Create new session
   const now = new Date();
-  const humanhash = generateHumanhash(sessionId);
   const projectKey = encodeProjectKey(cwd);
 
-  const session = createSession(sessionId, cwd, projectKey, humanhash, now);
+  const session = createSession(sessionId, cwd, projectKey, now);
 
   // Link to parent session if this is a plan execution
   if (parentSessionId) {

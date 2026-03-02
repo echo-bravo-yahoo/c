@@ -54,13 +54,11 @@ export function indexToTOML(index: IndexFile): string {
     lines.push(`[sessions.${JSON.stringify(id)}]`);
     lines.push(`id = "${session.id}"`);
     lines.push(`name = "${session.name}"`);
-    lines.push(`humanhash = "${session.humanhash}"`);
     lines.push(`directory = "${session.directory}"`);
     lines.push(`project_key = "${session.project_key}"`);
     lines.push(`created_at = ${session.created_at.toISOString()}`);
     lines.push(`last_active_at = ${session.last_active_at.toISOString()}`);
-    lines.push(`status = "${session.status}"`);
-    lines.push(`waiting = ${session.waiting}`);
+    lines.push(`state = "${session.state}"`);
     lines.push('');
   }
 

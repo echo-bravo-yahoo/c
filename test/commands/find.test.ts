@@ -28,13 +28,6 @@ describe('c', () => {
           assert.ok(cli.console.logs.some(l => l.includes('Important')));
         });
 
-        it('matches humanhash', async () => {
-          await cli.seed({ id: 'sess1', humanhash: 'alpha-bravo-charlie' });
-          await cli.run('find', 'bravo');
-
-          assert.ok(cli.console.logs.some(l => l.includes('bravo')));
-        });
-
         it('matches directory', async () => {
           await cli.seed({ id: 'sess1', directory: '/home/user/myproject' });
           await cli.run('find', 'myproject');

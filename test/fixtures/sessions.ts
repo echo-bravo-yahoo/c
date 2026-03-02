@@ -7,7 +7,6 @@ import type { Session, SessionResources, SessionMeta } from '../../src/store/sch
 export interface SessionOverrides {
   id?: string;
   name?: string;
-  humanhash?: string;
   directory?: string;
   project_key?: string;
   created_at?: Date;
@@ -32,7 +31,6 @@ export function createTestSession(overrides: SessionOverrides = {}): Session {
   return {
     id,
     name: overrides.name ?? '',
-    humanhash: overrides.humanhash ?? `word-word-word-${sessionCounter}`,
     directory: overrides.directory ?? '/home/test/project',
     project_key: overrides.project_key ?? '-home-test-project',
     created_at: overrides.created_at ?? now,

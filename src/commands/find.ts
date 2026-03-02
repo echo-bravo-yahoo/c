@@ -20,7 +20,6 @@ function matchSession(session: Session, query: string): boolean {
   const fields = [
     session.id,
     session.name,
-    session.humanhash,
     session.directory,
     session.resources.branch,
     session.resources.pr,

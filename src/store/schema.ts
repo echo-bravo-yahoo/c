@@ -28,7 +28,6 @@ export interface SessionMeta {
 export interface Session {
   id: string;
   name: string;
-  humanhash: string;
   directory: string;
   project_key: string;
   created_at: Date;
@@ -62,13 +61,11 @@ export function createSession(
   id: string,
   directory: string,
   projectKey: string,
-  humanhash: string,
   createdAt: Date = new Date()
 ): Session {
   return {
     id,
     name: '',
-    humanhash,
     directory,
     project_key: projectKey,
     created_at: createdAt,

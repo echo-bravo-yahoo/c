@@ -89,7 +89,7 @@ describe('c', () => {
           });
 
           const shortId = session.id.slice(0, 8);
-          const name = session.name || session.humanhash;
+          const name = session.name || '';
           const status = session.state;
           const branch = session.resources.branch ?? '';
 
@@ -101,14 +101,13 @@ describe('c', () => {
           assert.ok(line.includes('main'));
         });
 
-        it('falls back to humanhash', () => {
+        it('returns empty string when no name', () => {
           const session = createTestSession({
             name: '',
-            humanhash: 'alpha-bravo',
           });
 
-          const name = session.name || session.humanhash;
-          assert.strictEqual(name, 'alpha-bravo');
+          const name = session.name || '';
+          assert.strictEqual(name, '');
         });
 
         it('shows waiting state', () => {

@@ -47,7 +47,7 @@ const SUBCOMMANDS = [
 const LIST_FLAGS = ['--all', '--done', '--archived', '--dir', '--min-width', '--max-width'];
 
 /**
- * Get session completions (short IDs + humanhashes)
+ * Get session completions (short IDs + names)
  */
 function getSessionCompletions(): string[] {
   try {
@@ -55,8 +55,8 @@ function getSessionCompletions(): string[] {
     const completions: string[] = [];
     for (const session of Object.values(index.sessions)) {
       completions.push(session.id.slice(0, 8));
-      if (session.humanhash) {
-        completions.push(session.humanhash);
+      if (session.name) {
+        completions.push(session.name);
       }
     }
     return completions;
