@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Wrapper that mimics `c` for demo screenshots.
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_DIR"
+
+case "$*" in
+  "list --all") cmd=list-all ;;
+  list|"")      cmd=list ;;
+  show*)        cmd=show ;;
+  new*)         cmd=new ;;
+  resume*)      cmd=resume ;;
+  archive*)     cmd=archive ;;
+  *)            cmd=list ;;
+esac
+
+C_HOME=/tmp/c-demo exec npx tsx scripts/demo-seed.ts "$cmd" 2>/dev/null
