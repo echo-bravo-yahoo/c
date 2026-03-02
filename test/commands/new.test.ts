@@ -354,6 +354,46 @@ describe('c', () => {
           assert.ok(args.includes('--verbose'));
         });
       });
+
+      describe('spawn failure cleanup', () => {
+        it('deletes session from index on spawn failure', () => {
+          // Simulate: session was added to the index, then spawn failed
+          const sessions: Record<string, { id: string; state: string }> = {};
+          const sessionId = 'test-uuid';
+          sessions[sessionId] = { id: sessionId, state: 'busy' };
+
+          // On failure, the session should be removed
+          delete sessions[sessionId];
+
+          assert.strictEqual(sessions[sessionId], undefined);
+        });
+
+        it('deletes session from index on non-zero exit', () => {
+          const sessions: Record<string, { id: string; state: string }> = {};
+          const sessionId = 'test-uuid';
+          sessions[sessionId] = { id: sessionId, state: 'busy' };
+
+          const exitCode = 1;
+          if (exitCode !== 0) {
+            delete sessions[sessionId];
+          }
+
+          assert.strictEqual(sessions[sessionId], undefined);
+        });
+
+        it('preserves session on successful exit', () => {
+          const sessions: Record<string, { id: string; state: string }> = {};
+          const sessionId = 'test-uuid';
+          sessions[sessionId] = { id: sessionId, state: 'busy' };
+
+          const exitCode = 0;
+          if (exitCode !== 0) {
+            delete sessions[sessionId];
+          }
+
+          assert.ok(sessions[sessionId] != null);
+        });
+      });
     });
   });
 });

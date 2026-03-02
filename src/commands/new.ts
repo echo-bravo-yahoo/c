@@ -87,7 +87,15 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(chalk.red(`Failed to launch Claude: ${msg}.`));
+    await updateIndex((index) => {
+      delete index.sessions[sessionId];
+    });
     process.exit(1);
+  }
+  if (exitCode !== 0) {
+    await updateIndex((index) => {
+      delete index.sessions[sessionId];
+    });
   }
   process.exit(exitCode);
 }
