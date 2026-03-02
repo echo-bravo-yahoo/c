@@ -123,7 +123,6 @@ export function createProgram(): Command {
     .option('--effort <level>', 'Effort level (low, medium, high)')
     .option('--agent <agent>', 'Named agent')
     .option('--fork-session', 'Create a new session ID on resume')
-    .option('--worktree [name]', 'Create or reuse a worktree')
     .allowUnknownOption()
     .action(async (id, options) => {
       const passthroughArgs = parsePassthroughArgs();
@@ -133,7 +132,6 @@ export function createProgram(): Command {
         effort: options.effort,
         agent: options.agent,
         forkSession: options.forkSession,
-        worktree: options.worktree,
         passthroughArgs: passthroughArgs.length ? passthroughArgs : undefined,
       });
     });

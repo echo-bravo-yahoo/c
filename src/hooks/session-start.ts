@@ -71,6 +71,10 @@ export async function handleSessionStart(
         );
         if (wt) {
           branchCwd = wt.path;
+          // Update directory to worktree path so resume uses the correct CWD
+          // (Claude stores the transcript under the worktree's project key)
+          s.directory = wt.path;
+          s.project_key = encodeProjectKey(wt.path);
           // Also set the branch directly from worktree info
           if (!s.resources.branch) {
             s.resources.branch = wt.branch;

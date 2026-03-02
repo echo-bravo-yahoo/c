@@ -2,13 +2,13 @@
  * c resume <id> - resume a Claude session
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, cpSync } from 'node:fs';
+import * as path from 'node:path';
 import chalk from 'chalk';
 import { getSession, findSessions, findSessionsByName, updateIndex } from '../store/index.js';
-import { getClaudeSession, findClaudeSessionIdsByTitle } from '../claude/sessions.js';
-import { spawnInteractive, setTmuxPaneTitle } from '../util/exec.js';
+import { getClaudeSession, findClaudeSessionIdsByTitle, encodeProjectKey, PROJECTS_DIR } from '../claude/sessions.js';
+import { exec, spawnInteractive, setTmuxPaneTitle } from '../util/exec.js';
 import { getDisplayName, shortId, highlightId } from '../util/format.js';
-import { getGitRoot } from '../detection/git.js';
 
 export interface ResumeOptions {
   model?: string;
@@ -16,7 +16,6 @@ export interface ResumeOptions {
   effort?: string;
   agent?: string;
   forkSession?: boolean;
-  worktree?: string | true;
   passthroughArgs?: string[];
 }
 
@@ -85,17 +84,27 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
     const repoMatch = session.directory.match(/^(.+?)\/\.(?:claude\/)?worktrees\//);
     if (repoMatch && existsSync(repoMatch[1])) {
       const repoRoot = repoMatch[1];
-      console.error(chalk.yellow(`Worktree directory no longer exists: ${session.directory}.`));
-      console.error(chalk.dim(`Resuming from ${repoRoot} instead.`));
-      await updateIndex((index) => {
-        const s = index.sessions[session!.id];
-        if (s) {
-          s.directory = repoRoot;
-          delete s.resources.worktree;
-        }
-      });
-      session.directory = repoRoot;
-      delete session.resources.worktree;
+      const branch = session.resources.branch;
+
+      // Try to recreate the worktree from the session's branch
+      if (branch && recreateWorktree(repoRoot, session.directory, branch)) {
+        console.error(chalk.yellow(`Worktree was deleted. Recreated from branch ${chalk.cyan(branch)}.`));
+      } else {
+        // Branch gone or worktree add failed — fall back to repo root
+        console.error(chalk.yellow(`Worktree directory no longer exists: ${session.directory}.`));
+        console.error(chalk.dim(`Resuming from ${repoRoot} instead.`));
+        relocateTranscript(claudeSession, repoRoot);
+        await updateIndex((index) => {
+          const s = index.sessions[session!.id];
+          if (s) {
+            s.directory = repoRoot;
+            s.project_key = encodeProjectKey(repoRoot);
+            delete s.resources.worktree;
+          }
+        });
+        session.directory = repoRoot;
+        delete session.resources.worktree;
+      }
     } else {
       await updateIndex((index) => {
         const s = index.sessions[session!.id];
@@ -110,6 +119,47 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
       process.exit(1);
     }
   }
+
+  // Handle legacy worktree sessions where directory was never updated to the
+  // worktree path (pre-fix sessions). The transcript lives under the worktree's
+  // project key, but session.directory points to the repo root.
+  // Recreate the worktree so Claude resumes with the correct code on disk.
+  if (session.resources.worktree && session.resources.branch) {
+    const worktreeName = session.resources.worktree;
+    const branch = session.resources.branch;
+    const worktreePath = path.join(session.directory, '.claude', 'worktrees', worktreeName);
+
+    if (!existsSync(worktreePath) && recreateWorktree(session.directory, worktreePath, branch)) {
+      console.error(chalk.yellow(`Worktree was deleted. Recreated from branch ${chalk.cyan(branch)}.`));
+      await updateIndex((index) => {
+        const s = index.sessions[session!.id];
+        if (s) {
+          s.directory = worktreePath;
+          s.project_key = encodeProjectKey(worktreePath);
+        }
+      });
+      session.directory = worktreePath;
+    } else if (existsSync(worktreePath)) {
+      // Worktree exists but directory wasn't updated — fix it
+      await updateIndex((index) => {
+        const s = index.sessions[session!.id];
+        if (s) {
+          s.directory = worktreePath;
+          s.project_key = encodeProjectKey(worktreePath);
+        }
+      });
+      session.directory = worktreePath;
+    }
+  }
+
+  // Ensure transcript is in the project directory matching session.directory.
+  // Worktree sessions may have transcripts under the worktree's project key
+  // while session.directory points to the repo root.
+  relocateTranscript(claudeSession, session.directory);
+
+  // Save previous state for rollback on spawn failure
+  const prevState = session.state;
+  const prevPid = session.pid;
 
   // Store PID before exec replaces this process
   await updateIndex((index) => {
@@ -131,21 +181,6 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
   if (options.effort) resumeArgs.push('--effort', options.effort);
   if (options.agent) resumeArgs.push('--agent', options.agent);
   if (options.forkSession) resumeArgs.push('--fork-session');
-  if (options.worktree) {
-    const inGitRepo = !!getGitRoot(session.directory);
-    if (inGitRepo) {
-      const wtName = typeof options.worktree === 'string'
-        ? options.worktree
-        : session.resources.worktree;
-      if (wtName) {
-        resumeArgs.push('--worktree', wtName);
-      } else {
-        resumeArgs.push('--worktree');
-      }
-    } else {
-      console.log(chalk.dim('Not in a git repository. Skipping worktree creation.'));
-    }
-  }
   if (options.passthroughArgs) resumeArgs.push(...options.passthroughArgs);
 
   let exitCode: number;
@@ -157,9 +192,12 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
     await updateIndex((index) => {
       const s = index.sessions[session!.id];
       if (s) {
-        s.state = 'archived';
-        s.last_active_at = new Date();
-        delete s.pid;
+        s.state = prevState;
+        if (prevPid != null) {
+          s.pid = prevPid;
+        } else {
+          delete s.pid;
+        }
       }
     });
     process.exit(1);
@@ -167,14 +205,63 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
 
   if (exitCode !== 0) {
     await updateIndex((index) => {
-      if (index.sessions[session!.id]) {
-        index.sessions[session!.id].state = 'archived';
-        index.sessions[session!.id].last_active_at = new Date();
-        delete index.sessions[session!.id].pid;
+      const s = index.sessions[session!.id];
+      if (s) {
+        s.state = prevState;
+        if (prevPid != null) {
+          s.pid = prevPid;
+        } else {
+          delete s.pid;
+        }
       }
     });
-    console.error(chalk.dim(`Archived stale session. Run ${chalk.cyan('c new')} to start fresh.`));
   }
 
   process.exit(exitCode);
+}
+
+/**
+ * Recreate a deleted git worktree from the session's branch.
+ * Returns true if the worktree was successfully recreated.
+ */
+function recreateWorktree(repoRoot: string, worktreePath: string, branch: string): boolean {
+  // Verify the branch still exists (outputs SHA on success, '' on failure)
+  if (!exec(`git rev-parse --verify "refs/heads/${branch}"`, { cwd: repoRoot })) return false;
+
+  // git worktree add outputs to stderr; check directory existence after
+  exec(`git worktree add "${worktreePath}" "${branch}"`, { cwd: repoRoot });
+  return existsSync(worktreePath);
+}
+
+/**
+ * Move a Claude transcript from one project directory to another.
+ * Used when a worktree is deleted and the session falls back to the repo root.
+ */
+function relocateTranscript(
+  claudeSession: { id: string; transcriptPath: string; projectKey: string },
+  targetDirectory: string
+): void {
+  const targetProjectKey = encodeProjectKey(targetDirectory);
+  if (claudeSession.projectKey === targetProjectKey) return;
+
+  const targetProjectDir = path.join(PROJECTS_DIR, targetProjectKey);
+  const targetTranscript = path.join(targetProjectDir, `${claudeSession.id}.jsonl`);
+
+  if (existsSync(targetTranscript)) return;
+
+  try {
+    mkdirSync(targetProjectDir, { recursive: true });
+
+    // Move transcript file
+    renameSync(claudeSession.transcriptPath, targetTranscript);
+
+    // Move companion directory (contains history.jsonl) if it exists
+    const sourceCompanionDir = path.join(path.dirname(claudeSession.transcriptPath), claudeSession.id);
+    const targetCompanionDir = path.join(targetProjectDir, claudeSession.id);
+    if (existsSync(sourceCompanionDir)) {
+      cpSync(sourceCompanionDir, targetCompanionDir, { recursive: true });
+    }
+  } catch {
+    // Non-fatal — resume will still attempt to launch
+  }
 }
