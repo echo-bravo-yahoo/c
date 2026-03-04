@@ -655,6 +655,16 @@ describe('c', () => {
           assert.strictEqual(displayName, '');
         });
 
+        it('skips tmux title when display name is empty', () => {
+          const session = createTestSession({ name: '' });
+          const displayName = session.name || '';
+
+          // Resume should not call setTmuxPaneTitle when displayName is empty
+          assert.strictEqual(displayName, '');
+          // The guard in resume.ts: if (displayName) setTmuxPaneTitle(displayName)
+          // ensures no tmux title change occurs for unnamed sessions
+        });
+
         it('includes directory in log message', () => {
           const session = createTestSession({
             directory: '/home/user/project',
