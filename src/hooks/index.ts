@@ -8,6 +8,7 @@ import { handleNotificationWaiting } from './notification.js';
 import { handleUserPrompt } from './user-prompt.js';
 import { handlePostBash } from './post-bash.js';
 import { handleStop } from './stop.js';
+import { debugLog } from '../util/debug.js';
 
 export interface HookInput {
   session_id: string;
@@ -67,7 +68,9 @@ async function readStdin(): Promise<HookInput | null> {
  * Main hook handler
  */
 export async function handleHook(event: string): Promise<void> {
+  debugLog(`[hook] handleHook(${event}) invoked — C_DEBUG=${process.env.C_DEBUG} pid=${process.pid}`);
   const input = await readStdin();
+  debugLog(`[hook] handleHook(${event}) stdin parsed — sessionId=${input?.session_id}`);
 
   if (!input) {
     // Some hooks may be called without stdin

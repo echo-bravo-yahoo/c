@@ -101,6 +101,13 @@ mock.module(resolve('src/claude/sessions.ts'), {
 const { setupCLI } = await import('../helpers/cli.js');
 ```
 
+### Running individual test files
+Files that use `mock.module()` require the experimental flag:
+```bash
+node --import tsx --experimental-test-module-mocks --test test/commands/file.test.ts
+```
+`npx tsx --test` will fail with `mock.module is not a function`.
+
 ### Commands that spawn external processes
 Commands that exec/spawn (`new`, `resume`, `tmux-pick`) cannot be tested through `parseAsync()`. Test their pre-spawn logic directly as unit tests.
 

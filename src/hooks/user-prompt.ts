@@ -5,6 +5,7 @@
 import { updateIndex, getCurrentSession } from '../store/index.js';
 import { findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.js';
 import { setTmuxPaneTitle } from '../util/exec.js';
+import { debugLog } from '../util/debug.js';
 import type { HookInput } from './index.js';
 
 export async function handleUserPrompt(
@@ -15,6 +16,7 @@ export async function handleUserPrompt(
   const targetId = sessionId ?? getCurrentSession(cwd)?.id;
 
   if (!targetId) {
+    debugLog(`[title] user-prompt: no targetId (sessionId=${sessionId})`);
     return;
   }
 
@@ -23,7 +25,10 @@ export async function handleUserPrompt(
 
   await updateIndex((index) => {
     const s = index.sessions[targetId];
-    if (!s) return;
+    if (!s) {
+      debugLog(`[title] user-prompt: session ${targetId} not in index`);
+      return;
+    }
 
     s.state = 'busy';
     s.last_active_at = new Date();
@@ -33,10 +38,12 @@ export async function handleUserPrompt(
     const customTitle = transcriptPath
       ? getCustomTitleFromTranscriptTail(transcriptPath)
       : null;
+    debugLog(`[title] user-prompt: transcriptPath=${transcriptPath} customTitle=${JSON.stringify(customTitle)} stored=${JSON.stringify(s.meta._custom_title)} pane=${s.resources.tmux_pane}`);
     if (customTitle && customTitle !== s.meta._custom_title) {
       s.meta._custom_title = customTitle;
       newTitle = customTitle;
       pane = s.resources.tmux_pane;
+      debugLog(`[title] user-prompt: title changed → ${JSON.stringify(newTitle)}`);
     }
   });
 

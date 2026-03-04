@@ -7,17 +7,19 @@ import { createSession } from '../store/schema.js';
 import { getCurrentBranch, getWorktreeInfo, getRepoSlug, listWorktrees } from '../detection/git.js';
 import { extractJiraFromBranch } from '../detection/jira.js';
 import { encodeProjectKey, getPlanExecutionInfo, findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.js';
+import { setTmuxPaneTitle } from '../util/exec.js';
 import { writeStatusCache } from '../store/status-cache.js';
 import type { StatusCacheData } from '../store/status-cache.js';
+import { debugLog } from '../util/debug.js';
 import type { HookInput } from './index.js';
 
 export async function handleSessionStart(
   sessionId: string | undefined,
   cwd: string,
-  input: HookInput | null
+  _input: HookInput | null
 ): Promise<void> {
   if (!sessionId) {
-    // Cannot register without session ID
+    debugLog(`[title] session-start: no sessionId`);
     return;
   }
 
@@ -26,6 +28,7 @@ export async function handleSessionStart(
   // the real ID — skip persisting the transient ID to avoid phantom entries.
   const realSessionId = process.env.C_SESSION_ID;
   if (realSessionId && realSessionId !== sessionId) {
+    debugLog(`[title] session-start: C_SESSION_ID guard — skipping transient session ${sessionId} (real=${realSessionId})`);
     return;
   }
 
@@ -50,9 +53,12 @@ export async function handleSessionStart(
     }
   }
 
+  debugLog(`[title] session-start: sessionId=${sessionId} planTitle=${JSON.stringify(planTitle)} planSlug=${JSON.stringify(planSlug)} parentSessionId=${parentSessionId}`);
+
   // Check if session already exists (e.g., created by `c new`)
   const existing = getSession(sessionId);
   if (existing) {
+    debugLog(`[title] session-start: existing session path`);
     const updatedIndex = await updateIndex((index) => {
       const s = index.sessions[sessionId];
       if (!s) return;
@@ -111,6 +117,7 @@ export async function handleSessionStart(
       if (customTitle) {
         s.meta._custom_title = customTitle;
       }
+      debugLog(`[title] session-start: seeded _custom_title=${JSON.stringify(customTitle)} tmux_pane=${s.resources.tmux_pane}`);
     });
 
     const s = updatedIndex.sessions[sessionId];
@@ -121,6 +128,7 @@ export async function handleSessionStart(
   }
 
   // Create new session
+  debugLog(`[title] session-start: new session path — TMUX_PANE=${process.env.TMUX_PANE ?? 'unset'}`);
   const now = new Date();
   const projectKey = encodeProjectKey(cwd);
 
@@ -131,11 +139,21 @@ export async function handleSessionStart(
     session.parent_session_id = parentSessionId;
   }
 
+  // Store tmux pane for title updates from subsequent hooks
+  if (process.env.TMUX_PANE) {
+    session.resources.tmux_pane = process.env.TMUX_PANE;
+  }
+
   // Use plan title as session name if available, fall back to slug
   if (planTitle) {
     session.name = planTitle;
   } else if (planSlug) {
     session.name = planSlug;
+  }
+
+  // Set tmux pane title for plan child sessions
+  if (session.name) {
+    setTmuxPaneTitle(session.name, session.resources.tmux_pane);
   }
 
   // Detect git info

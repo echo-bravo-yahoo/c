@@ -5,6 +5,7 @@
 import { updateIndex, getCurrentSession } from '../store/index.js';
 import { findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.js';
 import { setTmuxPaneTitle } from '../util/exec.js';
+import { debugLog } from '../util/debug.js';
 import type { HookInput } from './index.js';
 
 export async function handleStop(
@@ -14,12 +15,14 @@ export async function handleStop(
 ): Promise<void> {
   // Don't set idle if this is a continuation from a stop hook
   if (input?.stop_hook_active) {
+    debugLog(`[title] stop: skipped — stop_hook_active`);
     return;
   }
 
   const targetId = sessionId ?? getCurrentSession(cwd)?.id;
 
   if (!targetId) {
+    debugLog(`[title] stop: no targetId (sessionId=${sessionId})`);
     return;
   }
 
@@ -28,7 +31,10 @@ export async function handleStop(
 
   await updateIndex((index) => {
     const s = index.sessions[targetId];
-    if (!s) return;
+    if (!s) {
+      debugLog(`[title] stop: session ${targetId} not in index`);
+      return;
+    }
 
     s.state = 'idle';
     s.last_active_at = new Date();
@@ -39,9 +45,11 @@ export async function handleStop(
     const customTitle = transcriptPath
       ? getCustomTitleFromTranscriptTail(transcriptPath)
       : null;
+    debugLog(`[title] stop: transcriptPath=${transcriptPath} customTitle=${JSON.stringify(customTitle)} stored=${JSON.stringify(s.meta._custom_title)} pane=${pane}`);
     if (customTitle && customTitle !== s.meta._custom_title) {
       s.meta._custom_title = customTitle;
       newTitle = customTitle;
+      debugLog(`[title] stop: title changed → ${JSON.stringify(newTitle)}`);
     }
   });
 

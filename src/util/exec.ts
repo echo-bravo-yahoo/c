@@ -3,6 +3,7 @@
  */
 
 import { execSync, spawn } from 'node:child_process';
+import { debugLog } from './debug.js';
 
 /**
  * Execute a command and return stdout
@@ -29,16 +30,20 @@ export function setTmuxPaneTitle(
   pane?: string,
   execFn: (cmd: string) => void = (cmd) => execSync(cmd, { stdio: 'ignore' })
 ): void {
+  debugLog(`[title] setTmuxPaneTitle(${JSON.stringify(title)}, pane=${pane ?? 'undefined'}) TMUX=${!!process.env.TMUX} TMUX_PANE=${process.env.TMUX_PANE ?? 'unset'}`);
   if (process.env.TMUX) {
     try {
       const escaped = JSON.stringify(title);
       const target = pane || process.env.TMUX_PANE;
       const flag = target ? ` -t ${target}` : '';
+      debugLog(`[title] exec: tmux select-pane${flag} -T ${escaped}`);
       execFn(`tmux select-pane${flag} -T ${escaped}`);
       execFn(`tmux set${flag} -p allow-set-title off`);
     } catch {
       // Ignore errors (e.g., tmux not available)
     }
+  } else {
+    debugLog(`[title] skipped — TMUX not set`);
   }
 }
 
