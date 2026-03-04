@@ -10,6 +10,7 @@ import { encodeProjectKey } from '../claude/sessions.js';
 import { shortId } from '../util/format.js';
 import { execReplace, setTmuxPaneTitle } from '../util/exec.js';
 import { getGitRoot } from '../detection/git.js';
+import { sanitizeWorktreeName } from '../util/sanitize.js';
 
 export interface NewOptions {
   jira?: string;
@@ -40,9 +41,15 @@ export async function newCommand(name: string | undefined, options: NewOptions):
 
   const inGitRepo = !!getGitRoot(cwd);
   const useWorktree = name && !options.noWorktree && inGitRepo;
+  const worktreeName = useWorktree ? sanitizeWorktreeName(name!) : undefined;
+
+  if (useWorktree && !worktreeName) {
+    console.error(chalk.red(`Name "${name}" cannot be used as a worktree name. Use --no-worktree or choose a different name.`));
+    process.exit(1);
+  }
 
   if (useWorktree) {
-    session.resources.worktree = name;
+    session.resources.worktree = worktreeName;
   } else if (name && !options.noWorktree && !inGitRepo) {
     console.log(chalk.dim('Not in a git repository. Skipping worktree creation.'));
   }
@@ -73,7 +80,7 @@ export async function newCommand(name: string | undefined, options: NewOptions):
 
   const args = ['--session-id', sessionId];
   if (useWorktree) {
-    args.push('--worktree', name);
+    args.push('--worktree', worktreeName!);
   }
   if (options.model) args.push('--model', options.model);
   if (options.permissionMode) args.push('--permission-mode', options.permissionMode);

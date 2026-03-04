@@ -6,6 +6,7 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { resetSessionCounter } from '../fixtures/sessions.js';
 import { createSession } from '../../src/store/schema.js';
+import { sanitizeWorktreeName } from '../../src/util/sanitize.js';
 import type { NewOptions } from '../../src/commands/new.js';
 
 describe('c', () => {
@@ -187,32 +188,28 @@ describe('c', () => {
           assert.strictEqual(session.resources.worktree, undefined);
         });
 
-        it('uses session name as worktree name', () => {
+        it('sanitizes worktree name from session name', () => {
           const session = createSession('uuid', '/path', 'key');
-          const name = 'feature/cool-thing';
+          const name = 'my cool feature';
           session.name = name;
+          session.resources.worktree = sanitizeWorktreeName(name);
 
-          if (name) session.resources.worktree = name;
-
-          assert.strictEqual(session.name, session.resources.worktree);
+          assert.strictEqual(session.name, 'my cool feature');
+          assert.strictEqual(session.resources.worktree, 'my-cool-feature');
         });
 
-        it('allows special characters in worktree name', () => {
+        it('preserves valid names through sanitization', () => {
           const session = createSession('uuid', '/path', 'key');
           const name = 'feature/MAC-123-add-thing';
-
-          if (name) session.resources.worktree = name;
+          session.resources.worktree = sanitizeWorktreeName(name);
 
           assert.strictEqual(session.resources.worktree, 'feature/MAC-123-add-thing');
         });
 
-        it('allows spaces in worktree name', () => {
-          const session = createSession('uuid', '/path', 'key');
-          const name = 'my cool feature';
-
-          if (name) session.resources.worktree = name;
-
-          assert.strictEqual(session.resources.worktree, 'my cool feature');
+        it('rejects all-illegal name for worktree', () => {
+          const name = '***';
+          const worktreeName = sanitizeWorktreeName(name);
+          assert.strictEqual(worktreeName, '');
         });
       });
 
@@ -237,7 +234,8 @@ describe('c', () => {
           const args = ['--session-id', sessionId];
           const useWorktree = name && !noWorktree && inGitRepo;
           if (useWorktree) {
-            args.push('--worktree', name);
+            const worktreeName = sanitizeWorktreeName(name);
+            args.push('--worktree', worktreeName);
           }
           if (opts.model) args.push('--model', opts.model);
           if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
