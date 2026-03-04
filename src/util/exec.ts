@@ -69,20 +69,24 @@ export function execReplace(
       cwd: options?.cwd,
     });
 
+    const onSigint = () => child.kill('SIGINT');
+    const onSigterm = () => child.kill('SIGTERM');
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
+
     child.on('error', (err) => {
       if (debug) console.error(`[c:debug] child error: ${err.message}`);
+      process.removeListener('SIGINT', onSigint);
+      process.removeListener('SIGTERM', onSigterm);
       reject(err);
     });
 
     child.on('close', (code) => {
       if (debug) console.error(`[c:debug] child close: code=${code}`);
+      process.removeListener('SIGINT', onSigint);
+      process.removeListener('SIGTERM', onSigterm);
       resolve(code ?? 1);
     });
-
-    const onSigint = () => child.kill('SIGINT');
-    const onSigterm = () => child.kill('SIGTERM');
-    process.on('SIGINT', onSigint);
-    process.on('SIGTERM', onSigterm);
   });
 }
 
@@ -101,12 +105,20 @@ export function spawnInteractive(
       cwd: options?.cwd,
     });
 
-    child.on('error', reject);
-    child.on('close', (code) => resolve(code ?? 1));
-
     const onSigint = () => child.kill('SIGINT');
     const onSigterm = () => child.kill('SIGTERM');
     process.on('SIGINT', onSigint);
     process.on('SIGTERM', onSigterm);
+
+    child.on('error', (err) => {
+      process.removeListener('SIGINT', onSigint);
+      process.removeListener('SIGTERM', onSigterm);
+      reject(err);
+    });
+    child.on('close', (code) => {
+      process.removeListener('SIGINT', onSigint);
+      process.removeListener('SIGTERM', onSigterm);
+      resolve(code ?? 1);
+    });
   });
 }

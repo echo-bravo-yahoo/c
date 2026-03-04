@@ -158,6 +158,13 @@ describe('c', () => {
           const code = await spawnInteractive('node', ['-e', 'process.exit(42)']);
           assert.strictEqual(code, 42);
         });
+
+        it('cleans up signal listeners after child exits', async () => {
+          const before = process.listenerCount('SIGINT');
+          await spawnInteractive('node', ['-e', 'process.exit(0)']);
+          const after = process.listenerCount('SIGINT');
+          assert.strictEqual(after, before, 'SIGINT listener count should not increase after child exits');
+        });
       });
     });
   });
