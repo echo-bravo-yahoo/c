@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import chalk from 'chalk';
 import { getSession, findSessions, findSessionsByName, updateIndex } from '../store/index.js';
 import { getClaudeSession, findClaudeSessionIdsByTitle, encodeProjectKey, PROJECTS_DIR } from '../claude/sessions.js';
+import { createSession } from '../store/schema.js';
 import { exec, spawnInteractive, setTmuxPaneTitle } from '../util/exec.js';
 import { getDisplayName, shortId, highlightId } from '../util/format.js';
 
@@ -46,6 +47,25 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
         const ids = resolved.map(m => shortId(m.id));
         console.error(chalk.red(`Multiple sessions named "${idOrPrefix}": ${ids.join(', ')}.`));
         process.exit(1);
+      }
+    }
+
+    // Fall back to Claude's storage for sessions not in c's index
+    if (!session) {
+      const claudeFallback = getClaudeSession(idOrPrefix);
+      if (claudeFallback) {
+        const newSession = createSession(
+          claudeFallback.id,
+          claudeFallback.directory,
+          claudeFallback.projectKey,
+          claudeFallback.modifiedAt
+        );
+        newSession.state = 'idle';
+        await updateIndex((index) => {
+          index.sessions[newSession.id] = newSession;
+        });
+        session = newSession;
+        console.error(chalk.dim(`Adopted session from Claude's storage.`));
       }
     }
 
