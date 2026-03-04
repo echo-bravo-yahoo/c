@@ -44,6 +44,27 @@ describe('c', () => {
         assert.strictEqual(result.status, 0);
       });
 
+      it('shows Claude Code options section in new --help', () => {
+        const result = run('new', '--help');
+        assert.strictEqual(result.status, 0);
+        const output = result.stdout;
+        assert.ok(output.includes('Claude Code options:'));
+        assert.ok(output.includes('--model'));
+        assert.ok(output.includes('--permission-mode'));
+        // --model should appear after the Claude Code heading, not in default Options
+        const [defaultSection] = output.split('Claude Code options:');
+        assert.ok(!defaultSection.includes('--model'));
+      });
+
+      it('shows Claude Code options section in resume --help', () => {
+        const result = run('resume', '--help');
+        assert.strictEqual(result.status, 0);
+        const output = result.stdout;
+        assert.ok(output.includes('Claude Code options:'));
+        assert.ok(output.includes('--fork-session'));
+        assert.ok(output.includes('--model'));
+      });
+
       it('runs --version', () => {
         const result = run('--version');
         assert.strictEqual(result.status, 0);

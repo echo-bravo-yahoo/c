@@ -4,7 +4,7 @@
  * c - Claude Code session manager CLI
  */
 
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { initCompletion, installCompletion, uninstallCompletion } from './completion.js';
 import { listCommand } from './commands/list.js';
 import { newCommand } from './commands/new.js';
@@ -43,6 +43,23 @@ function parsePassthroughArgs(): string[] {
   const dashDash = process.argv.indexOf('--');
   if (dashDash === -1) return [];
   return process.argv.slice(dashDash + 1);
+}
+
+/**
+ * Register Claude Code forwarded options on a command.
+ * Hidden from the default Options section; shown in a separate help block.
+ */
+function addClaudeOptions(
+  cmd: Command,
+  options: { flags: string; description: string }[]
+): void {
+  for (const opt of options) {
+    cmd.addOption(new Option(opt.flags, opt.description).hideHelp());
+  }
+  const lines = options.map(({ flags, description }) =>
+    `  ${flags.padEnd(30)}${description}`
+  );
+  cmd.addHelpText('after', '\nClaude Code options:\n' + lines.join('\n'));
 }
 
 export function createProgram(): Command {
@@ -94,7 +111,7 @@ export function createProgram(): Command {
     });
 
   // New session
-  program
+  const newCmd = program
     .command('new [name]')
     .alias('n')
     .description('Create a new session with optional name and metadata')
@@ -104,10 +121,6 @@ export function createProgram(): Command {
     .option('--note <text>', 'Add a note')
     .option('--meta <key=value...>', 'Set metadata (repeatable)')
     .option('--no-worktree', 'Skip worktree creation even when named')
-    .option('--model <model>', 'Claude model to use')
-    .option('--permission-mode <mode>', 'Permission mode')
-    .option('--effort <level>', 'Effort level (low, medium, high)')
-    .option('--agent <agent>', 'Named agent')
     .allowUnknownOption()
     .action(async (name, options) => {
       const passthroughArgs = parsePassthroughArgs();
@@ -117,6 +130,13 @@ export function createProgram(): Command {
         passthroughArgs: passthroughArgs.length ? passthroughArgs : undefined,
       });
     });
+
+  addClaudeOptions(newCmd, [
+    { flags: '--model <model>', description: 'Claude model to use' },
+    { flags: '--permission-mode <mode>', description: 'Permission mode' },
+    { flags: '--effort <level>', description: 'Effort level (low, medium, high)' },
+    { flags: '--agent <agent>', description: 'Named agent' },
+  ]);
 
   // Waiting (alias for list --waiting)
   program
@@ -136,15 +156,10 @@ export function createProgram(): Command {
     });
 
   // Resume
-  program
+  const resumeCmd = program
     .command('resume <id>')
     .alias('r')
     .description('Resume a Claude session')
-    .option('--model <model>', 'Claude model to use')
-    .option('--permission-mode <mode>', 'Permission mode')
-    .option('--effort <level>', 'Effort level (low, medium, high)')
-    .option('--agent <agent>', 'Named agent')
-    .option('--fork-session', 'Create a new session ID on resume')
     .allowUnknownOption()
     .action(async (id, options) => {
       const passthroughArgs = parsePassthroughArgs();
@@ -157,6 +172,14 @@ export function createProgram(): Command {
         passthroughArgs: passthroughArgs.length ? passthroughArgs : undefined,
       });
     });
+
+  addClaudeOptions(resumeCmd, [
+    { flags: '--model <model>', description: 'Claude model to use' },
+    { flags: '--permission-mode <mode>', description: 'Permission mode' },
+    { flags: '--effort <level>', description: 'Effort level (low, medium, high)' },
+    { flags: '--agent <agent>', description: 'Named agent' },
+    { flags: '--fork-session', description: 'Create a new session ID on resume' },
+  ]);
 
   // Archive
   program
