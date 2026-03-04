@@ -152,6 +152,8 @@ set -euo pipefail
 
 INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+SESSION_CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+[[ -n "$SESSION_CWD" ]] && cd "$SESSION_CWD"
 COST=$(echo "$INPUT" | jq -r '.cost.total_cost_usd // 0')
 PCT=$(echo "$INPUT" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
 
