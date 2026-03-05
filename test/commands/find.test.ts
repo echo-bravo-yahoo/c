@@ -122,6 +122,20 @@ describe('c', () => {
         });
       });
 
+      describe('--json output', () => {
+        it('outputs matching sessions as JSON array', async () => {
+          await cli.seed({ id: 'sess1', name: 'Auth Feature' });
+          await cli.seed({ id: 'sess2', name: 'Dashboard' });
+          await cli.run('find', 'auth', '--json');
+
+          const raw = cli.stdout.output.join('');
+          const arr = JSON.parse(raw) as { id: string }[];
+          assert.ok(Array.isArray(arr));
+          assert.strictEqual(arr.length, 1);
+          assert.strictEqual(arr[0].id, 'sess1');
+        });
+      });
+
       describe('optional fields', () => {
         it('tolerates missing resources', async () => {
           await cli.seed({ id: 'sess1', resources: {} });

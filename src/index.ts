@@ -21,6 +21,12 @@ import { nameCommand } from './commands/name.js';
 import { metaCommand } from './commands/meta.js';
 import { findCommand } from './commands/find.js';
 import { cleanCommand } from './commands/clean.js';
+import { dirCommand } from './commands/dir.js';
+import { execCommand } from './commands/exec.js';
+import { openCommand } from './commands/open.js';
+import { logCommand } from './commands/log.js';
+import { memoryCommand } from './commands/memory.js';
+import { statsCommand } from './commands/stats.js';
 import { tmuxStatusCommand } from './commands/tmux/status.js';
 import { tmuxPickCommand } from './commands/tmux/pick.js';
 import { handleHook } from './hooks/index.js';
@@ -123,8 +129,9 @@ export function createProgram(): Command {
   program
     .command('show <id>')
     .description('Show session details')
-    .action((id) => {
-      showCommand(id);
+    .option('--json', 'Output as JSON')
+    .action((id, options) => {
+      showCommand(id, { json: options.json });
     });
 
   // Resume
@@ -250,8 +257,77 @@ export function createProgram(): Command {
     .command('find <query>')
     .alias('f')
     .description('Search sessions')
-    .action((query) => {
-      findCommand(query);
+    .option('--json', 'Output as JSON')
+    .action((query, options) => {
+      findCommand(query, { json: options.json });
+    });
+
+  // Dir
+  program
+    .command('dir [id]')
+    .description('Print session directory path')
+    .action((id) => {
+      dirCommand(id);
+    });
+
+  // Exec
+  program
+    .command('exec [id]')
+    .usage('[id] -- <command...>')
+    .description('Run a command in session directory')
+    .allowUnknownOption()
+    .action(async (id) => {
+      const passthroughArgs = parsePassthroughArgs();
+      await execCommand(id, passthroughArgs);
+    });
+
+  // Delete
+  program
+    .command('delete [ids...]')
+    .alias('d')
+    .description('Delete sessions from index')
+    .option('--orphans', 'Delete sessions with no Claude data')
+    .option('--closed', 'Delete all closed sessions')
+    .action(async (ids, options) => {
+      const { deleteCommand } = await import('./commands/delete.js');
+      await deleteCommand(ids.length ? ids : undefined, options);
+    });
+
+  // Open
+  program
+    .command('open [id]')
+    .description('Open session resources in browser')
+    .option('--pr', 'Open PR')
+    .option('--jira', 'Open JIRA ticket')
+    .action((id, options) => {
+      openCommand(id, options);
+    });
+
+  // Log
+  program
+    .command('log [id]')
+    .description('View recent transcript activity')
+    .option('-n, --lines <n>', 'Number of entries to show', parseInt)
+    .option('--prompts', 'Show only user prompts')
+    .action((id, options) => {
+      logCommand(id, { lines: options.lines, prompts: options.prompts });
+    });
+
+  // Memory
+  program
+    .command('memory [id]')
+    .description("Show session project's CLAUDE.md")
+    .option('--raw', 'Output without syntax highlighting')
+    .action((id, options) => {
+      memoryCommand(id, { raw: options.raw });
+    });
+
+  // Stats
+  program
+    .command('stats')
+    .description('Show session statistics')
+    .action(() => {
+      statsCommand();
     });
 
   // Clean
