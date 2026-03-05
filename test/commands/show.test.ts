@@ -92,6 +92,129 @@ describe('c', () => {
         });
       });
 
+      describe('duration display', () => {
+        it('shows minutes for short sessions', async () => {
+          const created = new Date('2025-06-01T10:00:00Z');
+          const lastActive = new Date('2025-06-01T10:30:00Z');
+          await cli.seed({ id: 'abc12345', created_at: created, last_active_at: lastActive });
+          await cli.run('show', 'abc12345');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('30m'), 'should show 30m duration');
+        });
+
+        it('shows hours and minutes', async () => {
+          const created = new Date('2025-06-01T10:00:00Z');
+          const lastActive = new Date('2025-06-01T11:30:00Z');
+          await cli.seed({ id: 'abc12345', created_at: created, last_active_at: lastActive });
+          await cli.run('show', 'abc12345');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('1h 30m'), 'should show 1h 30m duration');
+        });
+
+        it('shows days and hours', async () => {
+          const created = new Date('2025-06-01T10:00:00Z');
+          const lastActive = new Date('2025-06-03T13:00:00Z');
+          await cli.seed({ id: 'abc12345', created_at: created, last_active_at: lastActive });
+          await cli.run('show', 'abc12345');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('2d 3h'), 'should show 2d 3h duration');
+        });
+      });
+
+      describe('resources section', () => {
+        it('shows branch', async () => {
+          await cli.seed({
+            id: 'abc12345',
+            resources: { branch: 'feature/auth' },
+          });
+          await cli.run('show', 'abc12345');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Branch:'), 'should have Branch label');
+          assert.ok(output.includes('feature/auth'), 'should show branch name');
+        });
+
+        it('shows PR', async () => {
+          await cli.seed({
+            id: 'abc12345',
+            resources: { pr: 'https://github.com/o/r/pull/42' },
+          });
+          await cli.run('show', 'abc12345');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('PR:'), 'should have PR label');
+          assert.ok(output.includes('pull/42'), 'should show PR URL');
+        });
+
+        it('shows JIRA', async () => {
+          await cli.seed({
+            id: 'abc12345',
+            resources: { jira: 'PROJ-99' },
+          });
+          await cli.run('show', 'abc12345');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('JIRA:'), 'should have JIRA label');
+          assert.ok(output.includes('PROJ-99'), 'should show JIRA ticket');
+        });
+
+        it('shows worktree', async () => {
+          await cli.seed({
+            id: 'abc12345',
+            resources: { worktree: 'my-worktree' },
+          });
+          await cli.run('show', 'abc12345');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Worktree:'), 'should have Worktree label');
+          assert.ok(output.includes('my-worktree'), 'should show worktree name');
+        });
+      });
+
+      describe('servers display', () => {
+        it('shows servers when present', async () => {
+          await cli.seed({
+            id: 'abc12345',
+            servers: { '1234:8080': 'node server.js' },
+          });
+          await cli.run('show', 'abc12345');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Servers:'), 'should have Servers label');
+          assert.ok(output.includes('1234:8080'), 'should show PID:port');
+          assert.ok(output.includes('node server.js'), 'should show command');
+        });
+      });
+
+      describe('family tree', () => {
+        it('shows family tree for child session', async () => {
+          await cli.seed(
+            { id: 'sparent1', state: 'busy', name: 'Parent' },
+            { id: 'schild01', state: 'busy', name: 'Child', parent_session_id: 'sparent1' },
+          );
+          await cli.run('show', 'schild01');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Family tree:'), 'should have Family tree label');
+          assert.ok(output.includes('sparent'), 'should show parent ID');
+          assert.ok(output.includes('schild0'), 'should show child ID');
+        });
+
+        it('shows family tree for parent session', async () => {
+          await cli.seed(
+            { id: 'sparent2', state: 'busy', name: 'Parent' },
+            { id: 'schild02', state: 'busy', name: 'Child', parent_session_id: 'sparent2' },
+          );
+          await cli.run('show', 'sparent2');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Family tree:'), 'should have Family tree label');
+        });
+      });
+
       describe('--json output', () => {
         it('outputs valid JSON to stdout', async () => {
           await cli.seed({ id: 'abc12345', state: 'busy', directory: '/tmp/proj' });

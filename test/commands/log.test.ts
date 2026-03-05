@@ -167,6 +167,188 @@ describe('c', () => {
         assert.ok(output.includes('Third'), 'last block should be visible');
       });
 
+      describe('summarizeTool branches', () => {
+        it('summarizes Bash tool', async () => {
+          await cli.seed({ id: 's1' });
+          const transcriptDir = join(cli.tmpDir, 'transcripts');
+          mkdirSync(transcriptDir, { recursive: true });
+          mockTranscriptPath = writeTranscript(transcriptDir,
+            makeEntry('assistant', '', [
+              { name: 'Bash', input: { command: 'npm test' } },
+            ]),
+          );
+          await cli.run('log', 's1');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Bash'), 'should contain tool name');
+          assert.ok(output.includes('npm test'), 'should contain command');
+        });
+
+        it('summarizes Grep tool', async () => {
+          await cli.seed({ id: 's1' });
+          const transcriptDir = join(cli.tmpDir, 'transcripts');
+          mkdirSync(transcriptDir, { recursive: true });
+          mockTranscriptPath = writeTranscript(transcriptDir,
+            makeEntry('assistant', '', [
+              { name: 'Grep', input: { pattern: 'TODO', glob: '*.ts', path: '/src/foo/bar.ts' } },
+            ]),
+          );
+          await cli.run('log', 's1');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Grep'), 'should contain tool name');
+          assert.ok(output.includes('"TODO"'), 'should contain pattern');
+          assert.ok(output.includes('--glob *.ts'), 'should contain glob');
+          assert.ok(output.includes('foo/bar.ts'), 'should contain short path');
+        });
+
+        it('summarizes Glob tool', async () => {
+          await cli.seed({ id: 's1' });
+          const transcriptDir = join(cli.tmpDir, 'transcripts');
+          mkdirSync(transcriptDir, { recursive: true });
+          mockTranscriptPath = writeTranscript(transcriptDir,
+            makeEntry('assistant', '', [
+              { name: 'Glob', input: { pattern: '**/*.ts' } },
+            ]),
+          );
+          await cli.run('log', 's1');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Glob'), 'should contain tool name');
+          assert.ok(output.includes('**/*.ts'), 'should contain glob pattern');
+        });
+
+        it('summarizes WebSearch tool', async () => {
+          await cli.seed({ id: 's1' });
+          const transcriptDir = join(cli.tmpDir, 'transcripts');
+          mkdirSync(transcriptDir, { recursive: true });
+          mockTranscriptPath = writeTranscript(transcriptDir,
+            makeEntry('assistant', '', [
+              { name: 'WebSearch', input: { query: 'node coverage' } },
+            ]),
+          );
+          await cli.run('log', 's1');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('WebSearch'), 'should contain tool name');
+          assert.ok(output.includes('node coverage'), 'should contain query');
+        });
+
+        it('summarizes WebFetch tool', async () => {
+          await cli.seed({ id: 's1' });
+          const transcriptDir = join(cli.tmpDir, 'transcripts');
+          mkdirSync(transcriptDir, { recursive: true });
+          mockTranscriptPath = writeTranscript(transcriptDir,
+            makeEntry('assistant', '', [
+              { name: 'WebFetch', input: { url: 'https://example.com/docs/api' } },
+            ]),
+          );
+          await cli.run('log', 's1');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('WebFetch'), 'should contain tool name');
+          assert.ok(output.includes('example.com'), 'should contain hostname');
+        });
+
+        it('summarizes Task tool', async () => {
+          await cli.seed({ id: 's1' });
+          const transcriptDir = join(cli.tmpDir, 'transcripts');
+          mkdirSync(transcriptDir, { recursive: true });
+          mockTranscriptPath = writeTranscript(transcriptDir,
+            makeEntry('assistant', '', [
+              { name: 'Task', input: { description: 'explore codebase' } },
+            ]),
+          );
+          await cli.run('log', 's1');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Task'), 'should contain tool name');
+          assert.ok(output.includes('explore codebase'), 'should contain description');
+        });
+
+        it('summarizes Write tool', async () => {
+          await cli.seed({ id: 's1' });
+          const transcriptDir = join(cli.tmpDir, 'transcripts');
+          mkdirSync(transcriptDir, { recursive: true });
+          mockTranscriptPath = writeTranscript(transcriptDir,
+            makeEntry('assistant', '', [
+              { name: 'Write', input: { file_path: '/src/foo/bar.ts' } },
+            ]),
+          );
+          await cli.run('log', 's1');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Write'), 'should contain tool name');
+          assert.ok(output.includes('foo/bar.ts'), 'should contain short path');
+        });
+
+        it('summarizes Edit tool', async () => {
+          await cli.seed({ id: 's1' });
+          const transcriptDir = join(cli.tmpDir, 'transcripts');
+          mkdirSync(transcriptDir, { recursive: true });
+          mockTranscriptPath = writeTranscript(transcriptDir,
+            makeEntry('assistant', '', [
+              { name: 'Edit', input: { file_path: '/src/a/b/c.ts' } },
+            ]),
+          );
+          await cli.run('log', 's1');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Edit'), 'should contain tool name');
+          assert.ok(output.includes('b/c.ts'), 'should contain short path');
+        });
+      });
+
+      describe('extractText string content', () => {
+        it('handles string content (not array)', async () => {
+          await cli.seed({ id: 's1' });
+          const transcriptDir = join(cli.tmpDir, 'transcripts');
+          mkdirSync(transcriptDir, { recursive: true });
+          // Write a transcript entry with string content instead of array
+          const entry = {
+            type: 'assistant',
+            timestamp: new Date().toISOString(),
+            message: { content: 'plain text response' },
+          };
+          const filePath = join(transcriptDir, 'transcript.jsonl');
+          writeFileSync(filePath, JSON.stringify(entry));
+          mockTranscriptPath = filePath;
+          await cli.run('log', 's1');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('plain text response'), 'should render string content');
+        });
+      });
+
+      describe('tool_result skipping', () => {
+        it('skips tool_result entries', async () => {
+          await cli.seed({ id: 's1' });
+          const transcriptDir = join(cli.tmpDir, 'transcripts');
+          mkdirSync(transcriptDir, { recursive: true });
+          const entries = [
+            makeEntry('user', 'My prompt'),
+            // tool_result entry — should be skipped
+            {
+              type: 'human' as const,
+              timestamp: new Date().toISOString(),
+              message: {
+                content: [{ type: 'tool_result', tool_use_id: 'abc', content: 'result data' }],
+              },
+            },
+            makeEntry('assistant', 'Response after tool'),
+          ];
+          const filePath = join(transcriptDir, 'transcript.jsonl');
+          writeFileSync(filePath, entries.map(e => JSON.stringify(e)).join('\n'));
+          mockTranscriptPath = filePath;
+          await cli.run('log', 's1');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('My prompt'), 'should show user prompt');
+          assert.ok(output.includes('Response after tool'), 'should show assistant response');
+          assert.ok(!output.includes('result data'), 'should not render tool_result content');
+        });
+      });
+
       it('exits 1 when session not found', async () => {
         await cli.run('log', 'nonexistent');
 

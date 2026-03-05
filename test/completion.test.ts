@@ -76,6 +76,118 @@ describe('completion', () => {
     });
   });
 
+  describe('--tag completions', () => {
+    it('returns tags from sessions', async () => {
+      await updateIndex((idx) => {
+        idx.sessions['s1'] = createTestSession({ id: 's1', tags: ['wip'] });
+        idx.sessions['s2'] = createTestSession({ id: 's2', tags: ['done'] });
+        idx.sessions['s3'] = createTestSession({ id: 's3', tags: ['blocked'] });
+      });
+
+      const results = getCompletions('--tag', 'c list --tag ');
+      assert.ok(results.includes('wip'));
+      assert.ok(results.includes('done'));
+      assert.ok(results.includes('blocked'));
+    });
+
+    it('deduplicates tags across sessions', async () => {
+      await updateIndex((idx) => {
+        idx.sessions['s1'] = createTestSession({ id: 's1', tags: ['wip'] });
+        idx.sessions['s2'] = createTestSession({ id: 's2', tags: ['wip'] });
+      });
+
+      const results = getCompletions('--tag', 'c list --tag ');
+      assert.strictEqual(results.filter(r => r === 'wip').length, 1, 'should not duplicate tags');
+    });
+  });
+
+  describe('--repo completions', () => {
+    it('returns repo names from session directories', async () => {
+      await updateIndex((idx) => {
+        idx.sessions['s1'] = createTestSession({ id: 's1', directory: '/home/u/api' });
+        idx.sessions['s2'] = createTestSession({ id: 's2', directory: '/home/u/web' });
+      });
+
+      const results = getCompletions('--repo', 'c list --repo ');
+      assert.ok(results.includes('api'));
+      assert.ok(results.includes('web'));
+    });
+  });
+
+  describe('--directory completions', () => {
+    it('returns directories from sessions', async () => {
+      await updateIndex((idx) => {
+        idx.sessions['s1'] = createTestSession({ id: 's1', directory: '/home/u/project-a' });
+        idx.sessions['s2'] = createTestSession({ id: 's2', directory: '/home/u/project-b' });
+      });
+
+      const results = getCompletions('--dir', 'c list --dir ');
+      assert.ok(results.includes('/home/u/project-a'));
+      assert.ok(results.includes('/home/u/project-b'));
+    });
+  });
+
+  describe('--branch completions', () => {
+    it('returns branch names from sessions', async () => {
+      await updateIndex((idx) => {
+        idx.sessions['s1'] = createTestSession({ id: 's1', resources: { branch: 'main' } });
+        idx.sessions['s2'] = createTestSession({ id: 's2', resources: { branch: 'feature/login' } });
+      });
+
+      const results = getCompletions('--branch', 'c list --branch ');
+      assert.ok(results.includes('main'));
+      assert.ok(results.includes('feature/login'));
+    });
+
+    it('skips sessions without branches', async () => {
+      await updateIndex((idx) => {
+        idx.sessions['s1'] = createTestSession({ id: 's1', resources: { branch: 'main' } });
+        idx.sessions['s2'] = createTestSession({ id: 's2' }); // no branch
+      });
+
+      const results = getCompletions('--branch', 'c list --branch ');
+      assert.strictEqual(results.length, 1);
+      assert.ok(results.includes('main'));
+    });
+  });
+
+  describe('subcommand flag completions', () => {
+    it('returns list flags for list subcommand', () => {
+      const results = getCompletions('--', 'c list --');
+      assert.ok(results.includes('--state'));
+      assert.ok(results.includes('--branch'));
+      assert.ok(results.includes('--sort'));
+      assert.ok(results.includes('--json'));
+    });
+
+    it('returns list flags for bare c (implicit list)', () => {
+      const results = getCompletions('--', 'c --');
+      assert.ok(results.includes('--state'));
+      assert.ok(results.includes('--branch'));
+    });
+  });
+
+  describe('session ID completions', () => {
+    it('returns session IDs for show command', async () => {
+      await updateIndex((idx) => {
+        idx.sessions['abcd1234-full-uuid'] = createTestSession({ id: 'abcd1234-full-uuid', name: 'My Session' });
+      });
+
+      const results = getCompletions('a', 'c show a');
+      assert.ok(results.includes('abcd1234'), 'should include short ID');
+      assert.ok(results.includes('My Session'), 'should include session name');
+    });
+
+    it('returns session IDs for log command', async () => {
+      await updateIndex((idx) => {
+        idx.sessions['sess-001'] = createTestSession({ id: 'sess-001' });
+      });
+
+      const results = getCompletions('s', 'c log s');
+      assert.ok(results.some(r => r.startsWith('sess')), 'should return session IDs for log command');
+    });
+  });
+
   describe('position-independent flag values', () => {
     it('handles flag values after other flags', () => {
       // Simulates: c list --sort name --branch <cursor>

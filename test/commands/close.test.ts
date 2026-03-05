@@ -130,6 +130,57 @@ describe('c', () => {
         });
       });
 
+      describe('no ID (current directory fallback)', () => {
+        it('closes current-dir session', async () => {
+          await cli.seed({ id: 'cwd-sess1', state: 'busy', directory: process.cwd() });
+          await cli.run('close');
+
+          const s = cli.session('cwd-sess1')!;
+          assert.strictEqual(s.state, 'closed');
+          assert.ok(cli.console.logs.some(l => l.includes('Closed')));
+        });
+
+        it('archives current-dir session with --archive', async () => {
+          await cli.seed({ id: 'cwd-sess2', state: 'busy', directory: process.cwd() });
+          await cli.run('close', '--archive');
+
+          const s = cli.session('cwd-sess2')!;
+          assert.strictEqual(s.state, 'archived');
+          assert.ok(cli.console.logs.some(l => l.includes('Archived')));
+        });
+
+        it('exits 1 when no active session in cwd', async () => {
+          await cli.run('close');
+
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.ok(cli.console.errors.some(l => l.includes('No active session')));
+        });
+
+        it('exits 1 when only closed session exists in cwd', async () => {
+          await cli.seed({ id: 'cwd-closed', state: 'closed', directory: process.cwd() });
+          await cli.run('close');
+
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.ok(cli.console.errors.some(l => l.includes('No active session')));
+        });
+
+        it('exits 1 when only archived session exists in cwd', async () => {
+          await cli.seed({ id: 'cwd-archived', state: 'archived', directory: process.cwd() });
+          await cli.run('close');
+
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.ok(cli.console.errors.some(l => l.includes('No active session')));
+        });
+
+        it('clears pid on close', async () => {
+          await cli.seed({ id: 'cwd-pid', state: 'busy', pid: 99999, directory: process.cwd() });
+          await cli.run('close');
+
+          const s = cli.session('cwd-pid')!;
+          assert.strictEqual(s.pid, undefined);
+        });
+      });
+
       describe('output message', () => {
         it('shows success message', async () => {
           await cli.seed({ id: 'abc12345', state: 'busy' });

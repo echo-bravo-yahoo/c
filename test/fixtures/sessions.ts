@@ -2,7 +2,7 @@
  * Session test fixtures
  */
 
-import type { Session, SessionResources, SessionMeta } from '../../src/store/schema.ts';
+import type { Session, SessionResources, SessionMeta, SessionServers } from '../../src/store/schema.ts';
 
 export interface SessionOverrides {
   id?: string;
@@ -13,6 +13,7 @@ export interface SessionOverrides {
   last_active_at?: Date;
   state?: Session['state'];
   resources?: Partial<SessionResources>;
+  servers?: SessionServers;
   tags?: string[];
   meta?: SessionMeta;
   pid?: number;
@@ -42,7 +43,7 @@ export function createTestSession(overrides: SessionOverrides = {}): Session {
       pr: overrides.resources?.pr,
       jira: overrides.resources?.jira,
     },
-    servers: {},
+    servers: overrides.servers ?? {},
     tags: { values: overrides.tags ?? [] },
     meta: overrides.meta ?? {},
     ...(overrides.pid != null && { pid: overrides.pid }),

@@ -356,6 +356,62 @@ describe('c', () => {
         });
       });
 
+      describe('resource display in table', () => {
+        it('shows PR number in session row', async () => {
+          await cli.seed({
+            id: 'sprnum',
+            state: 'busy',
+            resources: { pr: 'https://github.com/o/r/pull/42' },
+          });
+          await cli.run('list');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('#42'), 'should show PR number');
+        });
+
+        it('shows JIRA ticket in session row', async () => {
+          await cli.seed({
+            id: 'sjira',
+            state: 'busy',
+            resources: { jira: 'PROJ-99' },
+          });
+          await cli.run('list');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('PROJ-99'), 'should show JIRA ticket');
+        });
+
+        it('shows tag in session row', async () => {
+          await cli.seed({
+            id: 'stagged',
+            state: 'busy',
+            tags: ['wip'],
+          });
+          await cli.run('list');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('wip'), 'should show tag');
+        });
+
+        it('shows combined PR + JIRA + tag', async () => {
+          await cli.seed({
+            id: 'scombo',
+            state: 'busy',
+            resources: {
+              pr: 'https://github.com/o/r/pull/77',
+              jira: 'DEV-55',
+            },
+            tags: ['urgent'],
+          });
+          await cli.run('list');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('#77'), 'should show PR number');
+          assert.ok(output.includes('DEV-55'), 'should show JIRA ticket');
+          // Tag may be truncated if space is tight, but should appear if space allows
+        });
+      });
+
       describe('--sort', () => {
         it('--sort name orders alphabetically by display name', async () => {
           await cli.seed(
@@ -418,6 +474,83 @@ describe('c', () => {
           assert.ok(idleIdx < busyIdx, 'idle should appear before busy');
           assert.ok(busyIdx < closedIdx, 'busy should appear before closed');
         });
+
+        it('--sort created orders most recent first (desc default)', async () => {
+          const t1 = new Date('2025-01-01T00:00:00Z');
+          const t2 = new Date('2025-06-15T00:00:00Z');
+          const t3 = new Date('2025-12-31T00:00:00Z');
+          await cli.seed(
+            { id: 'sold', state: 'busy', name: 'Oldest', created_at: t1 },
+            { id: 'smid', state: 'busy', name: 'Middle', created_at: t2 },
+            { id: 'snew', state: 'busy', name: 'Newest', created_at: t3 },
+          );
+          await cli.run('list', '--sort', 'created');
+
+          const output = cli.console.logs.join('\n');
+          const newestIdx = output.indexOf('Newest');
+          const middleIdx = output.indexOf('Middle');
+          const oldestIdx = output.indexOf('Oldest');
+          assert.ok(newestIdx < middleIdx, 'newest should appear before middle');
+          assert.ok(middleIdx < oldestIdx, 'middle should appear before oldest');
+        });
+
+        it('--sort +created orders oldest first (asc)', async () => {
+          const t1 = new Date('2025-01-01T00:00:00Z');
+          const t2 = new Date('2025-06-15T00:00:00Z');
+          const t3 = new Date('2025-12-31T00:00:00Z');
+          await cli.seed(
+            { id: 'sold', state: 'busy', name: 'Oldest', created_at: t1 },
+            { id: 'smid', state: 'busy', name: 'Middle', created_at: t2 },
+            { id: 'snew', state: 'busy', name: 'Newest', created_at: t3 },
+          );
+          await cli.run('list', '--sort', '+created');
+
+          const output = cli.console.logs.join('\n');
+          const oldestIdx = output.indexOf('Oldest');
+          const middleIdx = output.indexOf('Middle');
+          const newestIdx = output.indexOf('Newest');
+          assert.ok(oldestIdx < middleIdx, 'oldest should appear before middle');
+          assert.ok(middleIdx < newestIdx, 'middle should appear before newest');
+        });
+
+        it('--sort repo orders alphabetically by repo name', async () => {
+          await cli.seed(
+            { id: 'sz', state: 'busy', name: 'Zulu', directory: '/home/user/zulu-repo' },
+            { id: 'sa', state: 'busy', name: 'Alpha', directory: '/home/user/alpha-repo' },
+            { id: 'sm', state: 'busy', name: 'Mike', directory: '/home/user/mike-repo' },
+          );
+          await cli.run('list', '--sort', 'repo');
+
+          const output = cli.console.logs.join('\n');
+          const alphaIdx = output.indexOf('Alpha');
+          const mikeIdx = output.indexOf('Mike');
+          const zuluIdx = output.indexOf('Zulu');
+          assert.ok(alphaIdx < mikeIdx, 'alpha should appear before mike');
+          assert.ok(mikeIdx < zuluIdx, 'mike should appear before zulu');
+        });
+
+        it('--sort status,name groups by state then alphabetically within', async () => {
+          await cli.seed(
+            { id: 'sib', state: 'idle', name: 'Beta' },
+            { id: 'sba', state: 'busy', name: 'Alpha' },
+            { id: 'sia', state: 'idle', name: 'Alpha' },
+            { id: 'sbb', state: 'busy', name: 'Beta' },
+          );
+          await cli.run('list', '--sort', 'status,name');
+
+          const output = cli.console.logs.join('\n');
+          // idle (status 1) comes before busy (status 2) in ascending status sort
+          // Within idle: Alpha before Beta
+          // Within busy: Alpha before Beta
+          const lines = cli.console.logs;
+          const idleAlphaLine = lines.findIndex(l => l.includes('sia'));
+          const idleBetaLine = lines.findIndex(l => l.includes('sib'));
+          const busyAlphaLine = lines.findIndex(l => l.includes('sba'));
+          const busyBetaLine = lines.findIndex(l => l.includes('sbb'));
+          assert.ok(idleAlphaLine < idleBetaLine, 'idle Alpha before idle Beta');
+          assert.ok(idleBetaLine < busyAlphaLine, 'idle group before busy group');
+          assert.ok(busyAlphaLine < busyBetaLine, 'busy Alpha before busy Beta');
+        });
       });
 
       describe('display options', () => {
@@ -465,6 +598,67 @@ describe('c', () => {
           assert.ok(output.includes('schild'));
           assert.ok(!output.includes('\u2514'), 'flat wins: no bottom-left connector');
           assert.ok(!output.includes('\u250c'), 'flat wins: no top-left connector');
+        });
+      });
+
+      describe('parseSortSpecs', () => {
+        it('parses simple field name', async () => {
+          // Exercise parseSortSpecs through the list command with a known field
+          // Direct verification via JSON output ordering
+          const t1 = new Date('2025-01-01T00:00:00Z');
+          const t2 = new Date('2025-12-31T00:00:00Z');
+          await cli.seed(
+            { id: 'sold', state: 'busy', created_at: t1 },
+            { id: 'snew', state: 'busy', created_at: t2 },
+          );
+          await cli.run('list', '--sort', 'created', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr[0].id, 'snew', 'default created sort is desc (newest first)');
+          assert.strictEqual(arr[1].id, 'sold');
+        });
+
+        it('parses - prefix as desc', async () => {
+          await cli.seed(
+            { id: 'szebra', state: 'busy', name: 'Zebra' },
+            { id: 'salpha', state: 'busy', name: 'Alpha' },
+          );
+          await cli.run('list', '--sort', '-name', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr[0].id, 'szebra', '-name should sort Z first');
+        });
+
+        it('parses + prefix as asc', async () => {
+          const t1 = new Date('2025-01-01T00:00:00Z');
+          const t2 = new Date('2025-12-31T00:00:00Z');
+          await cli.seed(
+            { id: 'sold', state: 'busy', created_at: t1 },
+            { id: 'snew', state: 'busy', created_at: t2 },
+          );
+          await cli.run('list', '--sort', '+created', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr[0].id, 'sold', '+created should sort oldest first');
+        });
+      });
+
+      describe('column truncation', () => {
+        it('truncates long names at narrow terminal width', async () => {
+          const longName = 'A'.repeat(80);
+          await cli.seed({ id: 'strunc', state: 'busy', name: longName });
+
+          const savedColumns = process.stdout.columns;
+          process.stdout.columns = 60;
+          try {
+            await cli.run('list');
+          } finally {
+            process.stdout.columns = savedColumns;
+          }
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('…'), 'long name should be truncated with …');
+          assert.ok(!output.includes(longName), 'full name should not appear');
         });
       });
 

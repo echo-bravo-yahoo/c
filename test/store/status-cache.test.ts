@@ -125,6 +125,88 @@ describe('c', () => {
         });
       });
 
+      describe('shellEscape', () => {
+        it('quotes values with spaces', async () => {
+          const { writeStatusCache } = await import('../../src/store/status-cache.ts');
+          writeStatusCache('test-session', { name: 'my session' });
+          const content = fs.readFileSync(path.join(testDir, 'status', 'test-session'), 'utf-8');
+          assert.ok(content.includes("NAME='my session'"), 'should single-quote value with spaces');
+        });
+
+        it('leaves safe chars unquoted', async () => {
+          const { writeStatusCache } = await import('../../src/store/status-cache.ts');
+          writeStatusCache('test-session', { branch: 'feature/auth-v2' });
+          const content = fs.readFileSync(path.join(testDir, 'status', 'test-session'), 'utf-8');
+          assert.ok(content.includes('BRANCH=feature/auth-v2'), 'safe chars should not be quoted');
+          assert.ok(!content.includes("'feature/auth-v2'"), 'safe chars should not be wrapped in quotes');
+        });
+
+        it('handles double quotes in value', async () => {
+          const { writeStatusCache } = await import('../../src/store/status-cache.ts');
+          writeStatusCache('test-session', { name: 'say "hello"' });
+          const cachePath = path.join(testDir, 'status', 'test-session');
+          // Verify it's valid bash by sourcing it
+          const result = execSync(`source "${cachePath}" && echo "$NAME"`, {
+            encoding: 'utf-8',
+            shell: '/bin/bash',
+          }).trim();
+          assert.strictEqual(result, 'say "hello"');
+        });
+
+        it('handles single quotes in value', async () => {
+          const { writeStatusCache } = await import('../../src/store/status-cache.ts');
+          writeStatusCache('test-session', { name: "it's working" });
+          const cachePath = path.join(testDir, 'status', 'test-session');
+          const result = execSync(`source "${cachePath}" && echo "$NAME"`, {
+            encoding: 'utf-8',
+            shell: '/bin/bash',
+          }).trim();
+          assert.strictEqual(result, "it's working");
+        });
+      });
+
+      describe('listStatusCacheIds', () => {
+        it('lists multiple cache IDs', async () => {
+          const { writeStatusCache, listStatusCacheIds } = await import('../../src/store/status-cache.ts');
+          writeStatusCache('session-a', { branch: 'main' });
+          writeStatusCache('session-b', { branch: 'dev' });
+          writeStatusCache('session-c', { branch: 'feat' });
+
+          const ids = listStatusCacheIds();
+          assert.strictEqual(ids.length, 3);
+          assert.ok(ids.includes('session-a'));
+          assert.ok(ids.includes('session-b'));
+          assert.ok(ids.includes('session-c'));
+        });
+
+        it('returns empty array when status dir exists but is empty', async () => {
+          const { listStatusCacheIds } = await import('../../src/store/status-cache.ts');
+          fs.mkdirSync(path.join(testDir, 'status'), { recursive: true });
+
+          const ids = listStatusCacheIds();
+          assert.deepStrictEqual(ids, []);
+        });
+
+        it('returns empty array when status dir does not exist', async () => {
+          const { listStatusCacheIds } = await import('../../src/store/status-cache.ts');
+          // testDir exists but has no status/ subdir
+          const ids = listStatusCacheIds();
+          assert.deepStrictEqual(ids, []);
+        });
+
+        it('excludes dotfiles', async () => {
+          const { writeStatusCache, listStatusCacheIds } = await import('../../src/store/status-cache.ts');
+          writeStatusCache('real-session', { branch: 'main' });
+          // Manually create a dotfile
+          fs.writeFileSync(path.join(testDir, 'status', '.DS_Store'), '');
+
+          const ids = listStatusCacheIds();
+          assert.strictEqual(ids.length, 1);
+          assert.ok(ids.includes('real-session'));
+          assert.ok(!ids.includes('.DS_Store'));
+        });
+      });
+
       describe('deleteStatusCache', () => {
         it('deletes existing cache file', async () => {
           const { writeStatusCache, deleteStatusCache } = await import('../../src/store/status-cache.ts');

@@ -14,7 +14,7 @@
     "test:watch": "node --experimental-strip-types --experimental-test-module-mocks --test --watch test/**/*.test.ts",
     "test:coverage": "node --experimental-strip-types --experimental-test-module-mocks --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test test/**/*.test.ts",
     "test:lcov": "mkdir -p coverage && node --experimental-strip-types --experimental-test-module-mocks --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info --test test/**/*.test.ts",
-    "test:html": "npx c8 --reporter=html --reports-dir=coverage/html --include='src/**/*.ts' node --experimental-strip-types --experimental-test-module-mocks --test test/**/*.test.ts && open coverage/html/index.html"
+    "test:html": "rm -rf coverage/v8 && NODE_V8_COVERAGE=coverage/v8 node --experimental-strip-types --experimental-test-module-mocks --test test/**/*.test.ts && node scripts/merge-v8-coverage.mjs coverage/v8 && npx c8 report --reporter=html --reports-dir=coverage/html --include='src/**/*.ts' --temp-directory=coverage/v8 && open coverage/html/index.html"
   },
   "dependencies": {
     "@iarna/toml": "^3.0.0",
@@ -29,6 +29,7 @@
     "update-notifier": "^7.3.1"
   },
   "devDependencies": {
+    "@bcoe/v8-coverage": "^1.0.2",
     "@types/iarna__toml": "^2.0.5",
     "@types/marked-terminal": "^6.1.1",
     "@types/node": "^20.11.0",
