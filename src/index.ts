@@ -236,10 +236,11 @@ export function createProgram(): Command {
       await untagCommand(tag, id);
     });
 
-  // Name
+  // Rename (primary) / Name (alias)
   program
-    .command('name <name> [id]')
-    .description('Set session name')
+    .command('rename <name> [id]')
+    .alias('name')
+    .description('Rename a session')
     .action(async (name, id) => {
       await nameCommand(name, id);
     });
