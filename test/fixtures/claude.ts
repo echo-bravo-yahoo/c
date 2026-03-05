@@ -2,7 +2,7 @@
  * Claude session test fixtures
  */
 
-import type { ClaudeSessionIndexEntry, ClaudeSessionIndex } from '../../src/claude/sessions.js';
+import type { ClaudeSessionIndexEntry, ClaudeSessionIndex } from '../../src/claude/sessions.ts';
 
 /**
  * Create a Claude session index entry

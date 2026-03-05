@@ -2,7 +2,7 @@
  * GitHub PR detection
  */
 
-import { exec } from '../util/exec.js';
+import { exec } from '../util/exec.ts';
 
 export interface PullRequest {
   url: string;

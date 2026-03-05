@@ -3,13 +3,13 @@
  */
 
 import chalk from 'chalk';
-import { getSessions, getAllSessions, reconcileStaleSessions } from '../store/index.js';
-import { printSessionTable, getDisplayName, shortId, highlightId, buildPrefixMap, getRepoName, sortSessions } from '../util/format.js';
-import { hyperlink } from '../util/hyperlink.js';
-import { buildJiraUrl } from '../detection/jira.js';
-import type { SessionState } from '../store/schema.js';
-import type { SortSpec, TableOptions } from '../util/format.js';
-import { loadConfig, mergeOptions } from '../config.js';
+import { getSessions, getAllSessions, reconcileStaleSessions } from '../store/index.ts';
+import { printSessionTable, getDisplayName, shortId, highlightId, buildPrefixMap, getRepoName, sortSessions } from '../util/format.ts';
+import { hyperlink } from '../util/hyperlink.ts';
+import { buildJiraUrl } from '../detection/jira.ts';
+import type { SessionState } from '../store/schema.ts';
+import type { SortSpec, TableOptions } from '../util/format.ts';
+import { loadConfig, mergeOptions } from '../config.ts';
 
 export interface ListOptions {
   state?: string;

@@ -3,7 +3,7 @@
  */
 
 import { execSync, spawn } from 'node:child_process';
-import { debugLog } from './debug.js';
+import { debugLog } from './debug.ts';
 
 /**
  * Execute a command and return stdout

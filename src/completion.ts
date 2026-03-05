@@ -3,7 +3,7 @@
  */
 
 import { createRequire } from 'node:module';
-import { readIndex } from './store/index.js';
+import { readIndex } from './store/index.ts';
 
 const require = createRequire(import.meta.url);
 const omelette = require('omelette');

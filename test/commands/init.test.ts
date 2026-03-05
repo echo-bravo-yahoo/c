@@ -4,7 +4,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { initCommand } from '../../src/commands/init.js';
+import { initCommand } from '../../src/commands/init.ts';
 
 describe('c', () => {
   describe('commands', () => {

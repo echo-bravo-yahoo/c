@@ -2,16 +2,29 @@
  * SessionStart hook - register new session
  */
 
-import { updateIndex, getSession, getSessions } from '../store/index.js';
-import { createSession } from '../store/schema.js';
-import { getCurrentBranch, getWorktreeInfo, getRepoSlug, listWorktrees } from '../detection/git.js';
-import { extractJiraFromBranch } from '../detection/jira.js';
-import { encodeProjectKey, getPlanExecutionInfo, findTranscriptPath, getCustomTitleFromTranscriptTail, readClaudeSessionIndex } from '../claude/sessions.js';
-import { setTmuxPaneTitle } from '../util/exec.js';
-import { writeStatusCache } from '../store/status-cache.js';
-import type { StatusCacheData } from '../store/status-cache.js';
-import { debugLog } from '../util/debug.js';
-import type { HookInput } from './index.js';
+import { updateIndex, getSession, getSessions } from '../store/index.ts';
+import { createSession } from '../store/schema.ts';
+import { getCurrentBranch, getWorktreeInfo, getRepoSlug, listWorktrees } from '../detection/git.ts';
+import { extractJiraFromBranch } from '../detection/jira.ts';
+import { encodeProjectKey, getPlanExecutionInfo, findTranscriptPath, getCustomTitleFromTranscriptTail, readClaudeSessionIndex } from '../claude/sessions.ts';
+import { setTmuxPaneTitle } from '../util/exec.ts';
+import { writeStatusCache } from '../store/status-cache.ts';
+import type { StatusCacheData } from '../store/status-cache.ts';
+import { debugLog } from '../util/debug.ts';
+import type { HookInput } from './index.ts';
+
+/**
+ * Find a worktree entry matching a session's worktree name.
+ * Matches by path suffix or branch name.
+ */
+export function findWorktreeMatch(
+  worktreeName: string,
+  worktrees: { path: string; branch: string }[]
+): { path: string; branch: string } | undefined {
+  return worktrees.find(
+    (w) => w.path.endsWith(`/${worktreeName}`) || w.branch === worktreeName
+  );
+}
 
 export async function handleSessionStart(
   sessionId: string | undefined,
@@ -71,10 +84,7 @@ export async function handleSessionStart(
       let branchCwd = cwd;
       if (s.resources.worktree) {
         const worktrees = listWorktrees(cwd);
-        // Match by worktree name in path or by branch name
-        const wt = worktrees.find(
-          (w) => w.path.endsWith(`/${s.resources.worktree}`) || w.branch === s.resources.worktree
-        );
+        const wt = findWorktreeMatch(s.resources.worktree, worktrees);
         if (wt) {
           branchCwd = wt.path;
           // Update directory to worktree path so resume uses the correct CWD

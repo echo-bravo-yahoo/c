@@ -3,9 +3,9 @@
  */
 
 import chalk from 'chalk';
-import { getSession, getCurrentSession, updateIndex } from '../store/index.js';
-import { getDisplayName } from '../util/format.js';
-import { signalSession } from '../util/process.js';
+import { getSession, getCurrentSession, updateIndex } from '../store/index.ts';
+import { getDisplayName } from '../util/format.ts';
+import { signalSession } from '../util/process.ts';
 
 export async function closeCommand(
   idsOrPrefixes?: string[],

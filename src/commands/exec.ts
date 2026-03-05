@@ -3,8 +3,8 @@
  */
 
 import chalk from 'chalk';
-import { getSession, getCurrentSession } from '../store/index.js';
-import { spawnInteractive } from '../util/exec.js';
+import { getSession, getCurrentSession } from '../store/index.ts';
+import { spawnInteractive } from '../util/exec.ts';
 
 export async function execCommand(
   idOrPrefix: string | undefined,

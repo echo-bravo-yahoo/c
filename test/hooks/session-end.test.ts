@@ -1,109 +1,121 @@
 /**
  * Tests for session-end hook behavior
+ *
+ * Calls the real handleSessionEnd handler against a temp store.
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
+import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { handleSessionEnd } from '../../src/hooks/session-end.ts';
+import { updateIndex, getSession, resetIndexCache } from '../../src/store/index.ts';
+import { writeStatusCache } from '../../src/store/status-cache.ts';
+import { createTestSession, resetSessionCounter } from '../fixtures/sessions.ts';
 
 describe('c', () => {
   describe('hooks', () => {
     describe('session-end', () => {
+      let tmpDir: string;
+      let savedCHome: string | undefined;
+
       beforeEach(() => {
         resetSessionCounter();
+        tmpDir = mkdtempSync(join(tmpdir(), 'c-test-'));
+        savedCHome = process.env.C_HOME;
+        process.env.C_HOME = tmpDir;
+        resetIndexCache();
       });
 
-      describe('state transition', () => {
-        it('closes the session', () => {
-          const session = createTestSession({ state: 'busy' });
-
-          session.state = 'closed';
-
-          assert.strictEqual(session.state, 'closed');
-        });
-
-        it('updates last_active_at', () => {
-          const oldDate = new Date('2024-01-01');
-          const session = createTestSession({ state: 'busy', last_active_at: oldDate });
-
-          session.state = 'closed';
-          session.last_active_at = new Date('2024-01-15');
-
-          assert.notStrictEqual(session.last_active_at, oldDate);
-        });
+      afterEach(() => {
+        process.env.C_HOME = savedCHome;
+        if (savedCHome === undefined) delete process.env.C_HOME;
+        rmSync(tmpDir, { recursive: true, force: true });
+        resetIndexCache();
       });
 
-      describe('pid clearing', () => {
-        it('clears pid when session ends', () => {
-          const session = createTestSession({ state: 'busy', pid: 12345 });
-
-          // Simulate session-end hook behavior
-          session.state = 'closed';
-          session.last_active_at = new Date();
-          delete session.pid;
-
-          assert.strictEqual(session.pid, undefined);
-          assert.strictEqual(session.state, 'closed');
+      it('closes session by explicit ID', async () => {
+        await updateIndex((idx) => {
+          idx.sessions['s1'] = createTestSession({ id: 's1', state: 'busy', pid: 12345 });
         });
 
-        it('closes session without pid', () => {
-          const session = createTestSession({ state: 'busy' });
+        await handleSessionEnd('s1', '/tmp', null);
 
-          assert.strictEqual(session.pid, undefined);
-
-          // delete on undefined property is a no-op
-          session.state = 'closed';
-          delete session.pid;
-
-          assert.strictEqual(session.pid, undefined);
-          assert.strictEqual(session.state, 'closed');
-        });
+        const s = getSession('s1');
+        assert.ok(s);
+        assert.strictEqual(s.state, 'closed');
+        assert.strictEqual(s.pid, undefined);
       });
 
-      describe('session lookup', () => {
-        it('finds session by ID', () => {
-          const sessions = [
-            createTestSession({ id: 'target-id', state: 'busy' }),
-            createTestSession({ id: 'other-id', state: 'busy' }),
-          ];
-
-          const targetId = 'target-id';
-          const found = sessions.find((s) => s.id === targetId);
-
-          assert.ok(found);
-          assert.strictEqual(found.id, 'target-id');
+      it('updates last_active_at', async () => {
+        const oldDate = new Date('2024-01-01');
+        await updateIndex((idx) => {
+          idx.sessions['s1'] = createTestSession({ id: 's1', state: 'busy', last_active_at: oldDate });
         });
 
-        it('defaults to session in cwd', () => {
-          const sessions = [
-            createTestSession({ directory: '/project', state: 'busy' }),
-            createTestSession({ directory: '/other', state: 'idle' }),
-          ];
+        await handleSessionEnd('s1', '/tmp', null);
 
-          const cwd = '/project';
-          const activeStates = ['busy', 'idle', 'waiting'];
-          const current = sessions.find(
-            (s) => activeStates.includes(s.state) && s.directory === cwd
-          );
+        const s = getSession('s1');
+        assert.ok(s);
+        assert.ok(s.last_active_at.getTime() > oldDate.getTime());
+      });
 
-          assert.ok(current);
-          assert.strictEqual(current.directory, '/project');
+      it('falls back to cwd when no explicit ID', async () => {
+        const dir = '/test/project';
+        await updateIndex((idx) => {
+          idx.sessions['s1'] = createTestSession({ id: 's1', directory: dir, state: 'busy' });
+          idx.sessions['s2'] = createTestSession({ id: 's2', directory: '/other', state: 'busy' });
         });
 
-        it('skips update when session not found', () => {
-          const sessions = [
-            createTestSession({ state: 'busy', pid: 12345 }),
-          ];
+        await handleSessionEnd(undefined, dir, null);
 
-          const targetId = 'nonexistent';
-          const found = sessions.find((s) => s.id === targetId);
+        const s1 = getSession('s1');
+        const s2 = getSession('s2');
+        assert.ok(s1);
+        assert.ok(s2);
+        assert.strictEqual(s1.state, 'closed');
+        assert.strictEqual(s2.state, 'busy');
+      });
 
-          // No session found, no update performed
-          assert.strictEqual(found, undefined);
-          // Original session unchanged
-          assert.strictEqual(sessions[0].pid, 12345);
-          assert.strictEqual(sessions[0].state, 'busy');
+      it('no-op when session not found', async () => {
+        await updateIndex((idx) => {
+          idx.sessions['s1'] = createTestSession({ id: 's1', state: 'busy', pid: 12345 });
         });
+
+        await handleSessionEnd('nonexistent', '/tmp', null);
+
+        const s = getSession('s1');
+        assert.ok(s);
+        assert.strictEqual(s.state, 'busy');
+        assert.strictEqual(s.pid, 12345);
+      });
+
+      it('deletes status cache file', async () => {
+        await updateIndex((idx) => {
+          idx.sessions['s1'] = createTestSession({ id: 's1', state: 'busy' });
+        });
+        writeStatusCache('s1', { branch: 'main' });
+
+        const cacheFile = join(tmpDir, 'status', 's1');
+        assert.ok(existsSync(cacheFile), 'cache file should exist before handler');
+
+        await handleSessionEnd('s1', '/tmp', null);
+
+        assert.ok(!existsSync(cacheFile), 'cache file should be deleted after handler');
+      });
+
+      it('closes session that has no pid', async () => {
+        await updateIndex((idx) => {
+          idx.sessions['s1'] = createTestSession({ id: 's1', state: 'busy' });
+        });
+
+        await handleSessionEnd('s1', '/tmp', null);
+
+        const s = getSession('s1');
+        assert.ok(s);
+        assert.strictEqual(s.state, 'closed');
+        assert.strictEqual(s.pid, undefined);
       });
     });
   });

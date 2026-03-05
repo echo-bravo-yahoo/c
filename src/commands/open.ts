@@ -3,8 +3,8 @@
  */
 
 import chalk from 'chalk';
-import { getSession, getCurrentSession } from '../store/index.js';
-import { exec } from '../util/exec.js';
+import { getSession, getCurrentSession } from '../store/index.ts';
+import { exec } from '../util/exec.ts';
 
 export function openCommand(
   idOrPrefix?: string,

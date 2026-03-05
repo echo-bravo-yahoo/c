@@ -2,8 +2,8 @@
  * Index file test fixtures
  */
 
-import type { IndexFile, Session } from '../../src/store/schema.js';
-import { createTestSession, type SessionOverrides } from './sessions.js';
+import type { IndexFile, Session } from '../../src/store/schema.ts';
+import { createTestSession, type SessionOverrides } from './sessions.ts';
 
 /**
  * Create an empty index with defaults

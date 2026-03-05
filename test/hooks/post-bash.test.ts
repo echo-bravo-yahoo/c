@@ -1,22 +1,24 @@
 /**
  * Tests for post-bash hook logic
  *
- * These tests verify the behavior of PR detection and session updates
- * without calling the actual hook.
+ * PR extraction tests call the real extractPRFromOutput function.
+ * PR linking tests call the real handlePostBash handler against a temp store.
+ * Server detection tests verify the regex patterns used in the handler.
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
-import { extractPRFromOutput } from '../../src/detection/pr.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { extractPRFromOutput } from '../../src/detection/pr.ts';
+import { handlePostBash } from '../../src/hooks/post-bash.ts';
+import { updateIndex, getSession, resetIndexCache } from '../../src/store/index.ts';
+import { createTestSession, resetSessionCounter } from '../fixtures/sessions.ts';
 
 describe('c', () => {
   describe('hooks', () => {
     describe('post-bash', () => {
-      beforeEach(() => {
-        resetSessionCounter();
-      });
-
       describe('PR extraction from output', () => {
         it('detects PR from gh output', () => {
           const output = `Creating pull request for feature-branch into main...
@@ -34,47 +36,89 @@ https://github.com/org/repo/pull/42
         });
       });
 
-      describe('PR linking behavior', () => {
-        it('links detected PR', () => {
-          const session = createTestSession({ resources: {} });
-          const prUrl = 'https://github.com/org/repo/pull/42';
+      describe('PR linking via handler', () => {
+        let tmpDir: string;
+        let savedCHome: string | undefined;
 
-          if (!session.resources.pr) {
-            session.resources.pr = prUrl;
-          }
-
-          assert.strictEqual(session.resources.pr, prUrl);
+        beforeEach(() => {
+          resetSessionCounter();
+          tmpDir = mkdtempSync(join(tmpdir(), 'c-test-'));
+          savedCHome = process.env.C_HOME;
+          process.env.C_HOME = tmpDir;
+          resetIndexCache();
         });
 
-        it('preserves existing PR', () => {
-          const session = createTestSession({
-            resources: { pr: 'https://github.com/org/repo/pull/1' },
+        afterEach(() => {
+          process.env.C_HOME = savedCHome;
+          if (savedCHome === undefined) delete process.env.C_HOME;
+          rmSync(tmpDir, { recursive: true, force: true });
+          resetIndexCache();
+        });
+
+        it('links detected PR to session', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({ id: 's1', state: 'busy', resources: {} });
           });
-          const newPrUrl = 'https://github.com/org/repo/pull/42';
 
-          if (!session.resources.pr) {
-            session.resources.pr = newPrUrl;
-          }
+          await handlePostBash('s1', '/tmp', {
+            tool_output: 'https://github.com/org/repo/pull/42\n✓ Created pull request',
+          } as any);
 
-          assert.strictEqual(session.resources.pr, 'https://github.com/org/repo/pull/1');
+          const s = getSession('s1');
+          assert.ok(s);
+          assert.strictEqual(s.resources.pr, 'https://github.com/org/repo/pull/42');
         });
-      });
 
-      describe('last_active_at update', () => {
-        it('updates timestamp on PR detection', () => {
+        it('preserves existing PR', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1',
+              state: 'busy',
+              resources: { pr: 'https://github.com/org/repo/pull/1' },
+            });
+          });
+
+          await handlePostBash('s1', '/tmp', {
+            tool_output: 'https://github.com/org/repo/pull/42\n✓ Created pull request',
+          } as any);
+
+          const s = getSession('s1');
+          assert.ok(s);
+          assert.strictEqual(s.resources.pr, 'https://github.com/org/repo/pull/1');
+        });
+
+        it('no-op when output has no PR', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({ id: 's1', state: 'busy', resources: {} });
+          });
+
+          await handlePostBash('s1', '/tmp', {
+            tool_output: 'npm install completed',
+          } as any);
+
+          const s = getSession('s1');
+          assert.ok(s);
+          assert.strictEqual(s.resources.pr, undefined);
+        });
+
+        it('updates last_active_at on PR detection', async () => {
           const oldDate = new Date('2024-01-01');
-          const session = createTestSession({ last_active_at: oldDate });
-          const prUrl = 'https://github.com/org/repo/pull/42';
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1',
+              state: 'busy',
+              last_active_at: oldDate,
+              resources: {},
+            });
+          });
 
-          // Simulate hook behavior
-          if (prUrl) {
-            session.last_active_at = new Date();
-            if (!session.resources.pr) {
-              session.resources.pr = prUrl;
-            }
-          }
+          await handlePostBash('s1', '/tmp', {
+            tool_output: 'https://github.com/org/repo/pull/42',
+          } as any);
 
-          assert.ok(session.last_active_at > oldDate);
+          const s = getSession('s1');
+          assert.ok(s);
+          assert.ok(s.last_active_at.getTime() > oldDate.getTime());
         });
       });
 
@@ -143,41 +187,6 @@ https://github.com/org/repo/pull/42
 
         it('ignores git commands', () => {
           assert.strictEqual(isServerStart('git commit -m "message"'), false);
-        });
-      });
-
-      describe('current session lookup', () => {
-        it('finds active session for directory', () => {
-          const sessions = [
-            createTestSession({ directory: '/project', state: 'busy' }),
-            createTestSession({ directory: '/project', state: 'closed' }),
-            createTestSession({ directory: '/other', state: 'busy' }),
-          ];
-
-          const cwd = '/project';
-          const activeStates = ['busy', 'idle', 'waiting'];
-          const current = sessions.find(
-            s => activeStates.includes(s.state) && s.directory === cwd
-          );
-
-          assert.ok(current);
-          assert.strictEqual(current.directory, '/project');
-          assert.strictEqual(current.state, 'busy');
-        });
-
-        it('returns undefined when no active session', () => {
-          const sessions = [
-            createTestSession({ directory: '/project', state: 'closed' }),
-            createTestSession({ directory: '/project', state: 'archived' }),
-          ];
-
-          const cwd = '/project';
-          const activeStates = ['busy', 'idle', 'waiting'];
-          const current = sessions.find(
-            s => activeStates.includes(s.state) && s.directory === cwd
-          );
-
-          assert.strictEqual(current, undefined);
         });
       });
     });

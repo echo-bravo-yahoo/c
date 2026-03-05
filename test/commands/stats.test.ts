@@ -24,8 +24,8 @@ mock.module(resolve('src/claude/sessions.ts'), {
   },
 });
 
-const { setupCLI } = await import('../helpers/cli.js');
-type CLIHarness = import('../helpers/cli.js').CLIHarness;
+type CLIHarness = import('../helpers/cli.ts').CLIHarness;
+const { setupCLI } = await import('../helpers/cli.ts');
 
 describe('c', () => {
   describe('commands', () => {

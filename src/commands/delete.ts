@@ -3,10 +3,10 @@
  */
 
 import chalk from 'chalk';
-import { updateIndex, getSession, getSessions } from '../store/index.js';
-import { getDisplayName, shortId } from '../util/format.js';
-import { signalSession } from '../util/process.js';
-import type { Session } from '../store/schema.js';
+import { updateIndex, getSession, getSessions } from '../store/index.ts';
+import { getDisplayName, shortId } from '../util/format.ts';
+import { signalSession } from '../util/process.ts';
+import type { Session } from '../store/schema.ts';
 
 export interface DeleteOptions {
   orphans?: boolean;
@@ -18,7 +18,7 @@ export async function deleteCommand(
   options?: DeleteOptions
 ): Promise<void> {
   if (options?.orphans) {
-    const { getClaudeSession } = await import('../claude/sessions.js');
+    const { getClaudeSession } = await import('../claude/sessions.ts');
     return deleteBatch(s => !getClaudeSession(s.id), 'orphaned');
   }
   if (options?.closed) {

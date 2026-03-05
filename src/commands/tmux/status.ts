@@ -2,7 +2,7 @@
  * c tmux-status - output for tmux status bar
  */
 
-import { getSessions } from '../../store/index.js';
+import { getSessions } from '../../store/index.ts';
 
 export function tmuxStatusCommand(): void {
   const activeSessions = getSessions({ state: ['busy', 'idle', 'waiting'] });

@@ -3,8 +3,8 @@
  */
 
 import chalk from 'chalk';
-import { getSession } from '../store/index.js';
-import { formatSessionDetails } from '../util/format.js';
+import { getSession } from '../store/index.ts';
+import { formatSessionDetails } from '../util/format.ts';
 
 export interface ShowOptions {
   json?: boolean;

@@ -7,9 +7,9 @@ import assert from 'node:assert';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { updateIndex } from '../src/store/index.js';
-import { createTestSession, resetSessionCounter } from './fixtures/sessions.js';
-import { getCompletions } from '../src/completion.js';
+import { updateIndex } from '../src/store/index.ts';
+import { createTestSession, resetSessionCounter } from './fixtures/sessions.ts';
+import { getCompletions } from '../src/completion.ts';
 
 describe('completion', () => {
   let tmpDir: string;

@@ -1,16 +1,19 @@
 /**
  * Tests for git detection
  *
- * These tests use real git commands on the current repo
+ * These tests use real git commands on the current repo.
+ * Skipped when not running inside a git repository.
  */
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { getCurrentBranch, getGitRoot, isWorktree, getWorktreeInfo, getRepoSlug, listWorktrees } from '../../src/detection/git.js';
+import { getCurrentBranch, getGitRoot, isWorktree, getWorktreeInfo, getRepoSlug, listWorktrees } from '../../src/detection/git.ts';
+
+const inGitRepo = !!getGitRoot(process.cwd());
 
 describe('c', () => {
   describe('detection', () => {
-    describe('git', () => {
+    describe('git', { skip: !inGitRepo && 'not in a git repo' }, () => {
       describe('getCurrentBranch', () => {
         it('returns branch name in git repo', () => {
           // This test runs in the c repo itself

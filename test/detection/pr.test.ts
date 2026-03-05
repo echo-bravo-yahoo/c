@@ -4,7 +4,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { extractPRFromOutput, getPRNumber } from '../../src/detection/pr.js';
+import { extractPRFromOutput, getPRNumber } from '../../src/detection/pr.ts';
 
 describe('c', () => {
   describe('detection', () => {

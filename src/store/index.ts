@@ -6,7 +6,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import TOML from '@iarna/toml';
-import { IndexFile, Session, SessionState, createDefaultIndex } from './schema.js';
+import { createDefaultIndex } from './schema.ts';
+import type { IndexFile, Session, SessionState } from './schema.ts';
 
 // --- Process-level cache for readIndex ---
 
@@ -314,7 +315,7 @@ export function getCurrentSession(directory: string = process.cwd()): Session | 
  */
 export async function reconcileStaleSessions(): Promise<number> {
   // Import here to avoid circular dependency
-  const { listClaudeSessions } = await import('../claude/sessions.js');
+  const { listClaudeSessions } = await import('../claude/sessions.ts');
 
   const index = readIndex();
   const activeSessions = Object.values(index.sessions).filter(

@@ -2,9 +2,9 @@
  * SessionEnd hook - mark session as closed
  */
 
-import { updateIndex, getCurrentSession } from '../store/index.js';
-import { deleteStatusCache } from '../store/status-cache.js';
-import type { HookInput } from './index.js';
+import { updateIndex, getCurrentSession } from '../store/index.ts';
+import { deleteStatusCache } from '../store/status-cache.ts';
+import type { HookInput } from './index.ts';
 
 export async function handleSessionEnd(
   sessionId: string | undefined,

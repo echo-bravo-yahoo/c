@@ -3,8 +3,8 @@
  */
 
 import chalk from 'chalk';
-import { updateIndex, getSession, getCurrentSession } from '../store/index.js';
-import { getDisplayName } from '../util/format.js';
+import { updateIndex, getSession, getCurrentSession } from '../store/index.ts';
+import { getDisplayName } from '../util/format.ts';
 
 export interface LinkOptions {
   pr?: string;

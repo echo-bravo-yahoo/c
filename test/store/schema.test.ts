@@ -4,7 +4,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { createDefaultIndex, createSession } from '../../src/store/schema.js';
+import { createDefaultIndex, createSession } from '../../src/store/schema.ts';
 
 describe('c', () => {
   describe('store', () => {

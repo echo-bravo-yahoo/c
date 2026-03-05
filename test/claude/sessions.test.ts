@@ -7,7 +7,7 @@ import assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { encodeProjectKey, decodeProjectKey } from '../../src/claude/sessions.js';
+import { encodeProjectKey, decodeProjectKey } from '../../src/claude/sessions.ts';
 
 // Test with real temp directory for integration tests
 let testDir: string;

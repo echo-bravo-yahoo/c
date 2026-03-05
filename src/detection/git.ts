@@ -2,7 +2,7 @@
  * Git branch and worktree detection
  */
 
-import { exec } from '../util/exec.js';
+import { exec } from '../util/exec.ts';
 
 // Process-level cache for getRepoSlug (avoids repeated git calls)
 const _repoSlugCache = new Map<string, string | undefined>();

@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { marked, type MarkedExtension } from 'marked';
 import { markedTerminal } from 'marked-terminal';
-import { getSession, getCurrentSession } from '../store/index.js';
+import { getSession, getCurrentSession } from '../store/index.ts';
 
 marked.use(markedTerminal() as MarkedExtension);
 

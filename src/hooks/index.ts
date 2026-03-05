@@ -2,13 +2,13 @@
  * Hook entry point - dispatches to specific hook handlers
  */
 
-import { handleSessionStart } from './session-start.js';
-import { handleSessionEnd } from './session-end.js';
-import { handleNotificationWaiting } from './notification.js';
-import { handleUserPrompt } from './user-prompt.js';
-import { handlePostBash } from './post-bash.js';
-import { handleStop } from './stop.js';
-import { debugLog } from '../util/debug.js';
+import { handleSessionStart } from './session-start.ts';
+import { handleSessionEnd } from './session-end.ts';
+import { handleNotificationWaiting } from './notification.ts';
+import { handleUserPrompt } from './user-prompt.ts';
+import { handlePostBash } from './post-bash.ts';
+import { handleStop } from './stop.ts';
+import { debugLog } from '../util/debug.ts';
 
 export interface HookInput {
   session_id: string;

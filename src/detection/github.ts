@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import TOML from '@iarna/toml';
-import { exec } from '../util/exec.js';
+import { exec } from '../util/exec.ts';
 
 const CACHE_PATH = path.join(os.homedir(), '.c', 'github-cache.toml');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours

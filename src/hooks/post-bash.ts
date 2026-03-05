@@ -2,12 +2,12 @@
  * PostToolUse (Bash) hook - detect branches, PRs, and servers
  */
 
-import { updateIndex, getCurrentSession, getSession } from '../store/index.js';
-import { extractPRFromOutput } from '../detection/pr.js';
-import { writeStatusCache } from '../store/status-cache.js';
-import { getCurrentBranch, getRepoSlug, getWorktreeInfo } from '../detection/git.js';
-import type { StatusCacheData } from '../store/status-cache.js';
-import type { HookInput } from './index.js';
+import { updateIndex, getCurrentSession, getSession } from '../store/index.ts';
+import { extractPRFromOutput } from '../detection/pr.ts';
+import { writeStatusCache } from '../store/status-cache.ts';
+import { getCurrentBranch, getRepoSlug, getWorktreeInfo } from '../detection/git.ts';
+import type { StatusCacheData } from '../store/status-cache.ts';
+import type { HookInput } from './index.ts';
 
 export async function handlePostBash(
   sessionId: string | undefined,

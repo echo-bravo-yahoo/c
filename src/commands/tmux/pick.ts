@@ -4,8 +4,8 @@
 
 import { spawn } from 'node:child_process';
 import chalk from 'chalk';
-import { getSessions } from '../../store/index.js';
-import { getDisplayName, shortId } from '../../util/format.js';
+import { getSessions } from '../../store/index.ts';
+import { getDisplayName, shortId } from '../../util/format.ts';
 
 export function tmuxPickCommand(): void {
   const sessions = getSessions({ state: ['busy', 'idle', 'waiting', 'closed'] });

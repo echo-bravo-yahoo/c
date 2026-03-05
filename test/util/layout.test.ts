@@ -10,7 +10,7 @@ import {
   GUTTER,
   ID_FIXED_WIDTH,
   type ColumnKey,
-} from '../../src/util/layout.js';
+} from '../../src/util/layout.ts';
 
 /** Sum of all column minimums */
 const ALL_MIN = COLUMN_SPECS.reduce((sum, col) => sum + col.min, 0);
@@ -47,7 +47,7 @@ describe('c', () => {
           assert.strictEqual(layout.repo, 6);
           assert.strictEqual(layout.branch, 6);
           assert.strictEqual(layout.time, 6);
-          assert.strictEqual(layout.size, 5);
+          assert.strictEqual(layout.size, 7);
           assert.strictEqual(layout.resources, 4);
         });
 
@@ -115,7 +115,7 @@ describe('c', () => {
           assert.strictEqual(layout.repo, 6);
           assert.strictEqual(layout.branch, 6);
           assert.strictEqual(layout.time, 6);
-          assert.strictEqual(layout.size, 5);
+          assert.strictEqual(layout.size, 7);
           assert.strictEqual(layout.resources, 4);
         });
 
@@ -142,7 +142,7 @@ describe('c', () => {
           assert.strictEqual(layout.repo, 6);
           assert.strictEqual(layout.branch, 6);
           assert.strictEqual(layout.time, 6);
-          assert.strictEqual(layout.size, 5);
+          assert.strictEqual(layout.size, 7);
           assert.strictEqual(layout.resources, 4);
         });
 
@@ -176,7 +176,7 @@ describe('c', () => {
           assert.ok(layout.repo <= 20, 'repo capped at max 20');
           assert.ok(layout.branch <= 30, 'branch capped at max 30');
           assert.ok(layout.time <= 12, 'time capped at max 12');
-          assert.ok(layout.size <= 9, 'size capped at max 9');
+          assert.ok(layout.size <= 10, 'size capped at max 10');
           assert.ok(layout.resources <= 24, 'resources capped at max 24');
         });
 

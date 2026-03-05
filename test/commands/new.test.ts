@@ -1,13 +1,21 @@
 /**
  * Tests for new command behavior
+ *
+ * Tests extracted pure functions (parseMeta, buildNewArgs) directly,
+ * and exercises session creation + store persistence via the real store.
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { resetSessionCounter } from '../fixtures/sessions.js';
-import { createSession } from '../../src/store/schema.js';
-import { sanitizeWorktreeName } from '../../src/util/sanitize.js';
-import type { NewOptions } from '../../src/commands/new.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { resetSessionCounter } from '../fixtures/sessions.ts';
+import { createSession } from '../../src/store/schema.ts';
+import { updateIndex, getSession, resetIndexCache } from '../../src/store/index.ts';
+import { sanitizeWorktreeName } from '../../src/util/sanitize.ts';
+import { parseMeta, buildNewArgs } from '../../src/commands/new.ts';
+import type { NewOptions } from '../../src/commands/new.ts';
 
 describe('c', () => {
   describe('commands', () => {
@@ -16,380 +24,244 @@ describe('c', () => {
         resetSessionCounter();
       });
 
+      describe('parseMeta', () => {
+        it('parses key=value pairs', () => {
+          const meta = parseMeta(['priority=high'], undefined);
+          assert.strictEqual(meta.priority, 'high');
+        });
+
+        it('parses multiple pairs', () => {
+          const meta = parseMeta(['priority=high', 'team=backend'], undefined);
+          assert.strictEqual(meta.priority, 'high');
+          assert.strictEqual(meta.team, 'backend');
+        });
+
+        it('handles value with equals sign', () => {
+          const meta = parseMeta(['url=https://example.com?foo=bar'], undefined);
+          assert.strictEqual(meta.url, 'https://example.com?foo=bar');
+        });
+
+        it('includes note', () => {
+          const meta = parseMeta(undefined, 'This is a test note');
+          assert.strictEqual(meta.note, 'This is a test note');
+        });
+
+        it('combines note and meta', () => {
+          const meta = parseMeta(['priority=high'], 'A note');
+          assert.strictEqual(meta.note, 'A note');
+          assert.strictEqual(meta.priority, 'high');
+        });
+
+        it('returns empty object when both undefined', () => {
+          const meta = parseMeta(undefined, undefined);
+          assert.deepStrictEqual(meta, {});
+        });
+      });
+
+      describe('buildNewArgs', () => {
+        it('always includes --session-id', () => {
+          const args = buildNewArgs('abc-123', false, undefined, {});
+          assert.deepStrictEqual(args, ['--session-id', 'abc-123']);
+        });
+
+        it('includes --worktree when useWorktree is true', () => {
+          const args = buildNewArgs('abc-123', true, 'my-feature', {});
+          assert.deepStrictEqual(args, ['--session-id', 'abc-123', '--worktree', 'my-feature']);
+        });
+
+        it('omits --worktree when useWorktree is false', () => {
+          const args = buildNewArgs('abc-123', false, undefined, {});
+          assert.ok(!args.includes('--worktree'));
+        });
+
+        it('appends --model when provided', () => {
+          const args = buildNewArgs('abc-123', false, undefined, { model: 'haiku' });
+          assert.ok(args.includes('--model'));
+          assert.ok(args.includes('haiku'));
+        });
+
+        it('appends --permission-mode when provided', () => {
+          const args = buildNewArgs('abc-123', false, undefined, { permissionMode: 'plan' });
+          assert.ok(args.includes('--permission-mode'));
+          assert.ok(args.includes('plan'));
+        });
+
+        it('appends --effort when provided', () => {
+          const args = buildNewArgs('abc-123', false, undefined, { effort: 'low' });
+          assert.ok(args.includes('--effort'));
+          assert.ok(args.includes('low'));
+        });
+
+        it('appends --agent when provided', () => {
+          const args = buildNewArgs('abc-123', false, undefined, { agent: 'my-agent' });
+          assert.ok(args.includes('--agent'));
+          assert.ok(args.includes('my-agent'));
+        });
+
+        it('appends passthrough args', () => {
+          const args = buildNewArgs('abc-123', false, undefined, {
+            passthroughArgs: ['--add-dir', '/tmp'],
+          });
+          assert.ok(args.includes('--add-dir'));
+          assert.ok(args.includes('/tmp'));
+        });
+
+        it('combines all flags', () => {
+          const args = buildNewArgs('abc-123', true, 'feat', {
+            model: 'haiku',
+            effort: 'high',
+            passthroughArgs: ['--verbose'],
+          });
+          assert.ok(args.includes('--worktree'));
+          assert.ok(args.includes('--model'));
+          assert.ok(args.includes('--effort'));
+          assert.ok(args.includes('--verbose'));
+        });
+
+        it('preserves worktree name with slashes', () => {
+          const args = buildNewArgs('abc-123', true, 'feature/new-thing', {});
+          assert.strictEqual(args[3], 'feature/new-thing');
+        });
+
+        it('preserves worktree name with dashes and numbers', () => {
+          const args = buildNewArgs('abc-123', true, 'MAC-123-fix-bug', {});
+          assert.strictEqual(args[3], 'MAC-123-fix-bug');
+        });
+
+        it('orders --session-id before --worktree', () => {
+          const args = buildNewArgs('abc-123', true, 'my-feature', {});
+          assert.strictEqual(args[0], '--session-id');
+          assert.strictEqual(args[1], 'abc-123');
+          assert.strictEqual(args[2], '--worktree');
+          assert.strictEqual(args[3], 'my-feature');
+        });
+      });
+
       describe('session creation', () => {
         it('assigns UUID as session ID', () => {
           const id = '12345678-1234-1234-1234-123456789012';
           const session = createSession(id, '/home/user/project', '-home-user-project');
-
           assert.strictEqual(session.id, id);
           assert.ok(/^[0-9a-f-]{36}$/.test(session.id));
         });
 
         it('sets directory from cwd', () => {
           const session = createSession('uuid', '/home/user/project', 'key');
-
           assert.strictEqual(session.directory, '/home/user/project');
         });
 
-        it('applies provided name', () => {
+        it('defaults to busy state', () => {
           const session = createSession('uuid', '/path', 'key');
-          const name = 'My Custom Session';
-          session.name = name;
+          assert.strictEqual(session.state, 'busy');
+        });
 
-          assert.strictEqual(session.name, name);
+        it('defaults to unnamed', () => {
+          const session = createSession('uuid', '/path', 'key');
+          assert.strictEqual(session.name, '');
         });
       });
 
-      describe('resource linking', () => {
-        it('attaches --jira', () => {
-          const session = createSession('uuid', '/path', 'key');
-          const options: NewOptions = { jira: 'MAC-123' };
+      describe('resource linking via store', () => {
+        let tmpDir: string;
+        let savedCHome: string | undefined;
 
-          if (options.jira) session.resources.jira = options.jira;
-
-          assert.strictEqual(session.resources.jira, 'MAC-123');
+        beforeEach(() => {
+          tmpDir = mkdtempSync(join(tmpdir(), 'c-test-'));
+          savedCHome = process.env.C_HOME;
+          process.env.C_HOME = tmpDir;
+          resetIndexCache();
         });
 
-        it('attaches --pr', () => {
-          const session = createSession('uuid', '/path', 'key');
-          const options: NewOptions = { pr: 'https://github.com/o/r/pull/42' };
-
-          if (options.pr) session.resources.pr = options.pr;
-
-          assert.strictEqual(session.resources.pr, 'https://github.com/o/r/pull/42');
+        afterEach(() => {
+          process.env.C_HOME = savedCHome;
+          if (savedCHome === undefined) delete process.env.C_HOME;
+          rmSync(tmpDir, { recursive: true, force: true });
+          resetIndexCache();
         });
 
-        it('attaches --branch', () => {
-          const session = createSession('uuid', '/path', 'key');
-          const options: NewOptions = { branch: 'feature/new-thing' };
-
-          if (options.branch) session.resources.branch = options.branch;
-
-          assert.strictEqual(session.resources.branch, 'feature/new-thing');
-        });
-
-        it('attaches multiple resources', () => {
+        it('persists resources to store', async () => {
           const session = createSession('uuid', '/path', 'key');
           const options: NewOptions = {
             jira: 'MAC-123',
             pr: 'https://github.com/o/r/pull/42',
             branch: 'feature/MAC-123-thing',
           };
-
           if (options.jira) session.resources.jira = options.jira;
           if (options.pr) session.resources.pr = options.pr;
           if (options.branch) session.resources.branch = options.branch;
 
-          assert.strictEqual(session.resources.jira, 'MAC-123');
-          assert.strictEqual(session.resources.pr, 'https://github.com/o/r/pull/42');
-          assert.strictEqual(session.resources.branch, 'feature/MAC-123-thing');
+          await updateIndex((idx) => { idx.sessions['uuid'] = session; });
+
+          const s = getSession('uuid');
+          assert.ok(s);
+          assert.strictEqual(s.resources.jira, 'MAC-123');
+          assert.strictEqual(s.resources.pr, 'https://github.com/o/r/pull/42');
+          assert.strictEqual(s.resources.branch, 'feature/MAC-123-thing');
         });
-      });
 
-      describe('meta parsing', () => {
-        it('parses --meta key=value', () => {
+        it('persists meta to store', async () => {
           const session = createSession('uuid', '/path', 'key');
-          const options: NewOptions = { meta: ['priority=high'] };
+          Object.assign(session.meta, parseMeta(['priority=high', 'team=backend'], 'A note'));
 
-          if (options.meta) {
-            for (const kv of options.meta) {
-              const eq = kv.indexOf('=');
-              if (eq !== -1) {
-                session.meta[kv.slice(0, eq)] = kv.slice(eq + 1);
-              }
-            }
+          await updateIndex((idx) => { idx.sessions['uuid'] = session; });
+
+          const s = getSession('uuid');
+          assert.ok(s);
+          assert.strictEqual(s.meta.priority, 'high');
+          assert.strictEqual(s.meta.team, 'backend');
+          assert.strictEqual(s.meta.note, 'A note');
+        });
+
+        it('cleans up session on spawn failure', async () => {
+          const session = createSession('uuid', '/path', 'key');
+          await updateIndex((idx) => { idx.sessions['uuid'] = session; });
+
+          // Simulate spawn failure cleanup
+          await updateIndex((idx) => { delete idx.sessions['uuid']; });
+
+          assert.strictEqual(getSession('uuid'), undefined);
+        });
+
+        it('cleans up session on non-zero exit', async () => {
+          const session = createSession('uuid', '/path', 'key');
+          await updateIndex((idx) => { idx.sessions['uuid'] = session; });
+
+          const exitCode: number = 1;
+          if (exitCode !== 0) {
+            await updateIndex((idx) => { delete idx.sessions['uuid']; });
           }
 
-          assert.strictEqual(session.meta.priority, 'high');
+          assert.strictEqual(getSession('uuid'), undefined);
         });
 
-        it('parses multiple --meta options', () => {
+        it('preserves session on successful exit', async () => {
           const session = createSession('uuid', '/path', 'key');
-          const options: NewOptions = { meta: ['priority=high', 'team=backend'] };
+          await updateIndex((idx) => { idx.sessions['uuid'] = session; });
 
-          if (options.meta) {
-            for (const kv of options.meta) {
-              const eq = kv.indexOf('=');
-              if (eq !== -1) {
-                session.meta[kv.slice(0, eq)] = kv.slice(eq + 1);
-              }
-            }
+          const exitCode = 0;
+          if (exitCode !== 0) {
+            await updateIndex((idx) => { delete idx.sessions['uuid']; });
           }
 
-          assert.strictEqual(session.meta.priority, 'high');
-          assert.strictEqual(session.meta.team, 'backend');
-        });
-
-        it('handles value with equals sign', () => {
-          const session = createSession('uuid', '/path', 'key');
-          const options: NewOptions = { meta: ['url=https://example.com?foo=bar'] };
-
-          if (options.meta) {
-            for (const kv of options.meta) {
-              const eq = kv.indexOf('=');
-              if (eq !== -1) {
-                session.meta[kv.slice(0, eq)] = kv.slice(eq + 1);
-              }
-            }
-          }
-
-          assert.strictEqual(session.meta.url, 'https://example.com?foo=bar');
-        });
-
-        it('stores --note in meta', () => {
-          const session = createSession('uuid', '/path', 'key');
-          const options: NewOptions = { note: 'This is a test note' };
-
-          if (options.note) session.meta.note = options.note;
-
-          assert.strictEqual(session.meta.note, 'This is a test note');
-        });
-      });
-
-      describe('session defaults', () => {
-        it('defaults to busy', () => {
-          const session = createSession('uuid', '/path', 'key');
-
-          assert.strictEqual(session.state, 'busy');
-        });
-
-        it('defaults to unnamed', () => {
-          const session = createSession('uuid', '/path', 'key');
-
-          assert.strictEqual(session.name, '');
+          assert.ok(getSession('uuid'));
         });
       });
 
       describe('worktree integration', () => {
-        it('records worktree name', () => {
-          const session = createSession('uuid', '/path', 'key');
-          const name = 'my-feature';
-
-          if (name) session.resources.worktree = name;
-
-          assert.strictEqual(session.resources.worktree, 'my-feature');
-        });
-
-        it('omits worktree when undefined', () => {
-          const session = createSession('uuid', '/path', 'key');
-          const name: string | undefined = undefined;
-
-          if (name) session.resources.worktree = name;
-
-          assert.strictEqual(session.resources.worktree, undefined);
-        });
-
-        it('omits worktree when empty', () => {
-          const session = createSession('uuid', '/path', 'key');
-          const name = '';
-
-          if (name) session.resources.worktree = name;
-
-          assert.strictEqual(session.resources.worktree, undefined);
-        });
-
         it('sanitizes worktree name from session name', () => {
-          const session = createSession('uuid', '/path', 'key');
           const name = 'my cool feature';
-          session.name = name;
-          session.resources.worktree = sanitizeWorktreeName(name);
-
-          assert.strictEqual(session.name, 'my cool feature');
-          assert.strictEqual(session.resources.worktree, 'my-cool-feature');
+          const worktreeName = sanitizeWorktreeName(name);
+          assert.strictEqual(worktreeName, 'my-cool-feature');
         });
 
         it('preserves valid names through sanitization', () => {
-          const session = createSession('uuid', '/path', 'key');
-          const name = 'feature/MAC-123-add-thing';
-          session.resources.worktree = sanitizeWorktreeName(name);
-
-          assert.strictEqual(session.resources.worktree, 'feature/MAC-123-add-thing');
+          const worktreeName = sanitizeWorktreeName('feature/MAC-123-add-thing');
+          assert.strictEqual(worktreeName, 'feature/MAC-123-add-thing');
         });
 
         it('rejects all-illegal name for worktree', () => {
-          const name = '***';
-          const worktreeName = sanitizeWorktreeName(name);
+          const worktreeName = sanitizeWorktreeName('***');
           assert.strictEqual(worktreeName, '');
-        });
-      });
-
-      describe('claude CLI args', () => {
-        /**
-         * Helper to build Claude CLI args matching newCommand logic
-         */
-        function buildClaudeArgs(
-          sessionId: string,
-          name: string | undefined,
-          opts: {
-            inGitRepo?: boolean;
-            noWorktree?: boolean;
-            model?: string;
-            permissionMode?: string;
-            effort?: string;
-            agent?: string;
-            passthroughArgs?: string[];
-          } = {}
-        ): string[] {
-          const { inGitRepo = true, noWorktree = false } = opts;
-          const args = ['--session-id', sessionId];
-          const useWorktree = name && !noWorktree && inGitRepo;
-          if (useWorktree) {
-            const worktreeName = sanitizeWorktreeName(name);
-            args.push('--worktree', worktreeName);
-          }
-          if (opts.model) args.push('--model', opts.model);
-          if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
-          if (opts.effort) args.push('--effort', opts.effort);
-          if (opts.agent) args.push('--agent', opts.agent);
-          if (opts.passthroughArgs) args.push(...opts.passthroughArgs);
-          return args;
-        }
-
-        it('always passes --session-id', () => {
-          const args = buildClaudeArgs('abc-123', undefined);
-
-          assert.deepStrictEqual(args, ['--session-id', 'abc-123']);
-        });
-
-        it('passes --worktree with name in git repo', () => {
-          const args = buildClaudeArgs('abc-123', 'my-feature', { inGitRepo: true });
-
-          assert.deepStrictEqual(args, ['--session-id', 'abc-123', '--worktree', 'my-feature']);
-        });
-
-        it('omits --worktree when not in git repo', () => {
-          const args = buildClaudeArgs('abc-123', 'my-feature', { inGitRepo: false });
-
-          assert.deepStrictEqual(args, ['--session-id', 'abc-123']);
-        });
-
-        it('omits --worktree when --no-worktree is set', () => {
-          const args = buildClaudeArgs('abc-123', 'my-feature', { noWorktree: true });
-
-          assert.deepStrictEqual(args, ['--session-id', 'abc-123']);
-        });
-
-        it('omits --worktree when undefined', () => {
-          const args = buildClaudeArgs('abc-123', undefined);
-
-          assert.ok(!args.includes('--worktree'));
-        });
-
-        it('omits --worktree when empty', () => {
-          const args = buildClaudeArgs('abc-123', '');
-
-          assert.ok(!args.includes('--worktree'));
-        });
-
-        it('preserves worktree name with slashes', () => {
-          const args = buildClaudeArgs('abc-123', 'feature/new-thing');
-
-          assert.strictEqual(args[3], 'feature/new-thing');
-        });
-
-        it('preserves worktree name with dashes and numbers', () => {
-          const args = buildClaudeArgs('abc-123', 'MAC-123-fix-bug');
-
-          assert.strictEqual(args[3], 'MAC-123-fix-bug');
-        });
-
-        it('orders --session-id before --worktree', () => {
-          const args = buildClaudeArgs('abc-123', 'my-feature');
-
-          assert.strictEqual(args[0], '--session-id');
-          assert.strictEqual(args[1], 'abc-123');
-          assert.strictEqual(args[2], '--worktree');
-          assert.strictEqual(args[3], 'my-feature');
-        });
-
-        it('appends --model when provided', () => {
-          const args = buildClaudeArgs('abc-123', undefined, { model: 'haiku' });
-
-          assert.ok(args.includes('--model'));
-          assert.ok(args.includes('haiku'));
-        });
-
-        it('appends --permission-mode when provided', () => {
-          const args = buildClaudeArgs('abc-123', undefined, { permissionMode: 'plan' });
-
-          assert.ok(args.includes('--permission-mode'));
-          assert.ok(args.includes('plan'));
-        });
-
-        it('appends --effort when provided', () => {
-          const args = buildClaudeArgs('abc-123', undefined, { effort: 'low' });
-
-          assert.ok(args.includes('--effort'));
-          assert.ok(args.includes('low'));
-        });
-
-        it('appends --agent when provided', () => {
-          const args = buildClaudeArgs('abc-123', undefined, { agent: 'my-agent' });
-
-          assert.ok(args.includes('--agent'));
-          assert.ok(args.includes('my-agent'));
-        });
-
-        it('appends passthrough args', () => {
-          const args = buildClaudeArgs('abc-123', undefined, {
-            passthroughArgs: ['--add-dir', '/tmp'],
-          });
-
-          assert.ok(args.includes('--add-dir'));
-          assert.ok(args.includes('/tmp'));
-        });
-
-        it('combines all flags', () => {
-          const args = buildClaudeArgs('abc-123', 'feat', {
-            model: 'haiku',
-            effort: 'high',
-            passthroughArgs: ['--verbose'],
-          });
-
-          assert.ok(args.includes('--worktree'));
-          assert.ok(args.includes('--model'));
-          assert.ok(args.includes('--effort'));
-          assert.ok(args.includes('--verbose'));
-        });
-      });
-
-      describe('spawn failure cleanup', () => {
-        it('deletes session from index on spawn failure', () => {
-          // Simulate: session was added to the index, then spawn failed
-          const sessions: Record<string, { id: string; state: string }> = {};
-          const sessionId = 'test-uuid';
-          sessions[sessionId] = { id: sessionId, state: 'busy' };
-
-          // On failure, the session should be removed
-          delete sessions[sessionId];
-
-          assert.strictEqual(sessions[sessionId], undefined);
-        });
-
-        it('deletes session from index on non-zero exit', () => {
-          const sessions: Record<string, { id: string; state: string }> = {};
-          const sessionId = 'test-uuid';
-          sessions[sessionId] = { id: sessionId, state: 'busy' };
-
-          const exitCode = 1;
-          if (exitCode !== 0) {
-            delete sessions[sessionId];
-          }
-
-          assert.strictEqual(sessions[sessionId], undefined);
-        });
-
-        it('preserves session on successful exit', () => {
-          const sessions: Record<string, { id: string; state: string }> = {};
-          const sessionId = 'test-uuid';
-          sessions[sessionId] = { id: sessionId, state: 'busy' };
-
-          const exitCode = 0;
-          if (exitCode !== 0) {
-            delete sessions[sessionId];
-          }
-
-          assert.ok(sessions[sessionId] != null);
         });
       });
     });

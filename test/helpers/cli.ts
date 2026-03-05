@@ -5,13 +5,13 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createProgram } from '../../src/index.js';
-import { captureConsole, captureStdout, mockProcessExit } from '../setup.js';
-import { updateIndex, getSession, readIndex, resetIndexCache } from '../../src/store/index.js';
-import { resetGitHubCache } from '../../src/detection/github.js';
-import { resetGitCaches } from '../../src/detection/git.js';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
-import type { SessionOverrides } from '../fixtures/sessions.js';
+import { createProgram } from '../../src/index.ts';
+import { captureConsole, captureStdout, mockProcessExit } from '../setup.ts';
+import { updateIndex, getSession, readIndex, resetIndexCache } from '../../src/store/index.ts';
+import { resetGitHubCache } from '../../src/detection/github.ts';
+import { resetGitCaches } from '../../src/detection/git.ts';
+import { createTestSession, resetSessionCounter } from '../fixtures/sessions.ts';
+import type { SessionOverrides } from '../fixtures/sessions.ts';
 
 export interface CLIHarness {
   tmpDir: string;

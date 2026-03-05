@@ -2,8 +2,8 @@
  * Notification hook - detect waiting state
  */
 
-import { updateIndex, getCurrentSession } from '../store/index.js';
-import type { HookInput } from './index.js';
+import { updateIndex, getCurrentSession } from '../store/index.ts';
+import type { HookInput } from './index.ts';
 
 export async function handleNotificationWaiting(
   sessionId: string | undefined,

@@ -3,8 +3,8 @@
  */
 
 import chalk from 'chalk';
-import { readIndex, updateIndex, getSession } from '../store/index.js';
-import { signalSession } from '../util/process.js';
+import { readIndex, updateIndex, getSession } from '../store/index.ts';
+import { signalSession } from '../util/process.ts';
 
 export async function bankruptcyCommand(options: { skip?: string[] }): Promise<void> {
   const index = readIndex();

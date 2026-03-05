@@ -2,7 +2,7 @@
  * Session test fixtures
  */
 
-import type { Session, SessionResources, SessionMeta } from '../../src/store/schema.js';
+import type { Session, SessionResources, SessionMeta } from '../../src/store/schema.ts';
 
 export interface SessionOverrides {
   id?: string;

@@ -4,13 +4,14 @@
 
 import { randomUUID } from 'node:crypto';
 import chalk from 'chalk';
-import { updateIndex } from '../store/index.js';
-import { createSession } from '../store/schema.js';
-import { encodeProjectKey } from '../claude/sessions.js';
-import { shortId } from '../util/format.js';
-import { execReplace, setTmuxPaneTitle } from '../util/exec.js';
-import { getGitRoot } from '../detection/git.js';
-import { sanitizeWorktreeName } from '../util/sanitize.js';
+import { updateIndex } from '../store/index.ts';
+import { createSession } from '../store/schema.ts';
+import { encodeProjectKey } from '../claude/sessions.ts';
+import { shortId } from '../util/format.ts';
+import { execReplace, setTmuxPaneTitle } from '../util/exec.ts';
+import { getGitRoot } from '../detection/git.ts';
+import { sanitizeWorktreeName } from '../util/sanitize.ts';
+import type { SessionMeta } from '../store/schema.ts';
 
 export interface NewOptions {
   jira?: string;
@@ -26,6 +27,58 @@ export interface NewOptions {
   passthroughArgs?: string[];
 }
 
+/**
+ * Parse --meta key=value pairs and --note into a SessionMeta object.
+ */
+export function parseMeta(meta: string[] | undefined, note: string | undefined): SessionMeta {
+  const result: SessionMeta = {};
+  if (note) result.note = note;
+  if (meta) {
+    for (const kv of meta) {
+      const eq = kv.indexOf('=');
+      if (eq !== -1) {
+        result[kv.slice(0, eq)] = kv.slice(eq + 1);
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Determine whether to use a worktree and compute the sanitized name.
+ */
+export function resolveWorktreeConfig(
+  name: string | undefined,
+  noWorktree: boolean,
+  cwd: string
+): { useWorktree: boolean; worktreeName: string | undefined } {
+  const inGitRepo = !!getGitRoot(cwd);
+  const useWorktree = !!(name && !noWorktree && inGitRepo);
+  const worktreeName = useWorktree ? sanitizeWorktreeName(name!) : undefined;
+  return { useWorktree, worktreeName };
+}
+
+/**
+ * Build the Claude CLI argument array for a new session.
+ */
+export function buildNewArgs(
+  sessionId: string,
+  useWorktree: boolean,
+  worktreeName: string | undefined,
+  options: Pick<NewOptions, 'model' | 'permissionMode' | 'effort' | 'agent' | 'passthroughArgs'>
+): string[] {
+  const args = ['--session-id', sessionId];
+  if (useWorktree && worktreeName) {
+    args.push('--worktree', worktreeName);
+  }
+  if (options.model) args.push('--model', options.model);
+  if (options.permissionMode) args.push('--permission-mode', options.permissionMode);
+  if (options.effort) args.push('--effort', options.effort);
+  if (options.agent) args.push('--agent', options.agent);
+  if (options.passthroughArgs) args.push(...options.passthroughArgs);
+  return args;
+}
+
 export async function newCommand(name: string | undefined, options: NewOptions): Promise<void> {
   const sessionId = randomUUID();
   const cwd = process.cwd();
@@ -39,9 +92,7 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   if (options.pr) session.resources.pr = options.pr;
   if (options.branch) session.resources.branch = options.branch;
 
-  const inGitRepo = !!getGitRoot(cwd);
-  const useWorktree = name && !options.noWorktree && inGitRepo;
-  const worktreeName = useWorktree ? sanitizeWorktreeName(name!) : undefined;
+  const { useWorktree, worktreeName } = resolveWorktreeConfig(name, !!options.noWorktree, cwd);
 
   if (useWorktree && !worktreeName) {
     console.error(chalk.red(`Name "${name}" cannot be used as a worktree name. Use --no-worktree or choose a different name.`));
@@ -50,20 +101,13 @@ export async function newCommand(name: string | undefined, options: NewOptions):
 
   if (useWorktree) {
     session.resources.worktree = worktreeName;
-  } else if (name && !options.noWorktree && !inGitRepo) {
+  } else if (name && !options.noWorktree && !getGitRoot(cwd)) {
     console.log(chalk.dim('Not in a git repository. Skipping worktree creation.'));
   }
 
   // Populate meta
-  if (options.note) session.meta.note = options.note;
-  if (options.meta) {
-    for (const kv of options.meta) {
-      const eq = kv.indexOf('=');
-      if (eq !== -1) {
-        session.meta[kv.slice(0, eq)] = kv.slice(eq + 1);
-      }
-    }
-  }
+  const meta = parseMeta(options.meta, options.note);
+  Object.assign(session.meta, meta);
 
   // Save to c's index
   await updateIndex((index) => {
@@ -78,15 +122,7 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   console.log(chalk.dim(`Starting session: ${displayName}.`));
   setTmuxPaneTitle(displayName);
 
-  const args = ['--session-id', sessionId];
-  if (useWorktree) {
-    args.push('--worktree', worktreeName!);
-  }
-  if (options.model) args.push('--model', options.model);
-  if (options.permissionMode) args.push('--permission-mode', options.permissionMode);
-  if (options.effort) args.push('--effort', options.effort);
-  if (options.agent) args.push('--agent', options.agent);
-  if (options.passthroughArgs) args.push(...options.passthroughArgs);
+  const args = buildNewArgs(sessionId, useWorktree, worktreeName, options);
 
   let exitCode: number;
   try {

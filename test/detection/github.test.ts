@@ -8,7 +8,7 @@ import {
   parseGitHubUsername,
   dehyphenate,
   matchesUsernamePrefix,
-} from '../../src/detection/github.js';
+} from '../../src/detection/github.ts';
 
 describe('c', () => {
   describe('detection', () => {

@@ -4,13 +4,13 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { useFakeTime } from '../setup.js';
+import { useFakeTime } from '../setup.ts';
 
 // These are pure functions we can test directly
-import { relativeTime, shortId, displayWidth, fixedWidth, getRepoName, getBranchDisplay, formatSessionLine, formatFileSize, computeUniquePrefixLength, highlightId, buildPrefixMap } from '../../src/util/format.js';
-import { hyperlink } from '../../src/util/hyperlink.js';
-import type { Session } from '../../src/store/schema.js';
-import type { ColumnLayout } from '../../src/util/layout.js';
+import { relativeTime, shortId, displayWidth, fixedWidth, getRepoName, getBranchDisplay, formatSessionLine, formatFileSize, computeUniquePrefixLength, highlightId, buildPrefixMap } from '../../src/util/format.ts';
+import { hyperlink } from '../../src/util/hyperlink.ts';
+import type { Session } from '../../src/store/schema.ts';
+import type { ColumnLayout } from '../../src/util/layout.ts';
 import chalk from 'chalk';
 
 describe('c', () => {

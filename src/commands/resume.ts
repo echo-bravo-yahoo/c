@@ -5,11 +5,12 @@
 import { existsSync, mkdirSync, renameSync, cpSync } from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
-import { getSession, findSessions, findSessionsByName, updateIndex } from '../store/index.js';
-import { getClaudeSession, findClaudeSessionIdsByTitle, encodeProjectKey, PROJECTS_DIR } from '../claude/sessions.js';
-import { createSession } from '../store/schema.js';
-import { exec, spawnInteractive, setTmuxPaneTitle } from '../util/exec.js';
-import { getDisplayName, shortId, highlightId } from '../util/format.js';
+import { getSession, findSessions, findSessionsByName, updateIndex } from '../store/index.ts';
+import { getClaudeSession, findClaudeSessionIdsByTitle, encodeProjectKey, PROJECTS_DIR } from '../claude/sessions.ts';
+import { createSession } from '../store/schema.ts';
+import { exec, spawnInteractive, setTmuxPaneTitle } from '../util/exec.ts';
+import { getDisplayName, shortId, highlightId } from '../util/format.ts';
+import type { Session } from '../store/schema.ts';
 
 export interface ResumeOptions {
   model?: string;
@@ -20,7 +21,11 @@ export interface ResumeOptions {
   passthroughArgs?: string[];
 }
 
-export async function resumeCommand(idOrPrefix: string, options: ResumeOptions = {}): Promise<void> {
+/**
+ * Multi-fallback session lookup: prefix → name → Claude title → Claude storage adoption.
+ * Returns the resolved session or undefined. Calls process.exit(1) on ambiguous matches.
+ */
+export async function resolveSessionForResume(idOrPrefix: string): Promise<Session | undefined> {
   let session = getSession(idOrPrefix);
 
   if (!session) {
@@ -81,6 +86,73 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
       process.exit(1);
     }
   }
+
+  return session;
+}
+
+/**
+ * Build the Claude CLI argument array for resuming a session.
+ */
+export function buildResumeArgs(sessionId: string, options: ResumeOptions): string[] {
+  const args = ['-r', sessionId];
+  if (options.model) args.push('--model', options.model);
+  if (options.permissionMode) args.push('--permission-mode', options.permissionMode);
+  if (options.effort) args.push('--effort', options.effort);
+  if (options.agent) args.push('--agent', options.agent);
+  if (options.forkSession) args.push('--fork-session');
+  if (options.passthroughArgs) args.push(...options.passthroughArgs);
+  return args;
+}
+
+/**
+ * Move a Claude transcript from one project directory to another.
+ * Used when a worktree is deleted and the session falls back to the repo root.
+ */
+export function relocateTranscript(
+  claudeSession: { id: string; transcriptPath: string; projectKey: string },
+  targetDirectory: string
+): void {
+  const targetProjectKey = encodeProjectKey(targetDirectory);
+  if (claudeSession.projectKey === targetProjectKey) return;
+
+  const targetProjectDir = path.join(PROJECTS_DIR, targetProjectKey);
+  const targetTranscript = path.join(targetProjectDir, `${claudeSession.id}.jsonl`);
+
+  if (existsSync(targetTranscript)) return;
+
+  try {
+    mkdirSync(targetProjectDir, { recursive: true });
+
+    // Move transcript file
+    renameSync(claudeSession.transcriptPath, targetTranscript);
+
+    // Move companion directory (contains history.jsonl) if it exists
+    const sourceCompanionDir = path.join(path.dirname(claudeSession.transcriptPath), claudeSession.id);
+    const targetCompanionDir = path.join(targetProjectDir, claudeSession.id);
+    if (existsSync(sourceCompanionDir)) {
+      cpSync(sourceCompanionDir, targetCompanionDir, { recursive: true });
+    }
+  } catch {
+    // Non-fatal — resume will still attempt to launch
+  }
+}
+
+/**
+ * Recreate a deleted git worktree from the session's branch.
+ * Returns true if the worktree was successfully recreated.
+ */
+export function recreateWorktree(repoRoot: string, worktreePath: string, branch: string): boolean {
+  // Verify the branch still exists (outputs SHA on success, '' on failure)
+  if (!exec(`git rev-parse --verify "refs/heads/${branch}"`, { cwd: repoRoot })) return false;
+
+  // git worktree add outputs to stderr; check directory existence after
+  exec(`git worktree add "${worktreePath}" "${branch}"`, { cwd: repoRoot });
+  return existsSync(worktreePath);
+}
+
+export async function resumeCommand(idOrPrefix: string, options: ResumeOptions = {}): Promise<void> {
+  const session = await resolveSessionForResume(idOrPrefix);
+  if (!session) return; // resolveSessionForResume exits on failure
 
   const displayName = getDisplayName(session);
 
@@ -194,13 +266,7 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
   console.log(chalk.dim(`Resuming session ${displayName} in ${session.directory}...`));
   if (displayName) setTmuxPaneTitle(displayName);
 
-  const resumeArgs = ['-r', session.id];
-  if (options.model) resumeArgs.push('--model', options.model);
-  if (options.permissionMode) resumeArgs.push('--permission-mode', options.permissionMode);
-  if (options.effort) resumeArgs.push('--effort', options.effort);
-  if (options.agent) resumeArgs.push('--agent', options.agent);
-  if (options.forkSession) resumeArgs.push('--fork-session');
-  if (options.passthroughArgs) resumeArgs.push(...options.passthroughArgs);
+  const resumeArgs = buildResumeArgs(session.id, options);
 
   let exitCode: number;
   try {
@@ -237,50 +303,4 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
   }
 
   process.exit(exitCode);
-}
-
-/**
- * Recreate a deleted git worktree from the session's branch.
- * Returns true if the worktree was successfully recreated.
- */
-function recreateWorktree(repoRoot: string, worktreePath: string, branch: string): boolean {
-  // Verify the branch still exists (outputs SHA on success, '' on failure)
-  if (!exec(`git rev-parse --verify "refs/heads/${branch}"`, { cwd: repoRoot })) return false;
-
-  // git worktree add outputs to stderr; check directory existence after
-  exec(`git worktree add "${worktreePath}" "${branch}"`, { cwd: repoRoot });
-  return existsSync(worktreePath);
-}
-
-/**
- * Move a Claude transcript from one project directory to another.
- * Used when a worktree is deleted and the session falls back to the repo root.
- */
-function relocateTranscript(
-  claudeSession: { id: string; transcriptPath: string; projectKey: string },
-  targetDirectory: string
-): void {
-  const targetProjectKey = encodeProjectKey(targetDirectory);
-  if (claudeSession.projectKey === targetProjectKey) return;
-
-  const targetProjectDir = path.join(PROJECTS_DIR, targetProjectKey);
-  const targetTranscript = path.join(targetProjectDir, `${claudeSession.id}.jsonl`);
-
-  if (existsSync(targetTranscript)) return;
-
-  try {
-    mkdirSync(targetProjectDir, { recursive: true });
-
-    // Move transcript file
-    renameSync(claudeSession.transcriptPath, targetTranscript);
-
-    // Move companion directory (contains history.jsonl) if it exists
-    const sourceCompanionDir = path.join(path.dirname(claudeSession.transcriptPath), claudeSession.id);
-    const targetCompanionDir = path.join(targetProjectDir, claudeSession.id);
-    if (existsSync(sourceCompanionDir)) {
-      cpSync(sourceCompanionDir, targetCompanionDir, { recursive: true });
-    }
-  } catch {
-    // Non-fatal — resume will still attempt to launch
-  }
 }

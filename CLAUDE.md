@@ -69,7 +69,7 @@ graph TD
 Command tests use `test/helpers/cli.ts` to run commands through `createProgram().parseAsync()`. This exercises argument parsing, store persistence, output formatting, and error handling end-to-end.
 
 ```ts
-import { setupCLI } from '../helpers/cli.js';
+import { setupCLI } from '../helpers/cli.ts';
 
 let cli: CLIHarness;
 beforeEach(() => { cli = setupCLI(); });
@@ -98,13 +98,13 @@ mock.module(resolve('src/claude/sessions.ts'), {
   namedExports: { getClaudeSession: () => ({ id: 'stub' }), /* ... */ },
 });
 
-const { setupCLI } = await import('../helpers/cli.js');
+const { setupCLI } = await import('../helpers/cli.ts');
 ```
 
 ### Running individual test files
 Files that use `mock.module()` require the experimental flag:
 ```bash
-node --import tsx --experimental-test-module-mocks --test test/commands/file.test.ts
+node --experimental-strip-types --experimental-test-module-mocks --test test/commands/file.test.ts
 ```
 `npx tsx --test` will fail with `mock.module is not a function`.
 

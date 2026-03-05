@@ -3,9 +3,9 @@
  */
 
 import chalk from 'chalk';
-import { updateIndex, getSession } from '../store/index.js';
-import { findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.js';
-import { setTmuxPaneTitle } from '../util/exec.js';
+import { updateIndex, getSession } from '../store/index.ts';
+import { findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.ts';
+import { setTmuxPaneTitle } from '../util/exec.ts';
 
 export async function nameCommand(idOrPrefix: string, name: string): Promise<void> {
   const session = getSession(idOrPrefix);

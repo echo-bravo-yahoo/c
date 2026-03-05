@@ -7,16 +7,16 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { useFakeTime } from '../setup.js';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
+import { useFakeTime } from '../setup.ts';
+import { createTestSession, resetSessionCounter } from '../fixtures/sessions.ts';
 import {
   formatSessionLine,
   measureColumns,
   fixedWidth,
   displayWidth,
-} from '../../src/util/format.js';
-import { computeColumnLayout, COLUMN_SPECS, GUTTER } from '../../src/util/layout.js';
-import type { Session } from '../../src/store/schema.js';
+} from '../../src/util/format.ts';
+import { computeColumnLayout, COLUMN_SPECS, GUTTER } from '../../src/util/layout.ts';
+import type { Session } from '../../src/store/schema.ts';
 
 /** Strip ANSI escape codes */
 function strip(s: string): string {

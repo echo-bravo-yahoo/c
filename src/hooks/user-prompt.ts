@@ -2,11 +2,11 @@
  * UserPromptSubmit hook - clear waiting state
  */
 
-import { updateIndex, getCurrentSession } from '../store/index.js';
-import { findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.js';
-import { setTmuxPaneTitle } from '../util/exec.js';
-import { debugLog } from '../util/debug.js';
-import type { HookInput } from './index.js';
+import { updateIndex, getCurrentSession } from '../store/index.ts';
+import { findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.ts';
+import { setTmuxPaneTitle } from '../util/exec.ts';
+import { debugLog } from '../util/debug.ts';
+import type { HookInput } from './index.ts';
 
 export async function handleUserPrompt(
   sessionId: string | undefined,

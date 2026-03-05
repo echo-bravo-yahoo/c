@@ -3,7 +3,7 @@
  */
 
 import chalk from 'chalk';
-import { getSession, getCurrentSession } from '../store/index.js';
+import { getSession, getCurrentSession } from '../store/index.ts';
 
 export function dirCommand(idOrPrefix?: string): void {
   const session = idOrPrefix

@@ -5,32 +5,32 @@
  */
 
 import { Command, Option } from 'commander';
-import { initCompletion, installCompletion, uninstallCompletion } from './completion.js';
-import { listCommand } from './commands/list.js';
-import { newCommand } from './commands/new.js';
-import { showCommand } from './commands/show.js';
-import { resumeCommand } from './commands/resume.js';
-import { archiveCommand } from './commands/archive.js';
-import { bankruptcyCommand } from './commands/bankruptcy.js';
-import { closeCommand } from './commands/close.js';
-import { linkCommand } from './commands/link.js';
-import { unlinkCommand } from './commands/unlink.js';
-import { tagCommand } from './commands/tag.js';
-import { untagCommand } from './commands/untag.js';
-import { nameCommand } from './commands/name.js';
-import { metaCommand } from './commands/meta.js';
-import { findCommand } from './commands/find.js';
-import { cleanCommand } from './commands/clean.js';
-import { dirCommand } from './commands/dir.js';
-import { initCommand } from './commands/init.js';
-import { execCommand } from './commands/exec.js';
-import { openCommand } from './commands/open.js';
-import { logCommand } from './commands/log.js';
-import { memoryCommand } from './commands/memory.js';
-import { statsCommand } from './commands/stats.js';
-import { tmuxStatusCommand } from './commands/tmux/status.js';
-import { tmuxPickCommand } from './commands/tmux/pick.js';
-import { handleHook } from './hooks/index.js';
+import { initCompletion, installCompletion, uninstallCompletion } from './completion.ts';
+import { listCommand } from './commands/list.ts';
+import { newCommand } from './commands/new.ts';
+import { showCommand } from './commands/show.ts';
+import { resumeCommand } from './commands/resume.ts';
+import { archiveCommand } from './commands/archive.ts';
+import { bankruptcyCommand } from './commands/bankruptcy.ts';
+import { closeCommand } from './commands/close.ts';
+import { linkCommand } from './commands/link.ts';
+import { unlinkCommand } from './commands/unlink.ts';
+import { tagCommand } from './commands/tag.ts';
+import { untagCommand } from './commands/untag.ts';
+import { nameCommand } from './commands/name.ts';
+import { metaCommand } from './commands/meta.ts';
+import { findCommand } from './commands/find.ts';
+import { cleanCommand } from './commands/clean.ts';
+import { dirCommand } from './commands/dir.ts';
+import { initCommand } from './commands/init.ts';
+import { execCommand } from './commands/exec.ts';
+import { openCommand } from './commands/open.ts';
+import { logCommand } from './commands/log.ts';
+import { memoryCommand } from './commands/memory.ts';
+import { statsCommand } from './commands/stats.ts';
+import { tmuxStatusCommand } from './commands/tmux/status.ts';
+import { tmuxPickCommand } from './commands/tmux/pick.ts';
+import { handleHook } from './hooks/index.ts';
 import { realpathSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -316,7 +316,7 @@ export function createProgram(): Command {
     .option('--orphans', 'Delete sessions with no Claude data')
     .option('--closed', 'Delete all closed sessions')
     .action(async (ids, options) => {
-      const { deleteCommand } = await import('./commands/delete.js');
+      const { deleteCommand } = await import('./commands/delete.ts');
       await deleteCommand(ids.length ? ids : undefined, options);
     });
 

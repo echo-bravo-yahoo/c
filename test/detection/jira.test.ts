@@ -4,7 +4,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { extractJiraTicket, extractAllJiraTickets, extractJiraFromBranch, buildJiraUrl } from '../../src/detection/jira.js';
+import { extractJiraTicket, extractAllJiraTickets, extractJiraFromBranch, buildJiraUrl } from '../../src/detection/jira.ts';
 
 describe('c', () => {
   describe('detection', () => {

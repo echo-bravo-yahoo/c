@@ -6,7 +6,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { setupCLI, type CLIHarness } from '../helpers/cli.js';
+import { setupCLI, type CLIHarness } from '../helpers/cli.ts';
 
 describe('c', () => {
   describe('commands', () => {

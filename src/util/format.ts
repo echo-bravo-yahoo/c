@@ -3,14 +3,14 @@
  */
 
 import chalk from 'chalk';
-import { Session, SessionState } from '../store/schema.js';
-import { getClaudeSessionTitles, getClaudeSession, listClaudeSessions, readClaudeSessionIndex } from '../claude/sessions.js';
-import { getAllSessions, getSession } from '../store/index.js';
-import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.js';
-import { getRepoSlug } from '../detection/git.js';
-import { buildJiraUrl } from '../detection/jira.js';
-import { hyperlink } from './hyperlink.js';
-import { computeColumnLayout, ID_FIXED_WIDTH, type ColumnKey, type ColumnLayout } from './layout.js';
+import type { Session, SessionState } from '../store/schema.ts';
+import { getClaudeSessionTitles, getClaudeSession, listClaudeSessions, readClaudeSessionIndex } from '../claude/sessions.ts';
+import { getAllSessions, getSession } from '../store/index.ts';
+import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.ts';
+import { getRepoSlug } from '../detection/git.ts';
+import { buildJiraUrl } from '../detection/jira.ts';
+import { hyperlink } from './hyperlink.ts';
+import { computeColumnLayout, ID_FIXED_WIDTH, type ColumnKey, type ColumnLayout } from './layout.ts';
 
 const USER_ICON = '󰇘';
 

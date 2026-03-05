@@ -7,7 +7,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { exec, setTmuxPaneTitle, spawnInteractive } from '../../src/util/exec.js';
+import { exec, setTmuxPaneTitle, spawnInteractive } from '../../src/util/exec.ts';
 
 describe('c', () => {
   describe('util', () => {

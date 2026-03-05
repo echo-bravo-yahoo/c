@@ -3,9 +3,9 @@
  */
 
 import chalk from 'chalk';
-import { updateIndex, getSession, getCurrentSession } from '../store/index.js';
-import { getDisplayName, shortId } from '../util/format.js';
-import { signalSession } from '../util/process.js';
+import { updateIndex, getSession, getCurrentSession } from '../store/index.ts';
+import { getDisplayName, shortId } from '../util/format.ts';
+import { signalSession } from '../util/process.ts';
 
 export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
   // No IDs: fall back to current directory session

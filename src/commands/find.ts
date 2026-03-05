@@ -2,9 +2,9 @@
  * c find <query> - search sessions
  */
 
-import { getSessions, getAllSessions } from '../store/index.js';
-import { printSessionTable, getDisplayName } from '../util/format.js';
-import type { Session } from '../store/schema.js';
+import { getSessions, getAllSessions } from '../store/index.ts';
+import { printSessionTable, getDisplayName } from '../util/format.ts';
+import type { Session } from '../store/schema.ts';
 
 export interface FindOptions {
   json?: boolean;

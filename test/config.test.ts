@@ -4,7 +4,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { mergeOptions } from '../src/config.js';
+import { mergeOptions } from '../src/config.ts';
 
 describe('config', () => {
   describe('mergeOptions', () => {

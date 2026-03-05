@@ -4,7 +4,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { sanitizeWorktreeName } from '../../src/util/sanitize.js';
+import { sanitizeWorktreeName } from '../../src/util/sanitize.ts';
 
 describe('c', () => {
   describe('util', () => {

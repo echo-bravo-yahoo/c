@@ -3,9 +3,9 @@
  */
 
 import { statSync } from 'node:fs';
-import { getSessions, getStoreDir } from '../store/index.js';
-import { listClaudeSessions } from '../claude/sessions.js';
-import { formatFileSize } from '../util/format.js';
+import { getSessions, getStoreDir } from '../store/index.ts';
+import { listClaudeSessions } from '../claude/sessions.ts';
+import { formatFileSize } from '../util/format.ts';
 
 export function statsCommand(): void {
   const all = getSessions({ state: ['busy', 'idle', 'waiting', 'closed', 'archived'] });

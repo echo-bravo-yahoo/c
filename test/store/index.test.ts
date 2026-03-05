@@ -12,9 +12,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import TOML from '@iarna/toml';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
-import { createIndexWithSessions } from '../fixtures/index.js';
-import type { IndexFile } from '../../src/store/schema.js';
+import { createTestSession, resetSessionCounter } from '../fixtures/sessions.ts';
+import { createIndexWithSessions } from '../fixtures/index.ts';
+import type { IndexFile } from '../../src/store/schema.ts';
 
 // Test with real temp directory
 let testDir: string;

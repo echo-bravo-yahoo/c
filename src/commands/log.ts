@@ -4,9 +4,9 @@
 
 import chalk from 'chalk';
 import { readFileSync } from 'node:fs';
-import { getSession, getCurrentSession } from '../store/index.js';
-import { findTranscriptPath } from '../claude/sessions.js';
-import { relativeTime } from '../util/format.js';
+import { getSession, getCurrentSession } from '../store/index.ts';
+import { findTranscriptPath } from '../claude/sessions.ts';
+import { relativeTime } from '../util/format.ts';
 
 export interface LogOptions {
   lines?: number;

@@ -4,7 +4,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { signalSession } from '../../src/util/process.js';
+import { signalSession } from '../../src/util/process.ts';
 
 describe('c', () => {
   describe('util', () => {

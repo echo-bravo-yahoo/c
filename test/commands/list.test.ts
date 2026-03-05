@@ -6,12 +6,21 @@ import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
 import { resolve } from 'node:path';
 
-// Mock claude/sessions.js BEFORE importing anything that depends on it.
-// Must use dynamic import below to ensure mock is registered first.
+// Late-bound reference to readIndex — set after import so the mock can
+// return all seeded session IDs, preventing reconcileStaleSessions from
+// marking active test sessions as stale/closed.
+let readIndexFn: (() => { sessions: Record<string, unknown> }) | null = null;
+
 mock.module(resolve('src/claude/sessions.ts'), {
   namedExports: {
     getClaudeSession: () => ({ id: 'stub' }),
-    listClaudeSessions: () => [],
+    listClaudeSessions: () => {
+      if (!readIndexFn) return [];
+      const idx = readIndexFn();
+      return Object.keys(idx.sessions).map(id => ({
+        id, projectKey: '', directory: '', transcriptPath: '', historyPath: '', modifiedAt: new Date(),
+      }));
+    },
     getClaudeSessionTitles: () => ({ customTitle: null, summary: null }),
     getClaudeSessionsForDirectory: () => [],
     readClaudeSessionIndex: () => null,
@@ -26,9 +35,10 @@ mock.module(resolve('src/claude/sessions.ts'), {
   },
 });
 
-// Dynamic import so the module graph loads AFTER mock.module registration
-const { setupCLI } = await import('../helpers/cli.js');
-type CLIHarness = import('../helpers/cli.js').CLIHarness;
+type CLIHarness = import('../helpers/cli.ts').CLIHarness;
+const { setupCLI } = await import('../helpers/cli.ts');
+const { readIndex } = await import('../../src/store/index.ts');
+readIndexFn = readIndex;
 
 // shortId() takes first 8 chars. Keep test IDs <= 8 chars so assertions
 // on console output match the displayed value exactly.
