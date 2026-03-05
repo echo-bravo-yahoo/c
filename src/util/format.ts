@@ -3,8 +3,8 @@
  */
 
 import chalk from 'chalk';
-import { Session } from '../store/schema.js';
-import { getClaudeSessionTitles, getClaudeSession, listClaudeSessions } from '../claude/sessions.js';
+import { Session, SessionState } from '../store/schema.js';
+import { getClaudeSessionTitles, getClaudeSession, listClaudeSessions, readClaudeSessionIndex } from '../claude/sessions.js';
 import { getAllSessions } from '../store/index.js';
 import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.js';
 import { getRepoSlug } from '../detection/git.js';
@@ -13,6 +13,48 @@ import { hyperlink } from './hyperlink.js';
 import { computeColumnLayout, ID_FIXED_WIDTH, type ColumnKey, type ColumnLayout } from './layout.js';
 
 const USER_ICON = '󰇘';
+
+// --- Sort types and logic ---
+
+export interface SortSpec {
+  field: string;
+  desc: boolean;
+}
+
+export interface TableOptions {
+  flat?: boolean;
+  bottomUp?: boolean;
+  sortSpecs?: SortSpec[];
+  sizeMap?: Map<string, number>;
+}
+
+const STATE_PRIORITY: Record<SessionState, number> = {
+  waiting: 0, idle: 1, busy: 2, closed: 3, archived: 4,
+};
+
+export function sortSessions(
+  sessions: Session[],
+  specs: SortSpec[],
+  sizeMap?: Map<string, number>
+): Session[] {
+  return [...sessions].sort((a, b) => {
+    for (const { field, desc } of specs) {
+      let cmp = 0;
+      switch (field) {
+        case 'active':  cmp = a.last_active_at.getTime() - b.last_active_at.getTime(); break;
+        case 'created': cmp = a.created_at.getTime() - b.created_at.getTime(); break;
+        case 'name':    cmp = getDisplayName(a).localeCompare(getDisplayName(b)); break;
+        case 'size':    cmp = (sizeMap?.get(a.id) ?? 0) - (sizeMap?.get(b.id) ?? 0); break;
+        case 'status':  cmp = STATE_PRIORITY[a.state] - STATE_PRIORITY[b.state]; break;
+        case 'repo':    cmp = getRepoName(a.directory).localeCompare(getRepoName(b.directory)); break;
+      }
+      if (cmp !== 0) return desc ? -cmp : cmp;
+    }
+    return 0;
+  });
+}
+
+// --- Format helpers ---
 
 /**
  * Format a file size in bytes to human-readable form
@@ -53,6 +95,20 @@ export function relativeTime(date: Date): string {
   if (hours > 0) return `${hours}h ago`;
   if (minutes > 0) return `${minutes}m ago`;
   return 'just now';
+}
+
+/**
+ * Format duration in milliseconds to human-readable form
+ */
+export function formatDuration(ms: number): string {
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remainMins = mins % 60;
+  if (hours < 24) return remainMins ? `${hours}h ${remainMins}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remainHours = hours % 24;
+  return remainHours ? `${days}d ${remainHours}h` : `${days}d`;
 }
 
 /**
@@ -263,7 +319,7 @@ export function getBranchDisplay(session: Session): { text: string; color: 'cyan
 /**
  * Format a session as a single line for list views
  */
-export function formatSessionLine(session: Session, layout: ColumnLayout, depth = 0, prefixMap?: Map<string, number>, repoSlug?: string, sizeMap?: Map<string, number>): string {
+export function formatSessionLine(session: Session, layout: ColumnLayout, depth = 0, prefixMap?: Map<string, number>, repoSlug?: string, sizeMap?: Map<string, number>, bottomUp?: boolean): string {
   const parts: string[] = [];
 
   // ID column (always visible when idName is visible)
@@ -272,8 +328,9 @@ export function formatSessionLine(session: Session, layout: ColumnLayout, depth 
     const prefixLen = prefixMap?.get(session.id) ?? id.length;
     const styledId = highlightId(id, prefixLen);
     const indent = '  '.repeat(depth);
+    const connector = bottomUp ? '┌' : '└';
     const idCol = depth > 0
-      ? indent + chalk.dim('└ ') + styledId + '  '
+      ? indent + chalk.dim(connector + ' ') + styledId + '  '
       : '  ' + styledId + '  ';
     parts.push(idCol);
 
@@ -378,9 +435,24 @@ export function formatSessionDetails(session: Session): string {
   lines.push(chalk.dim('  Pane: ') + (session.resources.tmux_pane ?? '–'));
   lines.push(chalk.dim('  Created: ') + session.created_at.toLocaleString());
   lines.push(chalk.dim('  Last active: ') + session.last_active_at.toLocaleString());
+
+  // Duration
+  const duration = session.last_active_at.getTime() - session.created_at.getTime();
+  lines.push(chalk.dim('  Duration: ') + formatDuration(duration));
+
   const claudeSession = getClaudeSession(session.id);
   if (claudeSession) {
     lines.push(chalk.dim('  Session size: ') + formatFileSize(claudeSession.fileSize));
+  }
+
+  // Message count and first prompt from Claude's index
+  const claudeIndex = readClaudeSessionIndex(session.project_key);
+  const indexEntry = claudeIndex?.entries.find(e => e.sessionId === session.id);
+  if (indexEntry?.messageCount) {
+    lines.push(chalk.dim('  Messages: ') + String(indexEntry.messageCount));
+  }
+  if (!session.name && indexEntry?.firstPrompt) {
+    lines.push(chalk.dim(`  "${indexEntry.firstPrompt.slice(0, 80)}"`));
   }
 
   // Resources
@@ -442,7 +514,9 @@ type OutputRow =
  * Order sessions so children appear under their parents, with gap markers
  * for hidden (archived) ancestors in the chain.
  */
-function orderSessionsWithChildren(visibleSessions: Session[]): OutputRow[] {
+function orderSessionsWithChildren(visibleSessions: Session[], options?: TableOptions): OutputRow[] {
+  const bottomUp = options?.bottomUp ?? false;
+
   // Get all sessions to trace ancestry through hidden sessions
   const allSessions = getAllSessions();
   const allById = new Map(allSessions.map((s) => [s.id, s]));
@@ -482,9 +556,15 @@ function orderSessionsWithChildren(visibleSessions: Session[]): OutputRow[] {
     byParent.set(m.visibleParentId, children);
   }
 
-  // Sort each group by last_active_at descending
-  for (const children of byParent.values()) {
-    children.sort((a, b) => b.last_active_at.getTime() - a.last_active_at.getTime());
+  // Sort each group: use provided sort specs or default to last_active_at desc
+  if (options?.sortSpecs) {
+    for (const children of byParent.values()) {
+      children.splice(0, children.length, ...sortSessions(children, options.sortSpecs, options.sizeMap));
+    }
+  } else {
+    for (const children of byParent.values()) {
+      children.sort((a, b) => b.last_active_at.getTime() - a.last_active_at.getTime());
+    }
   }
 
   const result: OutputRow[] = [];
@@ -496,8 +576,11 @@ function orderSessionsWithChildren(visibleSessions: Session[]): OutputRow[] {
     const childDepth = parentDepth + 1;
 
     for (const child of children) {
-      // Show gap marker only for children that actually have hidden ancestors
       const childMeta = meta.get(child.id)!;
+
+      // In bottom-up: recurse first (deepest children first)
+      if (bottomUp) addChildren(child.id, childDepth);
+
       if (childMeta.hiddenCount > 0) {
         result.push({
           type: 'gap',
@@ -506,7 +589,9 @@ function orderSessionsWithChildren(visibleSessions: Session[]): OutputRow[] {
         });
       }
       result.push({ type: 'session', session: child, depth: childDepth });
-      addChildren(child.id, childDepth);
+
+      // In top-down (default): recurse after
+      if (!bottomUp) addChildren(child.id, childDepth);
     }
   }
 
@@ -515,15 +600,24 @@ function orderSessionsWithChildren(visibleSessions: Session[]): OutputRow[] {
   for (const root of roots) {
     const rootMeta = meta.get(root.id)!;
 
-    // Check if this "root" is actually an orphan with hidden ancestors
     if (rootMeta.hiddenCount > 0) {
-      // Show gap marker at depth 0, but session at depth 1 (as child of hidden ancestors)
-      result.push({ type: 'gap', count: rootMeta.hiddenCount, depth: 0 });
-      result.push({ type: 'session', session: root, depth: 1 });
-      addChildren(root.id, 1);
+      if (bottomUp) {
+        addChildren(root.id, 1);
+        result.push({ type: 'gap', count: rootMeta.hiddenCount, depth: 0 });
+        result.push({ type: 'session', session: root, depth: 1 });
+      } else {
+        result.push({ type: 'gap', count: rootMeta.hiddenCount, depth: 0 });
+        result.push({ type: 'session', session: root, depth: 1 });
+        addChildren(root.id, 1);
+      }
     } else {
-      result.push({ type: 'session', session: root, depth: 0 });
-      addChildren(root.id, 0);
+      if (bottomUp) {
+        addChildren(root.id, 0);
+        result.push({ type: 'session', session: root, depth: 0 });
+      } else {
+        result.push({ type: 'session', session: root, depth: 0 });
+        addChildren(root.id, 0);
+      }
     }
   }
 
@@ -542,7 +636,7 @@ function formatGapLine(count: number, depth: number): string {
 /**
  * Print a table of sessions
  */
-export function printSessionTable(sessions: Session[], terminalWidth?: number, allSessions?: Session[]): void {
+export function printSessionTable(sessions: Session[], terminalWidth?: number, allSessions?: Session[], options?: TableOptions): void {
   if (sessions.length === 0) {
     console.log(chalk.dim('No sessions found.'));
     return;
@@ -553,15 +647,23 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
   // Pre-compute unique prefix lengths for ID highlighting
   const prefixMap = buildPrefixMap(sessions, allSessions);
 
-  // Reorder so children appear under their parents, with gap markers
-  const ordered = orderSessionsWithChildren(sessions);
-
   // Build size map from Claude's session files
   const sizeMap = new Map<string, number>();
   const claudeSessions = listClaudeSessions();
   for (const cs of claudeSessions) {
     sizeMap.set(cs.id, cs.fileSize);
   }
+
+  // Apply sorting before ordering
+  let sortedSessions = sessions;
+  if (options?.sortSpecs) {
+    sortedSessions = sortSessions(sessions, options.sortSpecs, sizeMap);
+  }
+
+  // Reorder so children appear under their parents, with gap markers
+  const ordered = options?.flat
+    ? sortedSessions.map(s => ({ type: 'session' as const, session: s, depth: 0 }))
+    : orderSessionsWithChildren(sortedSessions, { ...options, sizeMap });
 
   // Measure content and compute layout, accounting for nesting depth
   const contentWidths = measureColumns(sessions, sizeMap);
@@ -607,11 +709,12 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
     return slugCache.get(dir);
   }
 
+  const bottomUp = options?.bottomUp ?? false;
   for (const row of ordered) {
     if (row.type === 'gap') {
       console.log(formatGapLine(row.count, row.depth));
     } else if (row.type === 'session') {
-      console.log(formatSessionLine(row.session, layout, row.depth, prefixMap, getSlug(row.session.directory), sizeMap));
+      console.log(formatSessionLine(row.session, layout, row.depth, prefixMap, getSlug(row.session.directory), sizeMap, bottomUp));
     }
   }
 }

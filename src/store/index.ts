@@ -8,7 +8,7 @@ import * as os from 'node:os';
 import TOML from '@iarna/toml';
 import { IndexFile, Session, SessionState, createDefaultIndex } from './schema.js';
 
-function getStoreDir(): string {
+export function getStoreDir(): string {
   return process.env.C_HOME || path.join(os.homedir(), '.c');
 }
 function getIndexPath(): string {

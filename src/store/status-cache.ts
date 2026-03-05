@@ -39,6 +39,10 @@ export interface StatusCacheData {
   pr?: string;
   worktree?: string;
   worktree_path?: string;
+  name?: string;
+  state?: string;
+  message_count?: string;
+  first_prompt?: string;
 }
 
 /**
@@ -59,6 +63,10 @@ export function writeStatusCache(sessionId: string, data: StatusCacheData): void
     ['PR', data.pr],
     ['WORKTREE', data.worktree],
     ['WORKTREE_PATH', data.worktree_path],
+    ['NAME', data.name],
+    ['STATE', data.state],
+    ['MESSAGE_COUNT', data.message_count],
+    ['FIRST_PROMPT', data.first_prompt],
   ];
 
   for (const [key, value] of fields) {

@@ -6,7 +6,7 @@ import { updateIndex, getSession, getSessions } from '../store/index.js';
 import { createSession } from '../store/schema.js';
 import { getCurrentBranch, getWorktreeInfo, getRepoSlug, listWorktrees } from '../detection/git.js';
 import { extractJiraFromBranch } from '../detection/jira.js';
-import { encodeProjectKey, getPlanExecutionInfo, findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.js';
+import { encodeProjectKey, getPlanExecutionInfo, findTranscriptPath, getCustomTitleFromTranscriptTail, readClaudeSessionIndex } from '../claude/sessions.js';
 import { setTmuxPaneTitle } from '../util/exec.js';
 import { writeStatusCache } from '../store/status-cache.js';
 import type { StatusCacheData } from '../store/status-cache.js';
@@ -184,7 +184,11 @@ export async function handleSessionStart(
 
 function writeCacheFromSession(
   sessionId: string,
-  session: { resources: { branch?: string; worktree?: string; pr?: string; jira?: string } },
+  session: {
+    name?: string;
+    state?: string;
+    resources: { branch?: string; worktree?: string; pr?: string; jira?: string };
+  },
   cwd: string
 ): void {
   // On resume, Claude sends a new session ID to hooks, but the statusline
@@ -192,6 +196,12 @@ function writeCacheFromSession(
   const cacheId = process.env.C_SESSION_ID || sessionId;
   const repo = getRepoSlug(cwd);
   const worktreeInfo = getWorktreeInfo(cwd);
+
+  // Read Claude's session index for message count and first prompt
+  const projectKey = encodeProjectKey(cwd);
+  const claudeIndex = readClaudeSessionIndex(projectKey);
+  const indexEntry = claudeIndex?.entries.find(e => e.sessionId === sessionId);
+
   const cache: StatusCacheData = {
     branch: session.resources.branch,
     repo,
@@ -200,6 +210,10 @@ function writeCacheFromSession(
     pr: session.resources.pr,
     worktree: session.resources.worktree,
     worktree_path: worktreeInfo?.path,
+    name: session.name || undefined,
+    state: session.state,
+    message_count: indexEntry?.messageCount != null ? String(indexEntry.messageCount) : undefined,
+    first_prompt: indexEntry?.firstPrompt || undefined,
   };
   writeStatusCache(cacheId, cache);
 }
