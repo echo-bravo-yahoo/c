@@ -30,7 +30,8 @@ import { statsCommand } from './commands/stats.js';
 import { tmuxStatusCommand } from './commands/tmux/status.js';
 import { tmuxPickCommand } from './commands/tmux/pick.js';
 import { handleHook } from './hooks/index.js';
-import { realpathSync } from 'node:fs';
+import { realpathSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -390,9 +391,23 @@ try {
 } catch {}
 
 if (isDirectRun) {
+  // Non-blocking update check
+  const selfPath = fileURLToPath(import.meta.url);
+  const pkgPath = join(selfPath, '..', '..', 'package.json');
+  import('update-notifier').then(({ default: updateNotifier }) => {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+      updateNotifier({ pkg }).notify();
+    } catch {}
+  }).catch(() => {});
+
   initCompletion();
   const args = process.argv.slice(2);
-  if (args.length === 0 || args.every(a => a.startsWith('-'))) {
+  const subcommands = createProgram().commands.flatMap(c => [c.name(), ...c.aliases()]);
+  const firstPositional = args.find(a => !a.startsWith('-'));
+  const wantsHelp = args.includes('--help') || args.includes('-h');
+  const wantsVersion = args.includes('--version') || args.includes('-V');
+  if (!wantsHelp && !wantsVersion && (!firstPositional || !subcommands.includes(firstPositional))) {
     process.argv.splice(2, 0, 'list');
   }
   createProgram().parseAsync();

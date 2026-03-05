@@ -24,16 +24,14 @@ function run(...args: string[]) {
 describe('c', () => {
   describe('cli', () => {
     describe('routing', () => {
-      it('exits 1 on unknown command', () => {
+      it('routes unknown positional to implicit list', () => {
         const result = run('nonexistent');
-        assert.strictEqual(result.status, 1);
-        assert.match(result.stderr, /unknown command/i);
+        assert.strictEqual(result.status, 0);
       });
 
-      it('rejects "prune"', () => {
+      it('routes "prune" to implicit list', () => {
         const result = run('prune');
-        assert.strictEqual(result.status, 1);
-        assert.match(result.stderr, /unknown command/i);
+        assert.strictEqual(result.status, 0);
       });
 
       it('runs list', () => {
