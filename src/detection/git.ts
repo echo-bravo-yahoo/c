@@ -4,6 +4,16 @@
 
 import { exec } from '../util/exec.js';
 
+// Process-level cache for getRepoSlug (avoids repeated git calls)
+const _repoSlugCache = new Map<string, string | undefined>();
+
+/**
+ * Reset git caches (for testing)
+ */
+export function resetGitCaches(): void {
+  _repoSlugCache.clear();
+}
+
 /**
  * Get the current git branch for a directory
  */
@@ -55,13 +65,29 @@ export function getWorktreeInfo(cwd?: string): { name: string; path: string } | 
  * Get the org/repo slug from the GitHub remote URL
  */
 export function getRepoSlug(cwd?: string): string | undefined {
+  const key = cwd ?? '';
+  if (_repoSlugCache.has(key)) return _repoSlugCache.get(key);
+
+  // Resolve worktree paths to parent repo to avoid redundant git calls
+  const worktreeMatch = key.match(/^(.+?)\/\.(?:claude\/)?worktrees\//);
+  if (worktreeMatch) {
+    const slug = getRepoSlug(worktreeMatch[1]);
+    _repoSlugCache.set(key, slug);
+    return slug;
+  }
+
   const url = exec('git remote get-url origin', { cwd });
-  if (!url) return undefined;
+  if (!url) {
+    _repoSlugCache.set(key, undefined);
+    return undefined;
+  }
 
   // HTTPS: https://github.com/org/repo.git
   // SSH: git@github.com:org/repo.git
   const match = url.match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
-  return match?.[1];
+  const slug = match?.[1];
+  _repoSlugCache.set(key, slug);
+  return slug;
 }
 
 /**

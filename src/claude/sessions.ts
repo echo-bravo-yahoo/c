@@ -9,6 +9,23 @@ import * as os from 'node:os';
 const CLAUDE_DIR = path.join(os.homedir(), '.claude');
 const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');
 
+// --- Process-level caches (short-lived CLI process, safe to cache for lifetime) ---
+
+let _claudeSessionsCache: ClaudeSession[] | null = null;
+const _sessionIndexCache = new Map<string, ClaudeSessionIndex | null>();
+let _titleLookup: Map<string, { customTitle: string | null; summary: string | null }> | null = null;
+const _titleCache = new Map<string, { customTitle: string | null; summary: string | null }>();
+
+/**
+ * Reset all caches (for testing)
+ */
+export function resetSessionCaches(): void {
+  _claudeSessionsCache = null;
+  _sessionIndexCache.clear();
+  _titleLookup = null;
+  _titleCache.clear();
+}
+
 export interface ClaudeSession {
   id: string;
   projectKey: string;
@@ -72,6 +89,8 @@ export function encodeProjectKey(directory: string): string {
  * List all Claude sessions
  */
 export function listClaudeSessions(): ClaudeSession[] {
+  if (_claudeSessionsCache) return _claudeSessionsCache;
+
   if (!fs.existsSync(PROJECTS_DIR)) {
     return [];
   }
@@ -110,7 +129,9 @@ export function listClaudeSessions(): ClaudeSession[] {
   }
 
   // Sort by modified time descending
-  return sessions.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime());
+  sessions.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime());
+  _claudeSessionsCache = sessions;
+  return sessions;
 }
 
 /**
@@ -154,100 +175,90 @@ export interface ClaudeSessionIndexEntry {
  * Read Claude's sessions-index.json for a project
  */
 export function readClaudeSessionIndex(projectKey: string): ClaudeSessionIndex | null {
+  if (_sessionIndexCache.has(projectKey)) return _sessionIndexCache.get(projectKey)!;
+
   const indexPath = path.join(PROJECTS_DIR, projectKey, 'sessions-index.json');
   if (!fs.existsSync(indexPath)) {
+    _sessionIndexCache.set(projectKey, null);
     return null;
   }
 
   try {
     const content = fs.readFileSync(indexPath, 'utf-8');
-    return JSON.parse(content) as ClaudeSessionIndex;
+    const result = JSON.parse(content) as ClaudeSessionIndex;
+    _sessionIndexCache.set(projectKey, result);
+    return result;
   } catch {
+    _sessionIndexCache.set(projectKey, null);
     return null;
   }
 }
 
 /**
- * Get custom title from transcript file by finding the last custom-title entry
- * Claude writes these immediately on /rename, before updating sessions-index.json
+ * Build a lookup map from all Claude session indices (scans once, cached)
  */
-function getCustomTitleFromTranscript(transcriptPath: string): string | null {
-  if (!fs.existsSync(transcriptPath)) {
-    return null;
-  }
+function getTitleLookup(): Map<string, { customTitle: string | null; summary: string | null }> {
+  if (_titleLookup) return _titleLookup;
+  _titleLookup = new Map();
 
-  try {
-    const content = fs.readFileSync(transcriptPath, 'utf-8');
-    const lines = content.trim().split('\n');
+  if (!fs.existsSync(PROJECTS_DIR)) return _titleLookup;
 
-    // Search from end to find the most recent custom-title entry
-    for (let i = lines.length - 1; i >= 0; i--) {
-      try {
-        const entry = JSON.parse(lines[i]);
-        if (entry.type === 'custom-title' && entry.customTitle) {
-          return entry.customTitle;
-        }
-      } catch {
-        // Skip malformed lines
-      }
+  for (const projectDir of fs.readdirSync(PROJECTS_DIR)) {
+    const index = readClaudeSessionIndex(projectDir);
+    if (!index) continue;
+    for (const entry of index.entries) {
+      _titleLookup.set(entry.sessionId, {
+        customTitle: entry.customTitle || null,
+        summary: entry.summary || null,
+      });
     }
-  } catch {
-    // File read error
   }
 
-  return null;
+  return _titleLookup;
 }
 
 /**
  * Get session titles from Claude's index
  * Returns { customTitle, summary } so caller can decide priority
- * Searches all project directories since project_key encoding may vary
- * Falls back to reading custom-title from transcript if not in index
+ * Uses cached title lookup for O(1) access per session
+ * Falls back to reading custom-title from transcript tail if not in index
  */
 export function getClaudeSessionTitles(
   sessionId: string,
   _projectKey: string
 ): { customTitle: string | null; summary: string | null } {
-  if (!fs.existsSync(PROJECTS_DIR)) {
-    return { customTitle: null, summary: null };
-  }
+  // Check per-session memoization
+  const memoized = _titleCache.get(sessionId);
+  if (memoized) return memoized;
 
-  let transcriptPath: string | null = null;
+  const empty = { customTitle: null, summary: null };
 
-  // Search all project directories for the session
-  for (const projectDir of fs.readdirSync(PROJECTS_DIR)) {
-    // Check if transcript file exists for this session
-    const possibleTranscript = path.join(PROJECTS_DIR, projectDir, `${sessionId}.jsonl`);
-    if (fs.existsSync(possibleTranscript)) {
-      transcriptPath = possibleTranscript;
+  // Check pre-built index lookup (O(1))
+  const lookup = getTitleLookup();
+  const indexed = lookup.get(sessionId);
+
+  if (indexed) {
+    let { customTitle } = indexed;
+    if (!customTitle) {
+      // Check transcript for recent /rename not yet in index
+      const cs = getClaudeSession(sessionId);
+      if (cs) customTitle = getCustomTitleFromTranscriptTail(cs.transcriptPath);
     }
-
-    const index = readClaudeSessionIndex(projectDir);
-    if (!index) continue;
-
-    const entry = index.entries.find((e) => e.sessionId === sessionId);
-    if (entry) {
-      // If index has customTitle, use it; otherwise check transcript
-      let customTitle = entry.customTitle || null;
-      if (!customTitle && transcriptPath) {
-        customTitle = getCustomTitleFromTranscript(transcriptPath);
-      }
-      return {
-        customTitle,
-        summary: entry.summary || null,
-      };
-    }
+    const result = { customTitle, summary: indexed.summary };
+    _titleCache.set(sessionId, result);
+    return result;
   }
 
-  // Session not in index - check transcript directly for custom title
-  if (transcriptPath) {
-    return {
-      customTitle: getCustomTitleFromTranscript(transcriptPath),
-      summary: null,
-    };
+  // Not in any index — check transcript directly
+  const cs = getClaudeSession(sessionId);
+  if (cs) {
+    const result = { customTitle: getCustomTitleFromTranscriptTail(cs.transcriptPath), summary: null };
+    _titleCache.set(sessionId, result);
+    return result;
   }
 
-  return { customTitle: null, summary: null };
+  _titleCache.set(sessionId, empty);
+  return empty;
 }
 
 /**

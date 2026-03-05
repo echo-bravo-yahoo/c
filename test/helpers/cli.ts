@@ -7,7 +7,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createProgram } from '../../src/index.js';
 import { captureConsole, captureStdout, mockProcessExit } from '../setup.js';
-import { updateIndex, getSession, readIndex } from '../../src/store/index.js';
+import { updateIndex, getSession, readIndex, resetIndexCache } from '../../src/store/index.js';
+import { resetGitHubCache } from '../../src/detection/github.js';
+import { resetGitCaches } from '../../src/detection/git.js';
 import { createTestSession, resetSessionCounter } from '../fixtures/sessions.js';
 import type { SessionOverrides } from '../fixtures/sessions.js';
 
@@ -99,6 +101,9 @@ export function setupCLI(): CLIHarness {
       process.env.C_HOME = savedCHome;
       if (savedCHome === undefined) delete process.env.C_HOME;
       rmSync(tmpDir, { recursive: true, force: true });
+      resetIndexCache();
+      resetGitHubCache();
+      resetGitCaches();
     },
   };
 }

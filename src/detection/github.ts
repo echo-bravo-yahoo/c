@@ -11,6 +11,18 @@ import { exec } from '../util/exec.js';
 const CACHE_PATH = path.join(os.homedir(), '.c', 'github-cache.toml');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// In-memory cache to avoid repeated file reads within a single process
+let _usernameCached = false;
+let _usernameValue: string | undefined;
+
+/**
+ * Reset in-memory username cache (for testing)
+ */
+export function resetGitHubCache(): void {
+  _usernameCached = false;
+  _usernameValue = undefined;
+}
+
 interface CacheData {
   username: string;
   timestamp: number;
@@ -29,13 +41,17 @@ export function parseGitHubUsername(output: string): string | undefined {
  * Get GitHub username, using cache if valid
  */
 export function getGitHubUsername(): string | undefined {
-  // Check cache first
+  if (_usernameCached) return _usernameValue;
+  _usernameCached = true;
+
+  // Check file cache first
   try {
     if (fs.existsSync(CACHE_PATH)) {
       const content = fs.readFileSync(CACHE_PATH, 'utf-8');
       const cache = TOML.parse(content) as unknown as CacheData;
       if (cache.username && cache.timestamp && Date.now() - cache.timestamp < CACHE_TTL_MS) {
-        return cache.username;
+        _usernameValue = cache.username;
+        return _usernameValue;
       }
     }
   } catch {
@@ -60,6 +76,7 @@ export function getGitHubUsername(): string | undefined {
     }
   }
 
+  _usernameValue = username;
   return username;
 }
 

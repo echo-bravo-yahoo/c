@@ -8,6 +8,17 @@ import * as os from 'node:os';
 import TOML from '@iarna/toml';
 import { IndexFile, Session, SessionState, createDefaultIndex } from './schema.js';
 
+// --- Process-level cache for readIndex ---
+
+let _indexCache: IndexFile | null = null;
+
+/**
+ * Reset index cache (for testing)
+ */
+export function resetIndexCache(): void {
+  _indexCache = null;
+}
+
 export function getStoreDir(): string {
   return process.env.C_HOME || path.join(os.homedir(), '.c');
 }
@@ -134,6 +145,8 @@ function parseSession(raw: Record<string, unknown>): Session {
  * Read the index file
  */
 export function readIndex(): IndexFile {
+  if (_indexCache) return _indexCache;
+
   ensureDir();
 
   if (!fs.existsSync(getIndexPath())) {
@@ -151,11 +164,13 @@ export function readIndex(): IndexFile {
       sessions[id] = parseSession(rawSession);
     }
 
-    return {
+    const result: IndexFile = {
       version: Number(raw.version ?? 1),
       machine_id: String(raw.machine_id ?? getMachineId()),
       sessions,
     };
+    _indexCache = result;
+    return result;
   } catch (err) {
     console.error('Error reading index:', err);
     return createDefaultIndex(getMachineId());
@@ -187,6 +202,9 @@ export function writeIndex(index: IndexFile): void {
 
   const content = TOML.stringify(tomlData as TOML.JsonMap);
   fs.writeFileSync(getIndexPath(), content);
+
+  // Update cache to reflect what was written
+  _indexCache = index;
 }
 
 /**
@@ -296,20 +314,20 @@ export function getCurrentSession(directory: string = process.cwd()): Session | 
  */
 export async function reconcileStaleSessions(): Promise<number> {
   // Import here to avoid circular dependency
-  const { getClaudeSession } = await import('../claude/sessions.js');
+  const { listClaudeSessions } = await import('../claude/sessions.js');
 
   const index = readIndex();
   const activeSessions = Object.values(index.sessions).filter(
     (s) => s.state === 'busy' || s.state === 'idle' || s.state === 'waiting'
   );
 
-  const staleIds: string[] = [];
-  for (const session of activeSessions) {
-    const claudeSession = getClaudeSession(session.id);
-    if (!claudeSession) {
-      staleIds.push(session.id);
-    }
-  }
+  if (activeSessions.length === 0) return 0;
+
+  // Single scan → Set lookup instead of N individual scans
+  const claudeIds = new Set(listClaudeSessions().map(cs => cs.id));
+  const staleIds = activeSessions
+    .filter(s => !claudeIds.has(s.id))
+    .map(s => s.id);
 
   if (staleIds.length > 0) {
     await updateIndex((idx) => {
