@@ -1,11 +1,11 @@
 /**
- * PostToolUse (Bash) hook - detect PRs and servers
+ * PostToolUse (Bash) hook - detect branches, PRs, and servers
  */
 
 import { updateIndex, getCurrentSession, getSession } from '../store/index.js';
 import { extractPRFromOutput } from '../detection/pr.js';
 import { writeStatusCache } from '../store/status-cache.js';
-import { getRepoSlug, getWorktreeInfo } from '../detection/git.js';
+import { getCurrentBranch, getRepoSlug, getWorktreeInfo } from '../detection/git.js';
 import type { StatusCacheData } from '../store/status-cache.js';
 import type { HookInput } from './index.js';
 
@@ -23,6 +23,9 @@ export async function handlePostBash(
   const output = input?.tool_output ?? '';
   const command = (input?.tool_input?.command as string) ?? '';
 
+  // Detect branch
+  const branch = getCurrentBranch(cwd);
+
   // Detect PR creation
   const prUrl = extractPRFromOutput(output);
 
@@ -39,16 +42,22 @@ export async function handlePostBash(
 
   const isServerStart = serverPatterns.some((p) => p.test(command));
 
-  if (!prUrl && !isServerStart) {
-    // Nothing to update
+  if (!branch && !prUrl && !isServerStart) {
     return;
   }
+
+  let branchChanged = false;
 
   await updateIndex((index) => {
     if (!index.sessions[targetId]) return;
 
     const session = index.sessions[targetId];
     session.last_active_at = new Date();
+
+    if (branch && session.resources.branch !== branch) {
+      session.resources.branch = branch;
+      branchChanged = true;
+    }
 
     if (prUrl && !session.resources.pr) {
       session.resources.pr = prUrl;
@@ -61,8 +70,8 @@ export async function handlePostBash(
     }
   });
 
-  // Update status cache when PR is detected
-  if (prUrl) {
+  // Update status cache when PR or branch changes
+  if (prUrl || branchChanged) {
     const session = getSession(targetId);
     if (session) {
       const repo = getRepoSlug(cwd);
