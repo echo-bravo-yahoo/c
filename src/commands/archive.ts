@@ -4,7 +4,7 @@
 
 import chalk from 'chalk';
 import { updateIndex, getSession, getCurrentSession } from '../store/index.js';
-import { getDisplayName } from '../util/format.js';
+import { getDisplayName, shortId } from '../util/format.js';
 import { signalSession } from '../util/process.js';
 
 export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
@@ -26,7 +26,7 @@ export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
       }
     });
 
-    console.log(chalk.green(`Archived session "${getDisplayName(session)}" (${session.id.slice(0, 8)}).`));
+    console.log(chalk.green(`Archived "${getDisplayName(session) || shortId(session.id)}" (${shortId(session.id)}).`));
     return;
   }
 
@@ -49,6 +49,6 @@ export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
       }
     });
 
-    console.log(chalk.green(`Archived session "${getDisplayName(session)}" (${session.id.slice(0, 8)}).`));
+    console.log(chalk.green(`Archived "${getDisplayName(session) || shortId(session.id)}" (${shortId(session.id)}).`));
   }
 }
