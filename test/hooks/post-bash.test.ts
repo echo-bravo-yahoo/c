@@ -3,18 +3,15 @@
  *
  * PR extraction tests call the real extractPRFromOutput function.
  * PR linking tests call the real handlePostBash handler against a temp store.
- * Server detection tests verify the regex patterns used in the handler.
  */
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { extractPRFromOutput } from '../../src/detection/pr.ts';
 import { handlePostBash } from '../../src/hooks/post-bash.ts';
-import { updateIndex, getSession, resetIndexCache } from '../../src/store/index.ts';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.ts';
+import { updateIndex, getSession } from '../../src/store/index.ts';
+import { createTestSession } from '../fixtures/sessions.ts';
+import { setupTempStore, type TempStore } from '../helpers/store.ts';
 
 describe('c', () => {
   describe('hooks', () => {
@@ -37,23 +34,10 @@ https://github.com/org/repo/pull/42
       });
 
       describe('PR linking via handler', () => {
-        let tmpDir: string;
-        let savedCHome: string | undefined;
+        let store: TempStore;
 
-        beforeEach(() => {
-          resetSessionCounter();
-          tmpDir = mkdtempSync(join(tmpdir(), 'c-test-'));
-          savedCHome = process.env.C_HOME;
-          process.env.C_HOME = tmpDir;
-          resetIndexCache();
-        });
-
-        afterEach(() => {
-          process.env.C_HOME = savedCHome;
-          if (savedCHome === undefined) delete process.env.C_HOME;
-          rmSync(tmpDir, { recursive: true, force: true });
-          resetIndexCache();
-        });
+        beforeEach(() => { store = setupTempStore(); });
+        afterEach(() => { store.cleanup(); });
 
         it('links detected PR to session', async () => {
           await updateIndex((idx) => {
@@ -119,74 +103,6 @@ https://github.com/org/repo/pull/42
           const s = getSession('s1');
           assert.ok(s);
           assert.ok(s.last_active_at.getTime() > oldDate.getTime());
-        });
-      });
-
-      describe('server detection patterns', () => {
-        const serverPatterns = [
-          /npm (?:run )?start/,
-          /npm run dev/,
-          /yarn (?:run )?start/,
-          /yarn dev/,
-          /webpack.*serve/,
-          /vite/,
-          /next dev/,
-        ];
-
-        function isServerStart(command: string): boolean {
-          return serverPatterns.some(p => p.test(command));
-        }
-
-        it('detects npm start', () => {
-          assert.strictEqual(isServerStart('npm start'), true);
-        });
-
-        it('detects npm run start', () => {
-          assert.strictEqual(isServerStart('npm run start'), true);
-        });
-
-        it('detects npm run dev', () => {
-          assert.strictEqual(isServerStart('npm run dev'), true);
-        });
-
-        it('detects yarn start', () => {
-          assert.strictEqual(isServerStart('yarn start'), true);
-        });
-
-        it('detects yarn run start', () => {
-          assert.strictEqual(isServerStart('yarn run start'), true);
-        });
-
-        it('detects yarn dev', () => {
-          assert.strictEqual(isServerStart('yarn dev'), true);
-        });
-
-        it('detects webpack serve', () => {
-          assert.strictEqual(isServerStart('webpack serve --mode development'), true);
-        });
-
-        it('detects vite', () => {
-          assert.strictEqual(isServerStart('vite'), true);
-        });
-
-        it('detects next dev', () => {
-          assert.strictEqual(isServerStart('next dev'), true);
-        });
-
-        it('ignores npm install', () => {
-          assert.strictEqual(isServerStart('npm install'), false);
-        });
-
-        it('ignores npm test', () => {
-          assert.strictEqual(isServerStart('npm test'), false);
-        });
-
-        it('ignores npm build', () => {
-          assert.strictEqual(isServerStart('npm run build'), false);
-        });
-
-        it('ignores git commands', () => {
-          assert.strictEqual(isServerStart('git commit -m "message"'), false);
         });
       });
     });

@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import chalk from 'chalk';
 import { getSession, findSessions, findSessionsByName, updateIndex } from '../store/index.ts';
 import { getClaudeSession, findClaudeSessionIdsByTitle, encodeProjectKey, PROJECTS_DIR } from '../claude/sessions.ts';
+import { extractRepoRoot } from '../detection/git.ts';
 import { createSession } from '../store/schema.ts';
 import { exec, spawnInteractive, setTmuxPaneTitle } from '../util/exec.ts';
 import { getDisplayName, shortId, highlightId } from '../util/format.ts';
@@ -173,9 +174,8 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
 
   // Validate session directory still exists
   if (!existsSync(session.directory)) {
-    const repoMatch = session.directory.match(/^(.+?)\/\.(?:claude\/)?worktrees\//);
-    if (repoMatch && existsSync(repoMatch[1])) {
-      const repoRoot = repoMatch[1];
+    const repoRoot = extractRepoRoot(session.directory);
+    if (repoRoot && existsSync(repoRoot)) {
       const branch = session.resources.branch;
 
       // Try to recreate the worktree from the session's branch

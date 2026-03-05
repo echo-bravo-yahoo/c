@@ -7,7 +7,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { getCurrentBranch, getGitRoot, isWorktree, getWorktreeInfo, getRepoSlug, listWorktrees } from '../../src/detection/git.ts';
+import { getCurrentBranch, getGitRoot, isWorktree, getWorktreeInfo, getRepoSlug, listWorktrees, extractRepoRoot } from '../../src/detection/git.ts';
 
 const inGitRepo = !!getGitRoot(process.cwd());
 
@@ -142,6 +142,24 @@ describe('c', () => {
             assert.ok(typeof worktrees[0].branch === 'string');
           }
         });
+      });
+    });
+
+    describe('extractRepoRoot', () => {
+      it('extracts repo root from .claude/worktrees/ path', () => {
+        assert.strictEqual(extractRepoRoot('/repo/.claude/worktrees/gone'), '/repo');
+      });
+
+      it('extracts repo root from .worktrees/ path', () => {
+        assert.strictEqual(extractRepoRoot('/repo/.worktrees/old-branch'), '/repo');
+      });
+
+      it('returns null for non-worktree path', () => {
+        assert.strictEqual(extractRepoRoot('/deleted/project'), null);
+      });
+
+      it('handles deeply nested repo root', () => {
+        assert.strictEqual(extractRepoRoot('/home/user/work/repo/.claude/worktrees/feat'), '/home/user/work/repo');
       });
     });
   });

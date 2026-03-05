@@ -7,37 +7,30 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { handleSessionStart, findWorktreeMatch } from '../../src/hooks/session-start.ts';
-import { updateIndex, getSession, resetIndexCache } from '../../src/store/index.ts';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.ts';
+import { updateIndex, getSession } from '../../src/store/index.ts';
+import { createTestSession } from '../fixtures/sessions.ts';
+import { setupTempStore, type TempStore } from '../helpers/store.ts';
 
 describe('c', () => {
   describe('hooks', () => {
     describe('session-start', () => {
-      let tmpDir: string;
-      let savedCHome: string | undefined;
+      let store: TempStore;
       let savedCSessionId: string | undefined;
 
       beforeEach(() => {
-        resetSessionCounter();
-        tmpDir = mkdtempSync(join(tmpdir(), 'c-test-'));
-        savedCHome = process.env.C_HOME;
+        store = setupTempStore();
         savedCSessionId = process.env.C_SESSION_ID;
-        process.env.C_HOME = tmpDir;
         delete process.env.C_SESSION_ID;
-        resetIndexCache();
       });
 
       afterEach(() => {
-        process.env.C_HOME = savedCHome;
-        if (savedCHome === undefined) delete process.env.C_HOME;
-        process.env.C_SESSION_ID = savedCSessionId;
-        if (savedCSessionId === undefined) delete process.env.C_SESSION_ID;
-        rmSync(tmpDir, { recursive: true, force: true });
-        resetIndexCache();
+        store.cleanup();
+        if (savedCSessionId !== undefined) {
+          process.env.C_SESSION_ID = savedCSessionId;
+        } else {
+          delete process.env.C_SESSION_ID;
+        }
       });
 
       describe('new session creation', () => {
@@ -140,7 +133,7 @@ describe('c', () => {
           });
 
           // Handler calls getCurrentBranch which returns undefined in temp dir (no git)
-          await handleSessionStart('s1', tmpDir, null);
+          await handleSessionStart('s1', store.tmpDir, null);
 
           const s = getSession('s1');
           assert.ok(s);
@@ -156,7 +149,7 @@ describe('c', () => {
             });
           });
 
-          await handleSessionStart('s1', tmpDir, null);
+          await handleSessionStart('s1', store.tmpDir, null);
 
           const s = getSession('s1');
           assert.ok(s);

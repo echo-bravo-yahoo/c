@@ -6,33 +6,18 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { handleUserPrompt } from '../../src/hooks/user-prompt.ts';
-import { updateIndex, getSession, resetIndexCache } from '../../src/store/index.ts';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.ts';
+import { updateIndex, getSession } from '../../src/store/index.ts';
+import { createTestSession } from '../fixtures/sessions.ts';
+import { setupTempStore, type TempStore } from '../helpers/store.ts';
 
 describe('c', () => {
   describe('hooks', () => {
     describe('user-prompt', () => {
-      let tmpDir: string;
-      let savedCHome: string | undefined;
+      let store: TempStore;
 
-      beforeEach(() => {
-        resetSessionCounter();
-        tmpDir = mkdtempSync(join(tmpdir(), 'c-test-'));
-        savedCHome = process.env.C_HOME;
-        process.env.C_HOME = tmpDir;
-        resetIndexCache();
-      });
-
-      afterEach(() => {
-        process.env.C_HOME = savedCHome;
-        if (savedCHome === undefined) delete process.env.C_HOME;
-        rmSync(tmpDir, { recursive: true, force: true });
-        resetIndexCache();
-      });
+      beforeEach(() => { store = setupTempStore(); });
+      afterEach(() => { store.cleanup(); });
 
       it('transitions idle to busy', async () => {
         await updateIndex((idx) => {

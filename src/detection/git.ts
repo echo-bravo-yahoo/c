@@ -59,8 +59,15 @@ export function getWorktreeInfo(cwd?: string): { name: string; path: string } | 
 }
 
 /**
- * Get all worktrees for a repository
+ * Extract the parent repository root from a worktree path.
+ * Recognizes both .worktrees/ and .claude/worktrees/ layouts.
+ * Returns null if the path is not inside a worktree.
  */
+export function extractRepoRoot(dir: string): string | null {
+  const match = dir.match(/^(.+?)\/\.(?:claude\/)?worktrees\//);
+  return match ? match[1] : null;
+}
+
 /**
  * Get the org/repo slug from the GitHub remote URL
  */
@@ -69,9 +76,9 @@ export function getRepoSlug(cwd?: string): string | undefined {
   if (_repoSlugCache.has(key)) return _repoSlugCache.get(key);
 
   // Resolve worktree paths to parent repo to avoid redundant git calls
-  const worktreeMatch = key.match(/^(.+?)\/\.(?:claude\/)?worktrees\//);
-  if (worktreeMatch) {
-    const slug = getRepoSlug(worktreeMatch[1]);
+  const repoRoot = extractRepoRoot(key);
+  if (repoRoot) {
+    const slug = getRepoSlug(repoRoot);
     _repoSlugCache.set(key, slug);
     return slug;
   }

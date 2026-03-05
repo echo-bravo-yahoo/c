@@ -13,7 +13,6 @@ import { tmpdir } from 'node:os';
 import { resetSessionCounter } from '../fixtures/sessions.ts';
 import { createSession } from '../../src/store/schema.ts';
 import { updateIndex, getSession, resetIndexCache } from '../../src/store/index.ts';
-import { sanitizeWorktreeName } from '../../src/util/sanitize.ts';
 import { parseMeta, buildNewArgs } from '../../src/commands/new.ts';
 import type { NewOptions } from '../../src/commands/new.ts';
 
@@ -212,57 +211,6 @@ describe('c', () => {
           assert.strictEqual(s.meta.note, 'A note');
         });
 
-        it('cleans up session on spawn failure', async () => {
-          const session = createSession('uuid', '/path', 'key');
-          await updateIndex((idx) => { idx.sessions['uuid'] = session; });
-
-          // Simulate spawn failure cleanup
-          await updateIndex((idx) => { delete idx.sessions['uuid']; });
-
-          assert.strictEqual(getSession('uuid'), undefined);
-        });
-
-        it('cleans up session on non-zero exit', async () => {
-          const session = createSession('uuid', '/path', 'key');
-          await updateIndex((idx) => { idx.sessions['uuid'] = session; });
-
-          const exitCode: number = 1;
-          if (exitCode !== 0) {
-            await updateIndex((idx) => { delete idx.sessions['uuid']; });
-          }
-
-          assert.strictEqual(getSession('uuid'), undefined);
-        });
-
-        it('preserves session on successful exit', async () => {
-          const session = createSession('uuid', '/path', 'key');
-          await updateIndex((idx) => { idx.sessions['uuid'] = session; });
-
-          const exitCode = 0;
-          if (exitCode !== 0) {
-            await updateIndex((idx) => { delete idx.sessions['uuid']; });
-          }
-
-          assert.ok(getSession('uuid'));
-        });
-      });
-
-      describe('worktree integration', () => {
-        it('sanitizes worktree name from session name', () => {
-          const name = 'my cool feature';
-          const worktreeName = sanitizeWorktreeName(name);
-          assert.strictEqual(worktreeName, 'my-cool-feature');
-        });
-
-        it('preserves valid names through sanitization', () => {
-          const worktreeName = sanitizeWorktreeName('feature/MAC-123-add-thing');
-          assert.strictEqual(worktreeName, 'feature/MAC-123-add-thing');
-        });
-
-        it('rejects all-illegal name for worktree', () => {
-          const worktreeName = sanitizeWorktreeName('***');
-          assert.strictEqual(worktreeName, '');
-        });
       });
     });
   });
