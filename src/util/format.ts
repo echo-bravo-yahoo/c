@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import { Session, SessionState } from '../store/schema.js';
 import { getClaudeSessionTitles, getClaudeSession, listClaudeSessions, readClaudeSessionIndex } from '../claude/sessions.js';
-import { getAllSessions } from '../store/index.js';
+import { getAllSessions, getSession } from '../store/index.js';
 import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.js';
 import { getRepoSlug } from '../detection/git.js';
 import { buildJiraUrl } from '../detection/jira.js';
@@ -425,8 +425,25 @@ export function formatSessionDetails(session: Session): string {
 
   lines.push(chalk.bold('Session: ') + getDisplayName(session));
   lines.push(chalk.dim('  ID: ') + session.id);
+  const allSessions = getAllSessions();
+  const allShortIds = allSessions.map(s => shortId(s.id));
   if (session.parent_session_id) {
-    lines.push(chalk.dim('  Parent: ') + chalk.cyan(session.parent_session_id.slice(0, 8)));
+    const parent = getSession(session.parent_session_id);
+    const parentShort = shortId(session.parent_session_id);
+    const prefixLen = computeUniquePrefixLength(parentShort, allShortIds);
+    const parentId = highlightId(parentShort, prefixLen);
+    const parentLabel = parent
+      ? `${parentId} ${getDisplayName(parent)} (${parent.state})`
+      : parentId;
+    lines.push(chalk.dim('  Parent: ') + parentLabel);
+  }
+  const children = allSessions.filter(s => s.parent_session_id === session.id);
+  if (children.length > 0) {
+    lines.push(chalk.dim('  Children: ') + children.map(c => {
+      const cShort = shortId(c.id);
+      const cPrefix = computeUniquePrefixLength(cShort, allShortIds);
+      return `${highlightId(cShort, cPrefix)} ${getDisplayName(c)}`;
+    }).join(', '));
   }
   lines.push('');
   lines.push(chalk.bold('Status: ') + formatStatus(session));
