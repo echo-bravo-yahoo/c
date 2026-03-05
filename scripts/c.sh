@@ -5,7 +5,7 @@
 # c [args...]              Run built dist/index.js
 # c-dev                    Run tsx on main source (no args)
 # c-dev -- [args...]       Run tsx on main source with args
-# c-dev <worktree> [args]  Run tsx on worktree source
+# c-dev <worktree> [--] [args]  Run tsx on worktree source
 
 set -euo pipefail
 
@@ -26,6 +26,7 @@ case "$CMD" in
       exec "$REPO/node_modules/.bin/tsx" "$REPO/src/index.ts" "$@"
     else
       worktree="$1"; shift
+      [ "${1:-}" = "--" ] && shift
       if [ "$worktree" = "main" ]; then
         entry="$REPO/src/index.ts"
       elif [ -d "$REPO/.claude/worktrees/$worktree" ]; then
