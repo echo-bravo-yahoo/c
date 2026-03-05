@@ -3,7 +3,7 @@
  */
 
 import { getSessions, getAllSessions } from '../store/index.js';
-import { printSessionTable } from '../util/format.js';
+import { printSessionTable, getDisplayName } from '../util/format.js';
 import type { Session } from '../store/schema.js';
 
 export interface FindOptions {
@@ -34,8 +34,11 @@ function matchSession(session: Session, query: string): boolean {
   const fields = [
     session.id,
     session.name,
+    getDisplayName(session),
     session.directory,
+    session.state,
     session.resources.branch,
+    session.resources.worktree,
     session.resources.pr,
     session.resources.jira,
     ...session.tags.values,
