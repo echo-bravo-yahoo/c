@@ -16,19 +16,19 @@ import type { HookInput } from './index.js';
 export async function handleSessionStart(
   sessionId: string | undefined,
   cwd: string,
-  _input: HookInput | null
+  input: HookInput | null
 ): Promise<void> {
   if (!sessionId) {
     debugLog(`[title] session-start: no sessionId`);
     return;
   }
 
-  // When resuming, Claude briefly creates a transient session with a new UUID
-  // before switching to the real one. C_SESSION_ID (set by `c resume`) holds
-  // the real ID — skip persisting the transient ID to avoid phantom entries.
-  const realSessionId = process.env.C_SESSION_ID;
-  if (realSessionId && realSessionId !== sessionId) {
-    debugLog(`[title] session-start: C_SESSION_ID guard — skipping transient session ${sessionId} (real=${realSessionId})`);
+  // During resume, Claude may fire SessionStart with a transient UUID before
+  // switching to the real session. Skip unknown sessions during resume to
+  // avoid phantom index entries. New sessions (source="startup") are always
+  // registered, even when started from within a resumed session's environment.
+  if (input?.source === 'resume' && !getSession(sessionId)) {
+    debugLog(`[title] session-start: skipping unknown session ${sessionId} during resume`);
     return;
   }
 
@@ -191,9 +191,7 @@ function writeCacheFromSession(
   },
   cwd: string
 ): void {
-  // On resume, Claude sends a new session ID to hooks, but the statusline
-  // uses the original. C_SESSION_ID is set by `c resume` with the real ID.
-  const cacheId = process.env.C_SESSION_ID || sessionId;
+  const cacheId = sessionId;
   const repo = getRepoSlug(cwd);
   const worktreeInfo = getWorktreeInfo(cwd);
 

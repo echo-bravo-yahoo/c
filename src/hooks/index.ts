@@ -13,6 +13,7 @@ import { debugLog } from '../util/debug.js';
 export interface HookInput {
   session_id: string;
   cwd: string;
+  source?: string;
   type?: string;
   prompt?: string;
   tool_name?: string;

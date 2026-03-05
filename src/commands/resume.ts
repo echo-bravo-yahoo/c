@@ -193,7 +193,6 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
   });
   console.log(chalk.dim(`Resuming session ${displayName} in ${session.directory}...`));
   if (displayName) setTmuxPaneTitle(displayName);
-  process.env.C_SESSION_ID = session.id;
 
   const resumeArgs = ['-r', session.id];
   if (options.model) resumeArgs.push('--model', options.model);

@@ -238,24 +238,20 @@ describe('c', () => {
       describe('transient session filtering on resume', () => {
         let tmpDir: string;
         let savedCHome: string | undefined;
-        let savedCSessionId: string | undefined;
 
         beforeEach(() => {
           tmpDir = mkdtempSync(join(tmpdir(), 'c-test-'));
           savedCHome = process.env.C_HOME;
-          savedCSessionId = process.env.C_SESSION_ID;
           process.env.C_HOME = tmpDir;
         });
 
         afterEach(() => {
           process.env.C_HOME = savedCHome;
           if (savedCHome === undefined) delete process.env.C_HOME;
-          process.env.C_SESSION_ID = savedCSessionId;
-          if (savedCSessionId === undefined) delete process.env.C_SESSION_ID;
           rmSync(tmpDir, { recursive: true, force: true });
         });
 
-        it('does not create a session for a transient ID during resume', async () => {
+        it('does not create a session for an unknown ID during resume', async () => {
           const realId = 'real-session-uuid';
           const transientId = 'transient-session-uuid';
 
@@ -264,17 +260,18 @@ describe('c', () => {
             idx.sessions[realId] = createTestSession({ id: realId, state: 'closed' });
           });
 
-          // Simulate resume: C_SESSION_ID is the real session
-          process.env.C_SESSION_ID = realId;
-
-          // Hook fires with the transient ID
-          await handleSessionStart(transientId, '/some/project', null);
+          // Hook fires with a transient ID and source=resume
+          await handleSessionStart(transientId, '/some/project', {
+            session_id: transientId,
+            cwd: '/some/project',
+            source: 'resume',
+          });
 
           // No phantom session created for the transient ID
           assert.strictEqual(getSession(transientId), undefined);
         });
 
-        it('allows the real session ID through when C_SESSION_ID matches', async () => {
+        it('allows the real session ID through on resume', async () => {
           const realId = 'real-session-uuid';
 
           // Seed the real session into the store
@@ -282,10 +279,11 @@ describe('c', () => {
             idx.sessions[realId] = createTestSession({ id: realId, state: 'closed' });
           });
 
-          // C_SESSION_ID matches the incoming session ID
-          process.env.C_SESSION_ID = realId;
-
-          await handleSessionStart(realId, '/some/project', null);
+          await handleSessionStart(realId, '/some/project', {
+            session_id: realId,
+            cwd: '/some/project',
+            source: 'resume',
+          });
 
           // Session was updated (state set to busy on resume)
           const s = getSession(realId);
@@ -293,12 +291,15 @@ describe('c', () => {
           assert.strictEqual(s.state, 'busy');
         });
 
-        it('creates a new session when C_SESSION_ID is not set', async () => {
+        it('creates a new session on startup even within a resume env', async () => {
           const newId = 'brand-new-session-uuid';
 
-          delete process.env.C_SESSION_ID;
-
-          await handleSessionStart(newId, '/some/project', null);
+          // source=startup means a genuinely new session
+          await handleSessionStart(newId, '/some/project', {
+            session_id: newId,
+            cwd: '/some/project',
+            source: 'startup',
+          });
 
           // New session was created
           const s = getSession(newId);
