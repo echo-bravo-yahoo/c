@@ -4,23 +4,56 @@
 
 import chalk from 'chalk';
 import { getSessions, getAllSessions, reconcileStaleSessions } from '../store/index.js';
-import { printSessionTable, getDisplayName, shortId, highlightId, buildPrefixMap } from '../util/format.js';
+import { printSessionTable, getDisplayName, shortId, highlightId, buildPrefixMap, getRepoName, sortSessions } from '../util/format.js';
 import { hyperlink } from '../util/hyperlink.js';
 import { buildJiraUrl } from '../detection/jira.js';
 import type { SessionState } from '../store/schema.js';
+import type { SortSpec, TableOptions } from '../util/format.js';
+import { loadConfig, mergeOptions } from '../config.js';
 
 export interface ListOptions {
-  all?: boolean;
-  archived?: boolean;
-  waiting?: boolean;
+  state?: string;
   prs?: boolean;
   jira?: boolean;
   directory?: string;
+  branch?: string;
+  repo?: string;
+  tag?: string;
+  name?: string;
+  worktree?: string;
+  sort?: string;
+  flat?: boolean;
+  bottomUp?: boolean;
+  json?: boolean;
   minWidth?: number;
   maxWidth?: number;
 }
 
-export async function listCommand(options: ListOptions): Promise<void> {
+const DEFAULT_STATES: SessionState[] = ['busy', 'idle', 'waiting', 'closed'];
+const ALL_STATES: SessionState[] = ['busy', 'idle', 'waiting', 'closed', 'archived'];
+
+// Default direction per field: true = desc
+const DEFAULT_DESC: Record<string, boolean> = {
+  active: true, created: true, size: true,
+  name: false, status: false, repo: false,
+};
+
+export function parseSortSpecs(raw: string): SortSpec[] {
+  return raw.split(',').map(s => {
+    const hasExplicitPrefix = s.startsWith('-') || s.startsWith('+');
+    const desc = s.startsWith('-');
+    const field = hasExplicitPrefix ? s.slice(1) : s;
+    return {
+      field,
+      desc: hasExplicitPrefix ? desc : (DEFAULT_DESC[field] ?? false),
+    };
+  });
+}
+
+export async function listCommand(rawOptions: ListOptions): Promise<void> {
+  const config = loadConfig();
+  const options = mergeOptions(config.list, rawOptions);
+
   // Reconcile stale sessions before listing
   await reconcileStaleSessions();
 
@@ -34,34 +67,73 @@ export async function listCommand(options: ListOptions): Promise<void> {
     return;
   }
 
-  let stateFilter: SessionState[];
+  const stateFilter: SessionState[] = options.state
+    ? (options.state === 'all' ? ALL_STATES : options.state.split(',') as SessionState[])
+    : DEFAULT_STATES;
 
-  if (options.all) {
-    stateFilter = ['busy', 'idle', 'waiting', 'closed', 'archived'];
-  } else if (options.archived) {
-    stateFilter = ['archived'];
-  } else if (options.waiting) {
-    stateFilter = ['waiting'];
-  } else {
-    // Default: show active (busy/idle/waiting) and closed
-    stateFilter = ['busy', 'idle', 'waiting', 'closed'];
-  }
-
-  const sessions = getSessions({
+  let sessions = getSessions({
     state: stateFilter,
     directory: options.directory,
   });
+
+  // Post-filters
+  if (options.branch) {
+    const q = options.branch.toLowerCase();
+    sessions = sessions.filter(s => s.resources.branch?.toLowerCase().includes(q));
+  }
+  if (options.repo) {
+    const q = options.repo.toLowerCase();
+    sessions = sessions.filter(s => getRepoName(s.directory).toLowerCase().includes(q));
+  }
+  if (options.tag) {
+    sessions = sessions.filter(s => s.tags.values.includes(options.tag!));
+  }
+  if (options.name) {
+    const q = options.name.toLowerCase();
+    sessions = sessions.filter(s => getDisplayName(s).toLowerCase().includes(q));
+  }
+  if (options.worktree) {
+    const q = options.worktree.toLowerCase();
+    sessions = sessions.filter(s => s.resources.worktree?.toLowerCase().includes(q));
+  }
+
+  // Parse sort specs
+  const sortSpecs = options.sort ? parseSortSpecs(options.sort) : undefined;
+
+  // JSON output
+  if (options.json) {
+    // Apply sorting for JSON output too
+    let sorted = sessions;
+    if (sortSpecs) {
+      sorted = sortSessions(sessions, sortSpecs);
+    }
+    const output = sorted.map(s => ({
+      ...s,
+      created_at: s.created_at.toISOString(),
+      last_active_at: s.last_active_at.toISOString(),
+    }));
+    process.stdout.write(JSON.stringify(output, null, 2) + '\n');
+    return;
+  }
 
   let terminalWidth = process.stdout.columns || 80;
   if (options.minWidth != null) terminalWidth = Math.max(terminalWidth, options.minWidth);
   if (options.maxWidth != null) terminalWidth = Math.min(terminalWidth, options.maxWidth);
 
-  printSessionTable(sessions, terminalWidth, getAllSessions());
+  const tableOptions: TableOptions = {
+    flat: options.flat,
+    bottomUp: options.bottomUp,
+    sortSpecs,
+  };
+
+  printSessionTable(sessions, terminalWidth, getAllSessions(), tableOptions);
 }
+
+// --- Special views ---
 
 function listPRs(): void {
   const sessions = getSessions({
-    state: ['busy', 'idle', 'waiting', 'closed', 'archived'],
+    state: ALL_STATES,
   });
 
   const withPRs = sessions.filter((s) => s.resources.pr);
@@ -98,7 +170,7 @@ function listPRs(): void {
 
 function listJira(): void {
   const sessions = getSessions({
-    state: ['busy', 'idle', 'waiting', 'closed', 'archived'],
+    state: ALL_STATES,
   });
 
   const withJira = sessions.filter((s) => s.resources.jira);
@@ -126,3 +198,5 @@ function listJira(): void {
     );
   }
 }
+
+export { sortSessions };

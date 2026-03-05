@@ -51,22 +51,36 @@ export function createProgram(): Command {
   program
     .command('list')
     .description('List sessions')
-    .option('-a, --all', 'Show all sessions including archived')
-    .option('--archived', 'Show only archived sessions')
-    .option('-w, --waiting', 'Show only sessions waiting for input')
+    .option('--state <states>', 'Filter by state (comma-separated: busy,idle,waiting,closed,archived,all)')
+    .option('--branch <name>', 'Filter by branch (substring)')
+    .option('--repo <name>', 'Filter by repo name (substring)')
+    .option('--tag <tag>', 'Filter by tag (exact)')
+    .option('--name <name>', 'Filter by session name (substring)')
+    .option('--worktree <name>', 'Filter by worktree name (substring)')
     .option('--prs', 'Show sessions with linked PRs')
     .option('--jira', 'Show sessions with linked JIRA tickets')
     .option('--dir <directory>', 'Filter by directory')
+    .option('--sort <fields>', 'Sort by fields (comma-separated, prefix - for desc)')
+    .option('--flat', 'Flat list without parent/child nesting')
+    .option('--bottom-up', 'Show children above parents')
+    .option('--json', 'Output as JSON')
     .option('--min-width <n>', 'Minimum table width', parseInt)
     .option('--max-width <n>', 'Maximum table width', parseInt)
     .action(async (options) => {
       await listCommand({
-        all: options.all,
-        archived: options.archived,
-        waiting: options.waiting,
+        state: options.state,
+        branch: options.branch,
+        repo: options.repo,
+        tag: options.tag,
+        name: options.name,
+        worktree: options.worktree,
         prs: options.prs,
         jira: options.jira,
         directory: options.dir,
+        sort: options.sort,
+        flat: options.flat,
+        bottomUp: options.bottomUp,
+        json: options.json,
         minWidth: options.minWidth,
         maxWidth: options.maxWidth,
       });
@@ -102,7 +116,7 @@ export function createProgram(): Command {
     .command('waiting')
     .description('List sessions waiting for input')
     .action(async () => {
-      await listCommand({ waiting: true });
+      await listCommand({ state: 'waiting' });
     });
 
   // Show

@@ -30,6 +30,9 @@ mock.module(resolve('src/claude/sessions.ts'), {
 const { setupCLI } = await import('../helpers/cli.js');
 type CLIHarness = import('../helpers/cli.js').CLIHarness;
 
+// shortId() takes first 8 chars. Keep test IDs <= 8 chars so assertions
+// on console output match the displayed value exactly.
+
 describe('c', () => {
   describe('commands', () => {
     describe('list', () => {
@@ -52,24 +55,24 @@ describe('c', () => {
           assert.ok(!output.includes('s3'));
         });
 
-        it('--all includes archived', async () => {
+        it('--state all includes archived', async () => {
           await cli.seed(
             { id: 's1', state: 'busy' },
             { id: 's2', state: 'archived' },
           );
-          await cli.run('list', '--all');
+          await cli.run('list', '--state', 'all');
 
           const output = cli.console.logs.join('\n');
           assert.ok(output.includes('s1'));
           assert.ok(output.includes('s2'));
         });
 
-        it('--archived shows only archived', async () => {
+        it('--state archived shows only archived', async () => {
           await cli.seed(
             { id: 's1', state: 'busy' },
             { id: 's2', state: 'archived' },
           );
-          await cli.run('list', '--archived');
+          await cli.run('list', '--state', 'archived');
 
           const output = cli.console.logs.join('\n');
           assert.ok(!output.includes('s1'));
@@ -78,13 +81,13 @@ describe('c', () => {
       });
 
       describe('waiting filter', () => {
-        it('--waiting shows only waiting', async () => {
+        it('--state waiting shows only waiting', async () => {
           await cli.seed(
             { id: 's1', state: 'waiting' },
             { id: 's2', state: 'busy' },
             { id: 's3', state: 'closed' },
           );
-          await cli.run('list', '--waiting');
+          await cli.run('list', '--state', 'waiting');
 
           const output = cli.console.logs.join('\n');
           assert.ok(output.includes('s1'));
@@ -156,6 +159,350 @@ describe('c', () => {
           await cli.run('list');
 
           assert.strictEqual(cli.exit.exitCode, null);
+        });
+      });
+
+      describe('--state filter', () => {
+        it('--state busy,idle shows only busy and idle', async () => {
+          await cli.seed(
+            { id: 'sbusy', state: 'busy' },
+            { id: 'sidle', state: 'idle' },
+            { id: 'swait', state: 'waiting' },
+            { id: 'sclose', state: 'closed' },
+            { id: 'sarch', state: 'archived' },
+          );
+          await cli.run('list', '--state', 'busy,idle');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('sbusy'));
+          assert.ok(output.includes('sidle'));
+          assert.ok(!output.includes('swait'));
+          assert.ok(!output.includes('sclose'));
+          assert.ok(!output.includes('sarch'));
+        });
+
+        it('--state archived shows archived; bare list does not', async () => {
+          await cli.seed(
+            { id: 'sbusy', state: 'busy' },
+            { id: 'sarch', state: 'archived' },
+          );
+
+          // Bare list excludes archived
+          await cli.run('list');
+          const bareOutput = cli.console.logs.join('\n');
+          assert.ok(bareOutput.includes('sbusy'));
+          assert.ok(!bareOutput.includes('sarch'));
+
+          // Reset console for next run
+          cli.console.logs.length = 0;
+
+          // --state archived shows archived
+          await cli.run('list', '--state', 'archived');
+          const stateOutput = cli.console.logs.join('\n');
+          assert.ok(!stateOutput.includes('sbusy'));
+          assert.ok(stateOutput.includes('sarch'));
+        });
+
+        it('--state all shows all 5 states', async () => {
+          await cli.seed(
+            { id: 'sbusy', state: 'busy' },
+            { id: 'sidle', state: 'idle' },
+            { id: 'swait', state: 'waiting' },
+            { id: 'sclose', state: 'closed' },
+            { id: 'sarch', state: 'archived' },
+          );
+          await cli.run('list', '--state', 'all');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('sbusy'));
+          assert.ok(output.includes('sidle'));
+          assert.ok(output.includes('swait'));
+          assert.ok(output.includes('sclose'));
+          assert.ok(output.includes('sarch'));
+        });
+      });
+
+      describe('--branch filter', () => {
+        it('filters by branch substring', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', resources: { branch: 'feature/login' } },
+            { id: 's2', state: 'busy', resources: { branch: 'main' } },
+            { id: 's3', state: 'busy', resources: { branch: 'feature/signup' } },
+          );
+          await cli.run('list', '--branch', 'feature');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('s1'));
+          assert.ok(!output.includes('s2'));
+          assert.ok(output.includes('s3'));
+        });
+
+        it('is case-insensitive', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', resources: { branch: 'Feature/Auth' } },
+            { id: 's2', state: 'busy', resources: { branch: 'main' } },
+          );
+          await cli.run('list', '--branch', 'feature');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('s1'));
+          assert.ok(!output.includes('s2'));
+        });
+      });
+
+      describe('--repo filter', () => {
+        it('filters by repo name substring', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', directory: '/home/user/api-server' },
+            { id: 's2', state: 'busy', directory: '/home/user/web-client' },
+            { id: 's3', state: 'busy', directory: '/home/user/api-gate' },
+          );
+          await cli.run('list', '--repo', 'api');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('s1'));
+          assert.ok(!output.includes('s2'));
+          assert.ok(output.includes('s3'));
+        });
+      });
+
+      describe('--tag filter', () => {
+        it('matches exact tag', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', tags: ['wip'] },
+            { id: 's2', state: 'busy', tags: ['done'] },
+          );
+          await cli.run('list', '--tag', 'wip');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('s1'));
+          assert.ok(!output.includes('s2'));
+        });
+
+        it('does not match partial tag', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', tags: ['wip'] },
+          );
+          await cli.run('list', '--tag', 'wi');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(!output.includes('s1'));
+        });
+      });
+
+      describe('--name filter', () => {
+        it('filters by session name substring', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', name: 'Auth Bug' },
+            { id: 's2', state: 'busy', name: 'Dashboard Feature' },
+          );
+          await cli.run('list', '--name', 'auth');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('s1'));
+          assert.ok(!output.includes('s2'));
+        });
+      });
+
+      describe('--worktree filter', () => {
+        it('filters by worktree name substring', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', resources: { worktree: 'bugfix' } },
+            { id: 's2', state: 'busy', resources: { worktree: 'feat-x' } },
+          );
+          await cli.run('list', '--worktree', 'bug');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('s1'));
+          assert.ok(!output.includes('s2'));
+        });
+      });
+
+      describe('filters compose with AND', () => {
+        it('--state and --branch compose', async () => {
+          await cli.seed(
+            { id: 'sbm', state: 'busy', resources: { branch: 'main' } },
+            { id: 'sim', state: 'idle', resources: { branch: 'main' } },
+            { id: 'sbd', state: 'busy', resources: { branch: 'develop' } },
+          );
+          await cli.run('list', '--state', 'busy', '--branch', 'main');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('sbm'));
+          assert.ok(!output.includes('sim'));
+          assert.ok(!output.includes('sbd'));
+        });
+      });
+
+      describe('no matches', () => {
+        it('shows no sessions message when filter matches nothing', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', resources: { branch: 'main' } },
+          );
+          await cli.run('list', '--branch', 'nonexistent');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('No sessions found'));
+        });
+      });
+
+      describe('--sort', () => {
+        it('--sort name orders alphabetically by display name', async () => {
+          await cli.seed(
+            { id: 'szebra', state: 'busy', name: 'Zebra' },
+            { id: 'salpha', state: 'busy', name: 'Alpha' },
+            { id: 'smid', state: 'busy', name: 'Middle' },
+          );
+          await cli.run('list', '--sort', 'name');
+
+          const output = cli.console.logs.join('\n');
+          const alphaIdx = output.indexOf('Alpha');
+          const middleIdx = output.indexOf('Middle');
+          const zebraIdx = output.indexOf('Zebra');
+          assert.ok(alphaIdx >= 0, 'Alpha should be in output');
+          assert.ok(middleIdx >= 0, 'Middle should be in output');
+          assert.ok(zebraIdx >= 0, 'Zebra should be in output');
+          assert.ok(alphaIdx < middleIdx, 'Alpha should appear before Middle');
+          assert.ok(middleIdx < zebraIdx, 'Middle should appear before Zebra');
+        });
+
+        it('--sort -name orders reverse alphabetically', async () => {
+          await cli.seed(
+            { id: 'szebra', state: 'busy', name: 'Zebra' },
+            { id: 'salpha', state: 'busy', name: 'Alpha' },
+            { id: 'smid', state: 'busy', name: 'Middle' },
+          );
+          await cli.run('list', '--sort', '-name');
+
+          const output = cli.console.logs.join('\n');
+          const alphaIdx = output.indexOf('Alpha');
+          const middleIdx = output.indexOf('Middle');
+          const zebraIdx = output.indexOf('Zebra');
+          assert.ok(zebraIdx >= 0, 'Zebra should be in output');
+          assert.ok(middleIdx >= 0, 'Middle should be in output');
+          assert.ok(alphaIdx >= 0, 'Alpha should be in output');
+          assert.ok(zebraIdx < middleIdx, 'Zebra should appear before Middle');
+          assert.ok(middleIdx < alphaIdx, 'Middle should appear before Alpha');
+        });
+
+        it('--sort status orders waiting < idle < busy < closed', async () => {
+          await cli.seed(
+            { id: 'sc', state: 'closed', name: 'Closed One' },
+            { id: 'sw', state: 'waiting', name: 'Waiting One' },
+            { id: 'sb', state: 'busy', name: 'Busy One' },
+            { id: 'si', state: 'idle', name: 'Idle One' },
+          );
+          await cli.run('list', '--sort', 'status');
+
+          const output = cli.console.logs.join('\n');
+          // Use names to find positions since IDs may overlap with other text
+          const waitIdx = output.indexOf('Waiting One');
+          const idleIdx = output.indexOf('Idle One');
+          const busyIdx = output.indexOf('Busy One');
+          const closedIdx = output.indexOf('Closed One');
+          assert.ok(waitIdx >= 0, 'waiting session should be in output');
+          assert.ok(idleIdx >= 0, 'idle session should be in output');
+          assert.ok(busyIdx >= 0, 'busy session should be in output');
+          assert.ok(closedIdx >= 0, 'closed session should be in output');
+          assert.ok(waitIdx < idleIdx, 'waiting should appear before idle');
+          assert.ok(idleIdx < busyIdx, 'idle should appear before busy');
+          assert.ok(busyIdx < closedIdx, 'busy should appear before closed');
+        });
+      });
+
+      describe('display options', () => {
+        it('--flat shows no nesting connectors', async () => {
+          await cli.seed(
+            { id: 'sparent', state: 'busy', name: 'Parent' },
+            { id: 'schild', state: 'busy', name: 'Child', parent_session_id: 'sparent' },
+          );
+          await cli.run('list', '--flat');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('sparent'));
+          assert.ok(output.includes('schild'));
+          // \u2514 = └ (bottom-left corner), \u250c = ┌ (top-left corner)
+          assert.ok(!output.includes('\u2514'), 'flat mode should not contain bottom-left corner connector');
+          assert.ok(!output.includes('\u250c'), 'flat mode should not contain top-left corner connector');
+        });
+
+        it('--bottom-up shows child before parent with top-left connector', async () => {
+          await cli.seed(
+            { id: 'sparent', state: 'busy', name: 'Parent' },
+            { id: 'schild', state: 'busy', name: 'Child', parent_session_id: 'sparent' },
+          );
+          await cli.run('list', '--bottom-up');
+
+          const output = cli.console.logs.join('\n');
+          const childIdx = output.indexOf('schild');
+          const parentIdx = output.indexOf('sparent');
+          assert.ok(childIdx >= 0, 'child should be in output');
+          assert.ok(parentIdx >= 0, 'parent should be in output');
+          assert.ok(childIdx < parentIdx, 'child should appear before parent in bottom-up');
+          // \u250c = ┌ (top-left corner connector used in bottom-up mode)
+          assert.ok(output.includes('\u250c'), 'bottom-up should use top-left corner connector');
+        });
+
+        it('--flat --bottom-up uses flat (no connectors)', async () => {
+          await cli.seed(
+            { id: 'sparent', state: 'busy', name: 'Parent' },
+            { id: 'schild', state: 'busy', name: 'Child', parent_session_id: 'sparent' },
+          );
+          await cli.run('list', '--flat', '--bottom-up');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('sparent'));
+          assert.ok(output.includes('schild'));
+          assert.ok(!output.includes('\u2514'), 'flat wins: no bottom-left connector');
+          assert.ok(!output.includes('\u250c'), 'flat wins: no top-left connector');
+        });
+      });
+
+      describe('--json output', () => {
+        it('outputs valid JSON to stdout', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', name: 'Test Session' },
+            { id: 's2', state: 'idle' },
+          );
+          await cli.run('list', '--json');
+
+          const raw = cli.stdout.output.join('');
+          let parsed: unknown;
+          assert.doesNotThrow(() => { parsed = JSON.parse(raw); }, 'output should be valid JSON');
+          assert.ok(Array.isArray(parsed), 'JSON output should be an array');
+          const arr = parsed as { id: string; state: string; name?: string }[];
+          assert.strictEqual(arr.length, 2);
+          assert.ok(arr.some(s => s.id === 's1'));
+          assert.ok(arr.some(s => s.id === 's2'));
+        });
+
+        it('JSON includes expected fields', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', name: 'JSON Test', directory: '/tmp/proj' },
+          );
+          await cli.run('list', '--json');
+
+          const raw = cli.stdout.output.join('');
+          const arr = JSON.parse(raw) as Record<string, unknown>[];
+          assert.strictEqual(arr.length, 1);
+          const session = arr[0];
+          assert.strictEqual(session.id, 's1');
+          assert.strictEqual(session.state, 'busy');
+          assert.strictEqual(session.name, 'JSON Test');
+          assert.strictEqual(session.directory, '/tmp/proj');
+          assert.ok(typeof session.created_at === 'string', 'created_at should be ISO string');
+          assert.ok(typeof session.last_active_at === 'string', 'last_active_at should be ISO string');
+        });
+
+        it('JSON output goes to stdout, not console.log', async () => {
+          await cli.seed({ id: 's1', state: 'busy' });
+          await cli.run('list', '--json');
+
+          // stdout should have the JSON
+          assert.ok(cli.stdout.output.join('').includes('s1'));
+          // console.log should NOT have the JSON array
+          const consoleLogs = cli.console.logs.join('\n');
+          assert.ok(!consoleLogs.includes('"id"'), 'JSON should not appear in console.log');
         });
       });
     });
