@@ -177,6 +177,36 @@ printf ' | %s' "${PARTS[@]:1}"
 echo
 ```
 
+## Configuration
+
+`c` uses [cosmiconfig](https://github.com/cosmiconfig/cosmiconfig) to load configuration from any of these locations (first match wins):
+
+- `~/.config/c/config.yaml`
+- `~/.config/c/config.json`
+- `~/.crc.yaml`
+- `~/.crc.json`
+- `~/.crc`
+- `package.json` `"c"` key
+
+CLI flags always override config values. Config values act as defaults.
+
+```yaml
+# ~/.config/c/config.yaml
+
+list:
+  state: "busy,idle,waiting,closed,archived"
+  flat: true
+  sort: name
+
+new:
+  model: claude-opus-4-6
+
+resume:
+  model: claude-opus-4-6
+```
+
+Config keys match the long flag names for each command. For example, `list.sort` corresponds to `--sort`, `list.flat` to `--flat`, `new.model` to `--model`.
+
 ## Data storage
 
 Session state is persisted in a TOML index file at `~/.c/index.toml`. This file contains every tracked session with its ID, name, state, directory, linked resources (branch, PR, JIRA, worktree), tags, and metadata. All commands read from and write to this single file.
