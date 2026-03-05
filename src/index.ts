@@ -264,11 +264,11 @@ export function createProgram(): Command {
 
   // Rename (primary) / Name (alias)
   program
-    .command('rename <name> [id]')
+    .command('rename <id> <name>')
     .alias('name')
     .description('Rename a session')
-    .action(async (name, id) => {
-      await nameCommand(name, id);
+    .action(async (id, name) => {
+      await nameCommand(id, name);
     });
 
   // Meta

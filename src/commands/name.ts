@@ -1,26 +1,17 @@
 /**
- * c name "..." - set session name
+ * c rename <id> <name> - set session name
  */
 
 import chalk from 'chalk';
-import { updateIndex, getSession, getCurrentSession } from '../store/index.js';
+import { updateIndex, getSession } from '../store/index.js';
 import { findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.js';
 import { setTmuxPaneTitle } from '../util/exec.js';
 
-export async function nameCommand(name: string, idOrPrefix?: string): Promise<void> {
-  let session;
-
-  if (idOrPrefix) {
-    session = getSession(idOrPrefix);
-  } else {
-    session = getCurrentSession();
-  }
+export async function nameCommand(idOrPrefix: string, name: string): Promise<void> {
+  const session = getSession(idOrPrefix);
 
   if (!session) {
-    const msg = idOrPrefix
-      ? `Session not found: ${idOrPrefix}`
-      : 'No active session in current directory';
-    console.error(chalk.red(msg));
+    console.error(chalk.red(`Session not found: ${idOrPrefix}`));
     process.exit(1);
   }
 
@@ -40,8 +31,8 @@ export async function nameCommand(name: string, idOrPrefix?: string): Promise<vo
     if (current) s.meta._custom_title = current;
   });
 
-  if (!idOrPrefix) {
-    setTmuxPaneTitle(name, session?.resources.tmux_pane);
+  if (session.resources.tmux_pane) {
+    setTmuxPaneTitle(name, session.resources.tmux_pane);
   }
   console.log(chalk.green(`Set name: ${name}.`));
 }
