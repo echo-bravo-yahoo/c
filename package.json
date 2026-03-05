@@ -11,7 +11,10 @@
     "watch": "tsc --watch",
     "dev": "tsc && node dist/index.js",
     "test": "node --experimental-strip-types --experimental-test-module-mocks --test test/**/*.test.ts",
-    "test:watch": "node --experimental-strip-types --experimental-test-module-mocks --test --watch test/**/*.test.ts"
+    "test:watch": "node --experimental-strip-types --experimental-test-module-mocks --test --watch test/**/*.test.ts",
+    "test:coverage": "node --experimental-strip-types --experimental-test-module-mocks --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test test/**/*.test.ts",
+    "test:lcov": "mkdir -p coverage && node --experimental-strip-types --experimental-test-module-mocks --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info --test test/**/*.test.ts",
+    "test:html": "npx c8 --reporter=html --reports-dir=coverage/html --include='src/**/*.ts' node --experimental-strip-types --experimental-test-module-mocks --test test/**/*.test.ts && open coverage/html/index.html"
   },
   "dependencies": {
     "@iarna/toml": "^3.0.0",
