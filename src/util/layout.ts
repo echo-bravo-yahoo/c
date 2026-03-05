@@ -29,12 +29,12 @@ export const GUTTER = 2;
 export const ID_FIXED_WIDTH = 12;
 
 export const COLUMN_SPECS: readonly ColumnSpec[] = [
-  { key: 'status',    label: 'Status',          min:  7, max:  9, priority: 1 },
+  { key: 'status',    label: 'State',           min:  7, max:  9, priority: 1 },
   { key: 'idName',    label: 'ID',              min: 20, max: Infinity, priority: 2 },
   { key: 'repo',      label: 'Repo',            min:  6, max: 20, priority: 3 },
   { key: 'branch',    label: 'Worktree/Branch', min:  6, max: 30, priority: 4 },
   { key: 'time',      label: 'Last Active',     min:  6, max: 12, priority: 5 },
-  { key: 'size',      label: 'Size',            min:  5, max:  9, priority: 6 },
+  { key: 'size',      label: 'Size',            min:  7, max: 10, priority: 6 },
   { key: 'resources', label: 'Resources',       min:  4, max: 24, priority: 7 },
 ];
 
@@ -91,6 +91,18 @@ export function computeColumnLayout(
     const grow = Math.min(target - current, remaining);
     if (grow > 0) {
       widths.set('idName', current + grow);
+      remaining -= grow;
+    }
+  }
+
+  // Step 5: Expand toward header label width (only if space remains)
+  for (const col of active) {
+    if (remaining <= 0) break;
+    const current = widths.get(col.key)!;
+    const labelWidth = col.label.length + 1;
+    if (labelWidth > current) {
+      const grow = Math.min(labelWidth - current, remaining);
+      widths.set(col.key, current + grow);
       remaining -= grow;
     }
   }
