@@ -77,6 +77,7 @@ export function createProgram(): Command {
     .command('list')
     .description('List sessions')
     .option('--state <states>', 'Filter by state (comma-separated: busy,idle,waiting,closed,archived,all)')
+    .addOption(new Option('--status <states>', 'Alias for --state').hideHelp())
     .option('--branch <name>', 'Filter by branch (substring)')
     .option('--repo <name>', 'Filter by repo name (substring)')
     .option('--tag <tag>', 'Filter by tag (exact)')
@@ -93,7 +94,7 @@ export function createProgram(): Command {
     .option('--max-width <n>', 'Maximum table width', parseInt)
     .action(async (options) => {
       await listCommand({
-        state: options.state,
+        state: options.state ?? options.status,
         branch: options.branch,
         repo: options.repo,
         tag: options.tag,

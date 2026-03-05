@@ -681,7 +681,7 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
     headerParts.push('  ' + fixedWidth('ID', layout.id - 2) + fixedWidth('Name', layout.name));
   }
   if (layout.visible.has('status')) {
-    headerParts.push(fixedWidth('Status', layout.status));
+    headerParts.push(fixedWidth('State', layout.status));
   }
   if (layout.visible.has('repo')) {
     headerParts.push(fixedWidth('Repo', layout.repo));

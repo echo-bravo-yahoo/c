@@ -73,10 +73,15 @@ export async function listCommand(rawOptions: ListOptions): Promise<void> {
 
   let sessions = getSessions({
     state: stateFilter,
-    directory: options.directory,
   });
 
   // Post-filters
+  if (options.directory) {
+    const home = process.env.HOME || '';
+    const expanded = home ? options.directory.replace(/^~(?=$|\/)/, home) : options.directory;
+    const q = expanded.toLowerCase();
+    sessions = sessions.filter(s => s.directory.toLowerCase().includes(q));
+  }
   if (options.branch) {
     const q = options.branch.toLowerCase();
     sessions = sessions.filter(s => s.resources.branch?.toLowerCase().includes(q));
