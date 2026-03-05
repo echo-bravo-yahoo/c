@@ -79,6 +79,18 @@ export function writeStatusCache(sessionId: string, data: StatusCacheData): void
 }
 
 /**
+ * List all session IDs that have a status cache file
+ */
+export function listStatusCacheIds(): string[] {
+  const dir = getStatusDir();
+  try {
+    return fs.readdirSync(dir).filter((f) => !f.startsWith('.'));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Delete the status cache file for a session
  */
 export function deleteStatusCache(sessionId: string): void {

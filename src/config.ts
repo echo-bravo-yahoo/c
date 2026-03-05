@@ -7,6 +7,7 @@
 import { cosmiconfigSync } from 'cosmiconfig';
 
 export interface CConfig {
+  debug?: string;
   list?: Record<string, unknown>;
   new?: Record<string, unknown>;
   resume?: Record<string, unknown>;

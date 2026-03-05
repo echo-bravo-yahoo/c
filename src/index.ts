@@ -20,7 +20,7 @@ import { untagCommand } from './commands/untag.ts';
 import { nameCommand } from './commands/name.ts';
 import { metaCommand } from './commands/meta.ts';
 import { findCommand } from './commands/find.ts';
-import { cleanCommand } from './commands/clean.ts';
+import { repairCommand } from './commands/repair.ts';
 import { dirCommand } from './commands/dir.ts';
 import { initCommand } from './commands/init.ts';
 import { execCommand } from './commands/exec.ts';
@@ -336,8 +336,9 @@ export function createProgram(): Command {
     .description('View recent transcript activity')
     .option('-n, --lines <n>', 'Number of entries to show', parseInt)
     .option('--prompts', 'Show only user prompts')
-    .action((id, options) => {
-      logCommand(id, { lines: options.lines, prompts: options.prompts });
+    .option('--tail', 'Follow transcript in $PAGER')
+    .action(async (id, options) => {
+      await logCommand(id, { lines: options.lines, prompts: options.prompts, tail: options.tail });
     });
 
   // Memory
@@ -357,13 +358,12 @@ export function createProgram(): Command {
       statsCommand();
     });
 
-  // Clean
+  // Repair
   program
-    .command('clean')
-    .description('Find orphaned sessions')
-    .option('--prune', 'Delete orphaned sessions')
-    .action(async (options) => {
-      await cleanCommand({ prune: options.prune });
+    .command('repair [id]')
+    .description('Auto-fix inconsistent session state')
+    .action(async (id) => {
+      await repairCommand(id);
     });
 
   // tmux integration

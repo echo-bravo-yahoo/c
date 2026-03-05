@@ -4,6 +4,7 @@
 
 import { updateIndex, getCurrentSession } from '../store/index.ts';
 import { deleteStatusCache } from '../store/status-cache.ts';
+import { debugLog } from '../util/debug.ts';
 import type { HookInput } from './index.ts';
 
 export async function handleSessionEnd(
@@ -13,6 +14,7 @@ export async function handleSessionEnd(
 ): Promise<void> {
   // Find session by ID or by cwd
   const targetId = sessionId ?? getCurrentSession(cwd)?.id;
+  debugLog(`[hook] session-end: sessionId=${sessionId} targetId=${targetId}`);
 
   if (!targetId) {
     return;

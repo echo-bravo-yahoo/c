@@ -3,14 +3,17 @@
  */
 
 import chalk from 'chalk';
+import * as path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { getSession, getCurrentSession } from '../store/index.ts';
 import { findTranscriptPath } from '../claude/sessions.ts';
+import { spawnInteractive } from '../util/exec.ts';
 import { relativeTime } from '../util/format.ts';
 
 export interface LogOptions {
   lines?: number;
   prompts?: boolean;
+  tail?: boolean;
 }
 
 interface ToolUse {
@@ -134,7 +137,7 @@ function wrapText(text: string, width: number): string[] {
   return result.length ? result : [''];
 }
 
-export function logCommand(idOrPrefix?: string, options?: LogOptions): void {
+export async function logCommand(idOrPrefix?: string, options?: LogOptions): Promise<void> {
   const session = idOrPrefix ? getSession(idOrPrefix) : getCurrentSession();
   if (!session) {
     const msg = idOrPrefix
@@ -148,6 +151,15 @@ export function logCommand(idOrPrefix?: string, options?: LogOptions): void {
   if (!transcript) {
     console.error(chalk.red('Transcript not found.'));
     process.exit(1);
+  }
+
+  // --tail: open transcript in $PAGER with follow mode
+  if (options?.tail) {
+    const pager = process.env.PAGER || 'less';
+    const pagerBase = path.basename(pager);
+    const args = pagerBase === 'less' ? ['+F', transcript] : [transcript];
+    const code = await spawnInteractive(pager, args);
+    process.exit(code);
   }
 
   const fileContent = readFileSync(transcript, 'utf-8');

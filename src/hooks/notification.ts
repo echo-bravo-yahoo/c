@@ -3,6 +3,7 @@
  */
 
 import { updateIndex, getCurrentSession } from '../store/index.ts';
+import { debugLog } from '../util/debug.ts';
 import type { HookInput } from './index.ts';
 
 export async function handleNotificationWaiting(
@@ -11,6 +12,7 @@ export async function handleNotificationWaiting(
   _input: HookInput | null
 ): Promise<void> {
   const targetId = sessionId ?? getCurrentSession(cwd)?.id;
+  debugLog(`[hook] notification-waiting: sessionId=${sessionId} targetId=${targetId}`);
 
   if (!targetId) {
     return;

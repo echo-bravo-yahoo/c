@@ -6,6 +6,7 @@ import { updateIndex, getCurrentSession, getSession } from '../store/index.ts';
 import { extractPRFromOutput } from '../detection/pr.ts';
 import { writeStatusCache } from '../store/status-cache.ts';
 import { getCurrentBranch, getRepoSlug, getWorktreeInfo } from '../detection/git.ts';
+import { debugLog } from '../util/debug.ts';
 import type { StatusCacheData } from '../store/status-cache.ts';
 import type { HookInput } from './index.ts';
 
@@ -15,6 +16,7 @@ export async function handlePostBash(
   input: HookInput | null
 ): Promise<void> {
   const targetId = sessionId ?? getCurrentSession(cwd)?.id;
+  debugLog(`[hook] post-bash: sessionId=${sessionId} targetId=${targetId}`);
 
   if (!targetId) {
     return;

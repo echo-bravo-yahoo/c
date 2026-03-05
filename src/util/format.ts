@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import type { Session, SessionState } from '../store/schema.ts';
 import { getClaudeSessionTitles, getClaudeSession, listClaudeSessions, readClaudeSessionIndex } from '../claude/sessions.ts';
-import { getAllSessions, getSession } from '../store/index.ts';
+import { getAllSessions } from '../store/index.ts';
 import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.ts';
 import { getRepoSlug } from '../detection/git.ts';
 import { buildJiraUrl } from '../detection/jira.ts';
@@ -425,26 +425,6 @@ export function formatSessionDetails(session: Session): string {
 
   lines.push(chalk.bold('Session: ') + getDisplayName(session));
   lines.push(chalk.dim('  ID: ') + session.id);
-  const allSessions = getAllSessions();
-  const allShortIds = allSessions.map(s => shortId(s.id));
-  if (session.parent_session_id) {
-    const parent = getSession(session.parent_session_id);
-    const parentShort = shortId(session.parent_session_id);
-    const prefixLen = computeUniquePrefixLength(parentShort, allShortIds);
-    const parentId = highlightId(parentShort, prefixLen);
-    const parentLabel = parent
-      ? `${parentId} ${getDisplayName(parent)} (${parent.state})`
-      : parentId;
-    lines.push(chalk.dim('  Parent: ') + parentLabel);
-  }
-  const children = allSessions.filter(s => s.parent_session_id === session.id);
-  if (children.length > 0) {
-    lines.push(chalk.dim('  Children: ') + children.map(c => {
-      const cShort = shortId(c.id);
-      const cPrefix = computeUniquePrefixLength(cShort, allShortIds);
-      return `${highlightId(cShort, cPrefix)} ${getDisplayName(c)}`;
-    }).join(', '));
-  }
   lines.push('');
   lines.push(chalk.bold('Status: ') + formatStatus(session));
   lines.push(chalk.dim('  Directory: ') + hyperlink(`file://${session.directory}`, session.directory));
@@ -518,6 +498,46 @@ export function formatSessionDetails(session: Session): string {
     for (const [key, value] of Object.entries(session.meta)) {
       lines.push(`  ${key}: ${value}`);
     }
+  }
+
+  // Family tree
+  const allSessions = getAllSessions();
+  const hasFamily = session.parent_session_id || allSessions.some(s => s.parent_session_id === session.id);
+  if (hasFamily) {
+    lines.push('');
+    lines.push(chalk.bold('Family tree:'));
+    const allShortIds = allSessions.map(s => shortId(s.id));
+    const sessionMap = new Map(allSessions.map(s => [s.id, s]));
+
+    // Walk up to root
+    let root: Session = session;
+    while (root.parent_session_id) {
+      const parent = sessionMap.get(root.parent_session_id);
+      if (!parent) break;
+      root = parent;
+    }
+
+    // Render tree recursively
+    const renderNode = (node: Session, prefix: string, isLast: boolean, isRoot: boolean): void => {
+      const nShort = shortId(node.id);
+      const nPrefix = computeUniquePrefixLength(nShort, allShortIds);
+      const id = highlightId(nShort, nPrefix);
+      const name = getDisplayName(node) || '';
+      const state = chalk.dim(`(${node.state})`);
+      const marker = node.id === session.id ? chalk.bold(' ◀') : '';
+      const connector = isRoot ? '  ' : (isLast ? '└── ' : '├── ');
+      lines.push(`${prefix}${connector}${id} ${name} ${state}${marker}`);
+
+      const children = allSessions
+        .filter(s => s.parent_session_id === node.id)
+        .sort((a, b) => a.created_at.getTime() - b.created_at.getTime());
+      const childPrefix = isRoot ? '  ' : prefix + (isLast ? '    ' : '│   ');
+      for (let i = 0; i < children.length; i++) {
+        renderNode(children[i], childPrefix, i === children.length - 1, false);
+      }
+    };
+
+    renderNode(root, '', true, true);
   }
 
   return lines.join('\n');
