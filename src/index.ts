@@ -22,6 +22,7 @@ import { metaCommand } from './commands/meta.js';
 import { findCommand } from './commands/find.js';
 import { cleanCommand } from './commands/clean.js';
 import { dirCommand } from './commands/dir.js';
+import { initCommand } from './commands/init.js';
 import { execCommand } from './commands/exec.js';
 import { openCommand } from './commands/open.js';
 import { logCommand } from './commands/log.js';
@@ -385,6 +386,14 @@ export function createProgram(): Command {
     .description('Handle Claude hook events')
     .action(async (event) => {
       await handleHook(event);
+    });
+
+  // Init (shell wrapper for c cd)
+  program
+    .command('init')
+    .description('Output shell init script (eval "$(c init)")')
+    .action(() => {
+      initCommand();
     });
 
   // Completion

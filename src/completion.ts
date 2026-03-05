@@ -20,6 +20,7 @@ const SESSION_COMMANDS = [
   'rename',
   'name',
   'meta',
+  'cd',
   'dir',
   'exec',
   'delete',
@@ -45,6 +46,7 @@ const SUBCOMMANDS = [
   'name',
   'meta',
   'find',
+  'cd',
   'dir',
   'exec',
   'delete',
@@ -295,25 +297,8 @@ export function installCompletion(): void {
   const completion = omelette('c');
   completion.setupShellInitFile();
 
-  // Print cd wrapper instructions
-  const shell = process.env.SHELL || '';
-  const initFile = shell.includes('zsh') ? '~/.zshrc'
-    : shell.includes('fish') ? '~/.config/fish/config.fish'
-    : '~/.bashrc';
-
-  console.log(`\nTo enable 'c cd', add this function to ${initFile}:\n`);
-  console.log(`  c() {
-    if [ "$1" = "cd" ]; then
-      shift
-      local dir
-      dir=$(command c dir "$@")
-      if [ $? -eq 0 ] && [ -n "$dir" ]; then
-        builtin cd "$dir"
-      fi
-    else
-      command c "$@"
-    fi
-  }`);
+  console.log('\nTo enable \'c cd\', add to your shell profile:');
+  console.log('  eval "$(c init)"');
 }
 
 /**
