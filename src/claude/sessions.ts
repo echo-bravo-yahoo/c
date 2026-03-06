@@ -139,7 +139,8 @@ export function listClaudeSessions(): ClaudeSession[] {
  */
 export function getClaudeSession(sessionId: string): ClaudeSession | undefined {
   const sessions = listClaudeSessions();
-  return sessions.find((s) => s.id === sessionId || s.id.startsWith(sessionId));
+  const lower = sessionId.toLowerCase();
+  return sessions.find((s) => s.id.toLowerCase() === lower || s.id.toLowerCase().startsWith(lower));
 }
 
 /**

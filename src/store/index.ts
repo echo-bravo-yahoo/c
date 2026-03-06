@@ -236,9 +236,10 @@ export function getSession(idOrPrefix: string): Session | undefined {
     return index.sessions[idOrPrefix];
   }
 
-  // Prefix match
+  // Prefix match (case-insensitive)
+  const lower = idOrPrefix.toLowerCase();
   const matches = Object.values(index.sessions).filter(
-    (s) => s.id.startsWith(idOrPrefix)
+    (s) => s.id.toLowerCase().startsWith(lower)
   );
 
   if (matches.length === 1) {
@@ -262,8 +263,9 @@ export function findSessionsByName(name: string): Session[] {
 export function findSessions(prefix: string): Session[] {
   const index = readIndex();
   if (index.sessions[prefix]) return [index.sessions[prefix]];
+  const lower = prefix.toLowerCase();
   return Object.values(index.sessions).filter(
-    (s) => s.id.startsWith(prefix)
+    (s) => s.id.toLowerCase().startsWith(lower)
   );
 }
 
