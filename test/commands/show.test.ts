@@ -238,6 +238,39 @@ describe('c', () => {
           assert.match(obj.created_at as string, /^\d{4}-\d{2}-\d{2}T/, 'created_at should be ISO');
           assert.match(obj.last_active_at as string, /^\d{4}-\d{2}-\d{2}T/, 'last_active_at should be ISO');
         });
+
+        it('JSON matches seeded session', async () => {
+          const t = new Date('2025-06-01T12:00:00Z');
+          const seed = {
+            id: 'abc12345', state: 'busy' as const, name: 'Full Session',
+            directory: '/home/u/proj',
+            created_at: t, last_active_at: t,
+            resources: { branch: 'main', pr: 'https://github.com/o/r/pull/1', jira: 'PROJ-1', worktree: 'wt-1' },
+            servers: { '123:8080': 'node server.js' },
+            tags: ['wip', 'urgent'],
+            meta: { priority: 'high' },
+            pid: 42567,
+            parent_session_id: 'parent-uuid',
+          };
+          await cli.seed(seed);
+          await cli.run('show', 'abc12345', '--json');
+
+          assert.deepStrictEqual(JSON.parse(cli.stdout.output.join('')), {
+            ...seed,
+            project_key: '-home-test-project',
+            created_at: t.toISOString(),
+            last_active_at: t.toISOString(),
+            tags: { values: seed.tags },
+          });
+        });
+
+        it('exits 1 with no JSON when session not found', async () => {
+          await cli.run('show', 'nonexistent', '--json');
+
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.strictEqual(cli.stdout.output.join(''), '', 'no JSON on stdout');
+          assert.ok(cli.console.errors.some(l => l.includes('not found')));
+        });
       });
 
       describe('pid display', () => {

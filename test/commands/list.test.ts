@@ -255,6 +255,72 @@ describe('c', () => {
           const output = cli.console.logs.join('\n');
           assert.ok(output.includes('2 total'));
         });
+
+        it('--json matches expected structure', async () => {
+          const t = new Date('2025-06-01T12:00:00Z');
+          await cli.seed(
+            { id: 's1', directory: '/home/u/api', state: 'busy', last_active_at: t },
+            { id: 's2', directory: '/home/u/api', state: 'closed', last_active_at: t },
+          );
+          await cli.run('list', '--repos', '--json');
+
+          assert.deepStrictEqual(JSON.parse(cli.stdout.output.join('')), [{
+            name: 'api',
+            directory: '/home/u/api',
+            active: 1,
+            total: 2,
+            last_active_at: t.toISOString(),
+          }]);
+        });
+
+        it('--json returns empty array when no sessions', async () => {
+          await cli.run('list', '--repos', '--json');
+
+          assert.deepStrictEqual(JSON.parse(cli.stdout.output.join('')), []);
+        });
+
+        it('--json collapses worktree sessions into parent repo', async () => {
+          const t = new Date('2025-06-01T12:00:00Z');
+          await cli.seed(
+            { id: 's1', directory: '/home/u/myrepo', state: 'busy', last_active_at: t },
+            { id: 's2', directory: '/home/u/myrepo/.claude/worktrees/bugfix', state: 'idle', last_active_at: t },
+          );
+          await cli.run('list', '--repos', '--json');
+
+          assert.deepStrictEqual(JSON.parse(cli.stdout.output.join('')), [{
+            name: 'myrepo',
+            directory: '/home/u/myrepo',
+            active: 2,
+            total: 2,
+            last_active_at: t.toISOString(),
+          }]);
+        });
+
+        it('--json sorts by last active descending', async () => {
+          const old = new Date('2025-01-01T00:00:00Z');
+          const recent = new Date('2026-03-20T00:00:00Z');
+          await cli.seed(
+            { id: 's1', directory: '/home/u/old-repo', state: 'closed', last_active_at: old },
+            { id: 's2', directory: '/home/u/new-repo', state: 'busy', last_active_at: recent },
+          );
+          await cli.run('list', '--repos', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { name: string }[];
+          assert.strictEqual(arr[0].name, 'new-repo');
+          assert.strictEqual(arr[1].name, 'old-repo');
+        });
+
+        it('--json respects --state all', async () => {
+          const t = new Date('2025-06-01T12:00:00Z');
+          await cli.seed(
+            { id: 's1', directory: '/home/u/api', state: 'busy', last_active_at: t },
+            { id: 's2', directory: '/home/u/web', state: 'archived', last_active_at: t },
+          );
+          await cli.run('list', '--repos', '--state', 'all', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { name: string }[];
+          assert.strictEqual(arr.length, 2, '--state all should include archived');
+        });
       });
 
       describe('empty state', () => {
@@ -800,6 +866,123 @@ describe('c', () => {
           // console.log should NOT have the JSON array
           const consoleLogs = cli.console.logs.join('\n');
           assert.ok(!consoleLogs.includes('"id"'), 'JSON should not appear in console.log');
+        });
+
+        it('JSON matches seeded session', async () => {
+          const t = new Date('2025-06-01T12:00:00Z');
+          const seed = {
+            id: 's1', state: 'busy' as const, name: 'Full Session',
+            directory: '/home/u/proj',
+            created_at: t, last_active_at: t,
+            resources: { branch: 'main', pr: 'https://github.com/o/r/pull/1', jira: 'PROJ-1', worktree: 'wt-1' },
+            servers: { '123:8080': 'node server.js' },
+            tags: ['wip', 'urgent'],
+            meta: { priority: 'high' },
+            pid: 42567,
+            parent_session_id: 'parent-uuid',
+          };
+          await cli.seed(seed);
+          await cli.run('list', '--state', 'all', '--json');
+
+          assert.deepStrictEqual(JSON.parse(cli.stdout.output.join('')), [{
+            ...seed,
+            project_key: '-home-test-project',
+            created_at: t.toISOString(),
+            last_active_at: t.toISOString(),
+            tags: { values: seed.tags },
+          }]);
+        });
+
+        it('returns empty array when no sessions match', async () => {
+          await cli.seed({ id: 's1', state: 'archived' });
+          await cli.run('list', '--json');
+
+          assert.deepStrictEqual(JSON.parse(cli.stdout.output.join('')), []);
+        });
+
+        it('respects --state filter', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy' },
+            { id: 's2', state: 'closed' },
+            { id: 's3', state: 'archived' },
+          );
+          await cli.run('list', '--state', 'busy', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr.length, 1);
+          assert.strictEqual(arr[0].id, 's1');
+        });
+
+        it('respects --branch filter', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', resources: { branch: 'feature/auth' } },
+            { id: 's2', state: 'busy', resources: { branch: 'main' } },
+          );
+          await cli.run('list', '--branch', 'auth', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr.length, 1);
+          assert.strictEqual(arr[0].id, 's1');
+        });
+
+        it('respects --repo filter', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', directory: '/home/u/api' },
+            { id: 's2', state: 'busy', directory: '/home/u/web' },
+          );
+          await cli.run('list', '--repo', 'api', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr.length, 1);
+          assert.strictEqual(arr[0].id, 's1');
+        });
+
+        it('respects --tag filter', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', tags: ['wip'] },
+            { id: 's2', state: 'busy', tags: ['done'] },
+          );
+          await cli.run('list', '--tag', 'wip', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr.length, 1);
+          assert.strictEqual(arr[0].id, 's1');
+        });
+
+        it('respects --name filter', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', name: 'Auth Bug' },
+            { id: 's2', state: 'busy', name: 'Dashboard' },
+          );
+          await cli.run('list', '--name', 'auth', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr.length, 1);
+          assert.strictEqual(arr[0].id, 's1');
+        });
+
+        it('respects --worktree filter', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', resources: { worktree: 'bugfix-123' } },
+            { id: 's2', state: 'busy', resources: { worktree: 'feature-x' } },
+          );
+          await cli.run('list', '--worktree', 'bugfix', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr.length, 1);
+          assert.strictEqual(arr[0].id, 's1');
+        });
+
+        it('respects --dir filter', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', directory: '/home/u/api' },
+            { id: 's2', state: 'busy', directory: '/home/u/web' },
+          );
+          await cli.run('list', '--dir', '/home/u/api', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr.length, 1);
+          assert.strictEqual(arr[0].id, 's1');
         });
       });
     });

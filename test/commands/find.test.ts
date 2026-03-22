@@ -134,6 +134,58 @@ describe('c', () => {
           assert.strictEqual(arr.length, 1);
           assert.strictEqual(arr[0].id, 'sess1');
         });
+
+        it('JSON matches seeded session', async () => {
+          const t = new Date('2025-06-01T12:00:00Z');
+          const seed = {
+            id: 'sess1', name: 'Auth Feature',
+            created_at: t, last_active_at: t,
+          };
+          await cli.seed(seed);
+          await cli.run('find', 'auth', '--json');
+
+          assert.deepStrictEqual(JSON.parse(cli.stdout.output.join('')), [{
+            ...seed,
+            directory: '/home/test/project',
+            project_key: '-home-test-project',
+            state: 'busy',
+            created_at: t.toISOString(),
+            last_active_at: t.toISOString(),
+            resources: {},
+            servers: {},
+            tags: { values: [] },
+            meta: {},
+          }]);
+        });
+
+        it('returns empty array when no matches', async () => {
+          await cli.seed({ id: 'sess1', name: 'Dashboard' });
+          await cli.run('find', 'nonexistent', '--json');
+
+          assert.deepStrictEqual(JSON.parse(cli.stdout.output.join('')), []);
+        });
+
+        it('returns multiple matches', async () => {
+          await cli.seed(
+            { id: 'sess1', name: 'Auth Feature' },
+            { id: 'sess2', name: 'Auth Bug' },
+            { id: 'sess3', name: 'Dashboard' },
+          );
+          await cli.run('find', 'auth', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr.length, 2);
+          assert.ok(arr.some(s => s.id === 'sess1'));
+          assert.ok(arr.some(s => s.id === 'sess2'));
+        });
+
+        it('outputs to stdout, not console.log', async () => {
+          await cli.seed({ id: 'sess1', name: 'Auth' });
+          await cli.run('find', 'auth', '--json');
+
+          assert.ok(cli.stdout.output.join('').includes('sess1'));
+          assert.ok(!cli.console.logs.join('\n').includes('"id"'));
+        });
       });
 
       describe('optional fields', () => {

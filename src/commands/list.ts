@@ -218,6 +218,10 @@ function listRepos(options: ListOptions): void {
   const sessions = getSessions({ state: stateFilter });
 
   if (sessions.length === 0) {
+    if (options.json) {
+      process.stdout.write('[]\n');
+      return;
+    }
     console.log(chalk.dim('No sessions.'));
     return;
   }
