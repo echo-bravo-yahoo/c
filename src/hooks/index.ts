@@ -69,6 +69,10 @@ async function readStdin(): Promise<HookInput | null> {
  * Main hook handler
  */
 export async function handleHook(event: string): Promise<void> {
+  if (process.env.C_SKIP) {
+    debugLog(`[hook] handleHook(${event}) skipped — C_SKIP is set`);
+    return;
+  }
   debugLog(`[hook] handleHook(${event}) invoked — C_DEBUG=${process.env.C_DEBUG} pid=${process.pid}`);
   const input = await readStdin();
   debugLog(`[hook] handleHook(${event}) stdin parsed — sessionId=${input?.session_id}`);
