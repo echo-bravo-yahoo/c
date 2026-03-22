@@ -65,6 +65,14 @@ graph TD
 
 ## Testing
 
+### Strategy
+- **Framework**: Node.js built-in `node:test` with `node:assert`
+- **Run all tests**: `npm test` (or `node --experimental-strip-types --test test/**/*.test.ts`)
+- **Run one file**: `node --experimental-strip-types --test test/commands/file.test.ts`
+  - Files using `mock.module()` also need `--experimental-test-module-mocks`
+- **Test style**: Behavioral, end-to-end through the CLI. Seed state via `cli.seed()`, run the real command via `cli.run()`, assert outcomes on store and output. Do not reimplement command logic in tests.
+- **Placement**: Group tests by command (`test/commands/`) or module (`test/claude/`, `test/hooks/`). Add cases to an existing file when the behavior fits its scope.
+
 ### Command tests
 Command tests use `test/helpers/cli.ts` to run commands through `createProgram().parseAsync()`. This exercises argument parsing, store persistence, output formatting, and error handling end-to-end.
 
