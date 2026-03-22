@@ -158,6 +158,7 @@ describe('completion', () => {
       assert.ok(results.includes('--branch'));
       assert.ok(results.includes('--sort'));
       assert.ok(results.includes('--json'));
+      assert.ok(results.includes('--repos'));
     });
 
     it('returns list flags for bare c (implicit list)', () => {

@@ -85,6 +85,7 @@ export function createProgram(): Command {
     .option('--worktree <name>', 'Filter by worktree name (substring)')
     .option('--prs', 'Show sessions with linked PRs')
     .option('--jira', 'Show sessions with linked JIRA tickets')
+    .option('--repos', 'Show sessions grouped by repository')
     .option('--dir <directory>', 'Filter by directory')
     .option('--sort <fields>', 'Sort by fields (comma-separated, prefix - for desc)')
     .option('--flat', 'Flat list without parent/child nesting')
@@ -102,6 +103,7 @@ export function createProgram(): Command {
         worktree: options.worktree,
         prs: options.prs,
         jira: options.jira,
+        repos: options.repos,
         directory: options.dir,
         sort: options.sort,
         flat: options.flat,

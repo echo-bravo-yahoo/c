@@ -63,7 +63,7 @@ const SUBCOMMANDS = [
 // Flags for list command
 const LIST_FLAGS = [
   '--state', '--branch', '--repo', '--tag', '--name',
-  '--worktree', '--prs', '--jira', '--dir',
+  '--worktree', '--prs', '--jira', '--repos', '--dir',
   '--sort', '--flat', '--bottom-up', '--json',
   '--min-width', '--max-width',
 ];

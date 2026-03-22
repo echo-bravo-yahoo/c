@@ -164,6 +164,75 @@ describe('c', () => {
         });
       });
 
+      describe('--repos view', () => {
+        it('groups sessions by directory', async () => {
+          await cli.seed(
+            { id: 's1', directory: '/home/u/api', state: 'busy' },
+            { id: 's2', directory: '/home/u/api', state: 'closed' },
+            { id: 's3', directory: '/home/u/web', state: 'idle' },
+          );
+          await cli.run('list', '--repos');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('api'));
+          assert.ok(output.includes('web'));
+          assert.ok(output.includes('1 active') && output.includes('2 total'));
+        });
+
+        it('shows message when no sessions exist', async () => {
+          await cli.run('list', '--repos');
+
+          assert.ok(cli.console.logs.some(l => l.includes('No sessions')));
+        });
+
+        it('sorts by last active descending', async () => {
+          const old = new Date('2025-01-01');
+          const recent = new Date('2026-03-20');
+          await cli.seed(
+            { id: 's1', directory: '/home/u/old-repo', state: 'closed', last_active_at: old },
+            { id: 's2', directory: '/home/u/new-repo', state: 'busy', last_active_at: recent },
+          );
+          await cli.run('list', '--repos');
+
+          const lines = cli.console.logs.join('\n');
+          const newIdx = lines.indexOf('new-repo');
+          const oldIdx = lines.indexOf('old-repo');
+          assert.ok(newIdx < oldIdx, 'newer repo should appear first');
+        });
+
+        it('handles worktree directories correctly', async () => {
+          await cli.seed(
+            { id: 's1', directory: '/home/u/myrepo/.claude/worktrees/bugfix', state: 'busy' },
+          );
+          await cli.run('list', '--repos');
+
+          assert.ok(cli.console.logs.some(l => l.includes('myrepo')), 'should show parent repo name');
+        });
+
+        it('respects --state filter', async () => {
+          await cli.seed(
+            { id: 's1', directory: '/home/u/api', state: 'busy' },
+            { id: 's2', directory: '/home/u/web', state: 'archived' },
+          );
+          await cli.run('list', '--repos');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('api'), 'active repo should appear');
+          assert.ok(!output.includes('web'), 'archived repo should not appear by default');
+        });
+
+        it('--state all includes archived in counts', async () => {
+          await cli.seed(
+            { id: 's1', directory: '/home/u/api', state: 'busy' },
+            { id: 's2', directory: '/home/u/api', state: 'archived' },
+          );
+          await cli.run('list', '--repos', '--state', 'all');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('2 total'));
+        });
+      });
+
       describe('empty state', () => {
         it('handles no sessions', async () => {
           await cli.run('list');

@@ -4,7 +4,7 @@
 
 import chalk from 'chalk';
 import { getSessions, getAllSessions, reconcileStaleSessions } from '../store/index.ts';
-import { printSessionTable, getDisplayName, shortId, highlightId, buildPrefixMap, getRepoName, sortSessions } from '../util/format.ts';
+import { printSessionTable, getDisplayName, shortId, highlightId, buildPrefixMap, getRepoName, relativeTime, sortSessions } from '../util/format.ts';
 import { hyperlink } from '../util/hyperlink.ts';
 import { buildJiraUrl } from '../detection/jira.ts';
 import type { SessionState } from '../store/schema.ts';
@@ -15,6 +15,7 @@ export interface ListOptions {
   state?: string;
   prs?: boolean;
   jira?: boolean;
+  repos?: boolean;
   directory?: string;
   branch?: string;
   repo?: string;
@@ -64,6 +65,10 @@ export async function listCommand(rawOptions: ListOptions): Promise<void> {
   }
   if (options.jira) {
     listJira();
+    return;
+  }
+  if (options.repos) {
+    listRepos(options);
     return;
   }
 
@@ -202,6 +207,54 @@ function listJira(): void {
         '  ' +
         chalk.yellow(hyperlink(buildJiraUrl(session.resources.jira!), session.resources.jira!))
     );
+  }
+}
+
+function listRepos(options: ListOptions): void {
+  const stateFilter: SessionState[] = options.state
+    ? (options.state === 'all' ? ALL_STATES : options.state.split(',') as SessionState[])
+    : DEFAULT_STATES;
+
+  const sessions = getSessions({ state: stateFilter });
+
+  if (sessions.length === 0) {
+    console.log(chalk.dim('No sessions.'));
+    return;
+  }
+
+  // Group by directory
+  const repos = new Map<string, { name: string; directory: string; total: number; active: number; lastActive: Date }>();
+
+  for (const s of sessions) {
+    const name = getRepoName(s.directory);
+    const key = s.directory;
+    const existing = repos.get(key);
+    const isActive = ['busy', 'idle', 'waiting'].includes(s.state);
+
+    if (existing) {
+      existing.total++;
+      if (isActive) existing.active++;
+      if (s.last_active_at > existing.lastActive) existing.lastActive = s.last_active_at;
+    } else {
+      repos.set(key, {
+        name,
+        directory: s.directory,
+        total: 1,
+        active: isActive ? 1 : 0,
+        lastActive: s.last_active_at,
+      });
+    }
+  }
+
+  const sorted = [...repos.values()].sort((a, b) => b.lastActive.getTime() - a.lastActive.getTime());
+
+  for (const repo of sorted) {
+    const counts = repo.active
+      ? `${repo.active} active, ${repo.total} total`
+      : `${repo.total} total`;
+    const ago = relativeTime(repo.lastActive);
+    console.log(`${chalk.bold(repo.name)}  ${chalk.dim(counts)}  ${chalk.dim(ago)}`);
+    console.log(`  ${chalk.dim(repo.directory)}`);
   }
 }
 
