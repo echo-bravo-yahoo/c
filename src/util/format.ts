@@ -48,6 +48,7 @@ export function sortSessions(
         case 'size':    cmp = (sizeMap?.get(a.id) ?? 0) - (sizeMap?.get(b.id) ?? 0); break;
         case 'status':  cmp = STATE_PRIORITY[a.state] - STATE_PRIORITY[b.state]; break;
         case 'repo':    cmp = getRepoName(a.directory).localeCompare(getRepoName(b.directory)); break;
+        case 'cost':    cmp = (a.cost_usd ?? 0) - (b.cost_usd ?? 0); break;
       }
       if (cmp !== 0) return desc ? -cmp : cmp;
     }
@@ -203,23 +204,53 @@ export function fixedWidth(str: string, width: number): string {
 }
 
 /**
- * Format session state with color
+ * Format a cost in USD
+ */
+export function formatCost(usd: number): string {
+  if (usd < 0.005) return '$0';
+  return `$${usd.toFixed(2)}`;
+}
+
+/**
+ * Format session state with color, optionally appending context %
  */
 export function formatStatus(session: Session): string {
+  let base: string;
   switch (session.state) {
     case 'busy':
-      return chalk.green('busy');
+      base = chalk.green('busy');
+      break;
     case 'idle':
-      return chalk.blue('idle');
+      base = chalk.blue('idle');
+      break;
     case 'waiting':
-      return chalk.yellow('waiting');
+      base = chalk.yellow('waiting');
+      break;
     case 'closed':
-      return chalk.gray('closed');
+      base = chalk.gray('closed');
+      break;
     case 'archived':
-      return chalk.dim('archived');
+      base = chalk.dim('archived');
+      break;
     default:
-      return session.state;
+      base = session.state;
   }
+
+  // Append context % for active sessions
+  if (session.context_pct != null && ['busy', 'idle', 'waiting'].includes(session.state)) {
+    const pct = session.context_pct;
+    let colored: string;
+    if (pct >= 60) {
+      colored = chalk.red(`${pct}%`);
+    } else if (pct >= 33) {
+      colored = chalk.yellow(`${pct}%`);
+    } else {
+      colored = chalk.green(`${pct}%`);
+    }
+    base += ' ' + colored;
+  }
+
+  return base;
 }
 
 /**
@@ -250,9 +281,19 @@ export function measureColumns(sessions: Session[], sizeMap?: Map<string, number
     const idNameWidth = 12 + nameWidth + 1;
     widths.set('idName', Math.max(widths.get('idName') ?? 0, idNameWidth));
 
-    // status
-    const statusWidth = session.state.length + 1;
+    // status (account for context % suffix like "busy 42%")
+    let statusLen = session.state.length;
+    if (session.context_pct != null && ['busy', 'idle', 'waiting'].includes(session.state)) {
+      statusLen += 1 + `${session.context_pct}%`.length; // space + "NN%"
+    }
+    const statusWidth = statusLen + 1;
     widths.set('status', Math.max(widths.get('status') ?? 0, statusWidth));
+
+    // cost
+    if (session.cost_usd != null && session.cost_usd >= 0.005) {
+      const costWidth = formatCost(session.cost_usd).length + 1;
+      widths.set('cost', Math.max(widths.get('cost') ?? 0, costWidth));
+    }
 
     // repo
     const repoWidth = displayWidth(getRepoName(session.directory)) + 1;
@@ -374,6 +415,16 @@ export function formatSessionLine(session: Session, layout: ColumnLayout, depth 
     parts.push(branchCol);
   }
 
+  // Cost column
+  if (layout.visible.has('cost')) {
+    if (session.cost_usd != null && session.cost_usd >= 0.005) {
+      const costText = formatCost(session.cost_usd);
+      parts.push(chalk.dim(fixedWidth(costText, layout.cost)));
+    } else {
+      parts.push(fixedWidth('', layout.cost));
+    }
+  }
+
   // Resources column
   if (layout.visible.has('resources')) {
     const resourceText = buildResourceText(session);
@@ -441,6 +492,14 @@ export function formatSessionDetails(session: Session): string {
   const claudeSession = getClaudeSession(session.id);
   if (claudeSession) {
     lines.push(chalk.dim('  Session size: ') + formatFileSize(claudeSession.fileSize));
+  }
+
+  // Cost and context
+  if (session.cost_usd != null && session.cost_usd >= 0.005) {
+    lines.push(chalk.dim('  Cost: ') + formatCost(session.cost_usd));
+  }
+  if (session.context_pct != null && ['busy', 'idle', 'waiting'].includes(session.state)) {
+    lines.push(chalk.dim('  Context: ') + `${session.context_pct}%`);
   }
 
   // Message count and first prompt from Claude's index
@@ -727,6 +786,9 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
   }
   if (layout.visible.has('branch')) {
     headerParts.push(fixedWidth('Worktree/Branch', layout.branch));
+  }
+  if (layout.visible.has('cost')) {
+    headerParts.push(fixedWidth('Cost', layout.cost));
   }
   if (layout.visible.has('resources')) {
     headerParts.push(fixedWidth('Resources', layout.resources));

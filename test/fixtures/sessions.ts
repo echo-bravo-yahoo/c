@@ -16,6 +16,8 @@ export interface SessionOverrides {
   servers?: SessionServers;
   tags?: string[];
   meta?: SessionMeta;
+  cost_usd?: number;
+  context_pct?: number;
   pid?: number;
   parent_session_id?: string;
 }
@@ -46,6 +48,8 @@ export function createTestSession(overrides: SessionOverrides = {}): Session {
     servers: overrides.servers ?? {},
     tags: { values: overrides.tags ?? [] },
     meta: overrides.meta ?? {},
+    ...(overrides.cost_usd != null && { cost_usd: overrides.cost_usd }),
+    ...(overrides.context_pct != null && { context_pct: overrides.context_pct }),
     ...(overrides.pid != null && { pid: overrides.pid }),
     ...(overrides.parent_session_id && { parent_session_id: overrides.parent_session_id }),
   };

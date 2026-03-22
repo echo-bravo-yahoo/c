@@ -131,6 +131,13 @@ function parseSession(raw: Record<string, unknown>): Session {
     meta: (raw.meta as Session['meta']) ?? {},
   };
 
+  if (typeof raw.cost_usd === 'number') {
+    session.cost_usd = raw.cost_usd;
+  }
+  if (typeof raw.context_pct === 'number') {
+    session.context_pct = raw.context_pct;
+  }
+
   if (typeof raw.pid === 'number') {
     session.pid = raw.pid;
   }

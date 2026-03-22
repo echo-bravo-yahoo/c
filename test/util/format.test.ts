@@ -7,7 +7,7 @@ import assert from 'node:assert';
 import { useFakeTime } from '../setup.ts';
 
 // These are pure functions we can test directly
-import { relativeTime, shortId, displayWidth, fixedWidth, getRepoName, getBranchDisplay, formatSessionLine, formatFileSize, computeUniquePrefixLength, highlightId, buildPrefixMap } from '../../src/util/format.ts';
+import { relativeTime, shortId, displayWidth, fixedWidth, getRepoName, getBranchDisplay, formatSessionLine, formatFileSize, formatCost, computeUniquePrefixLength, highlightId, buildPrefixMap } from '../../src/util/format.ts';
 import { hyperlink } from '../../src/util/hyperlink.ts';
 import type { Session } from '../../src/store/schema.ts';
 import type { ColumnLayout } from '../../src/util/layout.ts';
@@ -536,6 +536,7 @@ describe('c', () => {
           status: 8,
           repo: 0,
           branch: 0,
+          cost: 0,
           resources: 0,
           size: 0,
           time: 0,
@@ -609,6 +610,32 @@ describe('c', () => {
         it('highlights single character when sufficient', () => {
           const result = highlightId('abcdef', 1);
           assert.strictEqual(result, chalk.cyan('a') + chalk.dim('bcdef'));
+        });
+      });
+
+      describe('formatCost', () => {
+        it('formats zero as "$0"', () => {
+          assert.strictEqual(formatCost(0), '$0');
+        });
+
+        it('formats small amounts with 2 decimals', () => {
+          assert.strictEqual(formatCost(0.05), '$0.05');
+        });
+
+        it('formats amounts under a dollar', () => {
+          assert.strictEqual(formatCost(0.42), '$0.42');
+        });
+
+        it('formats amounts over a dollar', () => {
+          assert.strictEqual(formatCost(15.67), '$15.67');
+        });
+
+        it('formats large amounts', () => {
+          assert.strictEqual(formatCost(123.45), '$123.45');
+        });
+
+        it('rounds sub-cent to zero', () => {
+          assert.strictEqual(formatCost(0.004), '$0');
         });
       });
 

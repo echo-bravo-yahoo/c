@@ -785,6 +785,60 @@ describe('c', () => {
         });
       });
 
+      describe('cost display', () => {
+        it('includes cost_usd in --json output', async () => {
+          await cli.seed({ id: 's1', state: 'busy', cost_usd: 15.67 });
+          await cli.run('list', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as Record<string, unknown>[];
+          assert.strictEqual(arr[0].cost_usd, 15.67);
+        });
+
+        it('includes context_pct in --json output for active sessions', async () => {
+          await cli.seed({ id: 's1', state: 'busy', context_pct: 42 });
+          await cli.run('list', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as Record<string, unknown>[];
+          assert.strictEqual(arr[0].context_pct, 42);
+        });
+
+        it('omits context_pct in --json for closed sessions', async () => {
+          await cli.seed({ id: 's1', state: 'closed' });
+          await cli.run('list', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as Record<string, unknown>[];
+          assert.strictEqual(arr[0].context_pct, undefined);
+        });
+
+        it('--sort cost sorts by cost descending', async () => {
+          await cli.seed(
+            { id: 'slow', state: 'busy', name: 'Low', cost_usd: 1 },
+            { id: 'shigh', state: 'busy', name: 'High', cost_usd: 10 },
+            { id: 'smid', state: 'busy', name: 'Mid', cost_usd: 5 },
+          );
+          await cli.run('list', '--sort', 'cost', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr[0].id, 'shigh');
+          assert.strictEqual(arr[1].id, 'smid');
+          assert.strictEqual(arr[2].id, 'slow');
+        });
+
+        it('--sort +cost sorts by cost ascending', async () => {
+          await cli.seed(
+            { id: 'slow', state: 'busy', name: 'Low', cost_usd: 1 },
+            { id: 'shigh', state: 'busy', name: 'High', cost_usd: 10 },
+            { id: 'smid', state: 'busy', name: 'Mid', cost_usd: 5 },
+          );
+          await cli.run('list', '--sort', '+cost', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr[0].id, 'slow');
+          assert.strictEqual(arr[1].id, 'smid');
+          assert.strictEqual(arr[2].id, 'shigh');
+        });
+      });
+
       describe('column truncation', () => {
         it('truncates long names at narrow terminal width', async () => {
           const longName = 'A'.repeat(80);

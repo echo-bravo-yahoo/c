@@ -35,7 +35,7 @@ const ALL_STATES: SessionState[] = ['busy', 'idle', 'waiting', 'closed', 'archiv
 
 // Default direction per field: true = desc
 const DEFAULT_DESC: Record<string, boolean> = {
-  active: true, created: true, size: true,
+  active: true, created: true, size: true, cost: true,
   name: false, status: false, repo: false,
 };
 
@@ -117,11 +117,16 @@ export async function listCommand(rawOptions: ListOptions): Promise<void> {
     if (sortSpecs) {
       sorted = sortSessions(sessions, sortSpecs);
     }
-    const output = sorted.map(s => ({
-      ...s,
-      created_at: s.created_at.toISOString(),
-      last_active_at: s.last_active_at.toISOString(),
-    }));
+    const output = sorted.map(s => {
+      const obj: Record<string, unknown> = {
+        ...s,
+        created_at: s.created_at.toISOString(),
+        last_active_at: s.last_active_at.toISOString(),
+      };
+      if (s.cost_usd != null) obj.cost_usd = s.cost_usd;
+      if (s.context_pct != null) obj.context_pct = s.context_pct;
+      return obj;
+    });
     process.stdout.write(JSON.stringify(output, null, 2) + '\n');
     return;
   }

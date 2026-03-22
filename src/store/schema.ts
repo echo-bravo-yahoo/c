@@ -37,6 +37,10 @@ export interface Session {
   servers: SessionServers;
   tags: SessionTags;
   meta: SessionMeta;
+  /** Cumulative API cost in USD */
+  cost_usd?: number;
+  /** Current context window usage as percentage (0-100), only meaningful for active sessions */
+  context_pct?: number;
   /** PID of the wrapper process that launched this session */
   pid?: number;
   /** Parent session ID if this session was spawned from plan execution */

@@ -31,7 +31,7 @@ describe('c', () => {
       describe('computeColumnLayout', () => {
         it('shows all columns at wide terminal', () => {
           const layout = computeColumnLayout(emptyWidths(), 200);
-          assert.strictEqual(layout.visible.size, 7);
+          assert.strictEqual(layout.visible.size, COLUMN_SPECS.length);
           for (const spec of COLUMN_SPECS) {
             assert.ok(layout.visible.has(spec.key), `${spec.key} should be visible`);
           }
@@ -41,29 +41,31 @@ describe('c', () => {
           const minTerminal = ALL_MIN + GUTTER;
           const layout = computeColumnLayout(emptyWidths(), minTerminal);
 
-          assert.strictEqual(layout.visible.size, 7);
+          assert.strictEqual(layout.visible.size, COLUMN_SPECS.length);
           assert.strictEqual(layout.status, 7);
           assert.strictEqual(layout.id + layout.name, 20); // idName min
           assert.strictEqual(layout.repo, 6);
           assert.strictEqual(layout.branch, 6);
           assert.strictEqual(layout.time, 6);
+          assert.strictEqual(layout.cost, 5);
           assert.strictEqual(layout.size, 7);
           assert.strictEqual(layout.resources, 4);
         });
 
         it('drops lowest-priority column first', () => {
-          // Just below the point where all 7 fit
+          // Just below the point where all columns fit
           const tooNarrow = ALL_MIN + GUTTER - 1;
           const layout = computeColumnLayout(emptyWidths(), tooNarrow);
 
-          // resources (priority 7) should be dropped
+          // resources (priority 8) should be dropped
           assert.ok(!layout.visible.has('resources'), 'resources should be dropped');
-          assert.strictEqual(layout.visible.size, 6);
+          assert.strictEqual(layout.visible.size, COLUMN_SPECS.length - 1);
           assert.ok(layout.visible.has('status'));
           assert.ok(layout.visible.has('idName'));
           assert.ok(layout.visible.has('repo'));
           assert.ok(layout.visible.has('branch'));
           assert.ok(layout.visible.has('time'));
+          assert.ok(layout.visible.has('cost'));
           assert.ok(layout.visible.has('size'));
         });
 
@@ -76,6 +78,7 @@ describe('c', () => {
           assert.ok(layout.visible.has('repo'));
           assert.ok(!layout.visible.has('branch'), 'branch should be dropped');
           assert.ok(!layout.visible.has('time'), 'time should be dropped');
+          assert.ok(!layout.visible.has('cost'), 'cost should be dropped');
           assert.ok(!layout.visible.has('size'), 'size should be dropped');
           assert.ok(!layout.visible.has('resources'), 'resources should be dropped');
         });
@@ -115,6 +118,7 @@ describe('c', () => {
           assert.strictEqual(layout.repo, 6);
           assert.strictEqual(layout.branch, 6);
           assert.strictEqual(layout.time, 6);
+          assert.strictEqual(layout.cost, 5);
           assert.strictEqual(layout.size, 7);
           assert.strictEqual(layout.resources, 4);
         });
@@ -127,6 +131,7 @@ describe('c', () => {
             repo: 20,
             branch: 30,
             time: 12,
+            cost: 8,
             size: 9,
             resources: 24,
           });
@@ -142,6 +147,7 @@ describe('c', () => {
           assert.strictEqual(layout.repo, 6);
           assert.strictEqual(layout.branch, 6);
           assert.strictEqual(layout.time, 6);
+          assert.strictEqual(layout.cost, 5);
           assert.strictEqual(layout.size, 7);
           assert.strictEqual(layout.resources, 4);
         });
@@ -165,6 +171,7 @@ describe('c', () => {
             repo: 100,
             branch: 100,
             time: 100,
+            cost: 100,
             size: 100,
             resources: 100,
           });
@@ -176,6 +183,7 @@ describe('c', () => {
           assert.ok(layout.repo <= 20, 'repo capped at max 20');
           assert.ok(layout.branch <= 30, 'branch capped at max 30');
           assert.ok(layout.time <= 12, 'time capped at max 12');
+          assert.ok(layout.cost <= 8, 'cost capped at max 8');
           assert.ok(layout.size <= 10, 'size capped at max 10');
           assert.ok(layout.resources <= 24, 'resources capped at max 24');
         });
@@ -188,6 +196,7 @@ describe('c', () => {
             repo: 6,
             branch: 6,
             time: 6,
+            cost: 5,
             size: 5,
             resources: 4,
           });
@@ -208,6 +217,7 @@ describe('c', () => {
             layout.repo +
             layout.branch +
             layout.time +
+            layout.cost +
             layout.size +
             layout.resources;
 
@@ -223,8 +233,35 @@ describe('c', () => {
           assert.strictEqual(layout.repo, 0);
           assert.strictEqual(layout.branch, 0);
           assert.strictEqual(layout.time, 0);
+          assert.strictEqual(layout.cost, 0);
           assert.strictEqual(layout.size, 0);
           assert.strictEqual(layout.resources, 0);
+        });
+
+        describe('cost column', () => {
+          it('includes cost column when terminal is wide enough', () => {
+            const content = widths({ cost: 7 });
+            const layout = computeColumnLayout(content, 200);
+            assert.ok(layout.visible.has('cost'), 'cost should be visible');
+          });
+
+          it('drops cost column before higher-priority columns', () => {
+            // status(7) + idName(20) + repo(6) + branch(6) + time(6) + gutter(2) = 47
+            const layout = computeColumnLayout(emptyWidths(), 47);
+            assert.ok(!layout.visible.has('cost'), 'cost should be dropped');
+            assert.ok(layout.visible.has('status'));
+            assert.ok(layout.visible.has('idName'));
+            assert.ok(layout.visible.has('repo'));
+            assert.ok(layout.visible.has('branch'));
+            assert.ok(layout.visible.has('time'));
+          });
+
+          it('allocates cost width between min and max', () => {
+            const content = widths({ cost: 7 });
+            const layout = computeColumnLayout(content, 200);
+            assert.ok(layout.cost >= 5, 'cost width should be at least min (5)');
+            assert.ok(layout.cost <= 8, 'cost width should be at most max (8)');
+          });
         });
       });
     });

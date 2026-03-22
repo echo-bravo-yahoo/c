@@ -6,7 +6,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleSessionEnd } from '../../src/hooks/session-end.ts';
 import { updateIndex, getSession } from '../../src/store/index.ts';
@@ -103,6 +103,76 @@ describe('c', () => {
         assert.ok(s);
         assert.strictEqual(s.state, 'closed');
         assert.strictEqual(s.pid, undefined);
+      });
+
+      describe('usage tracking', () => {
+        function assistantEntry(model: string, stopReason: string, usage: Record<string, number>): string {
+          return JSON.stringify({
+            type: 'assistant',
+            requestId: 'req_test',
+            message: { model, stop_reason: stopReason, usage },
+          });
+        }
+
+        it('persists final cost_usd from transcript', async () => {
+          const txPath = join(store.tmpDir, 'transcript.jsonl');
+          writeFileSync(txPath, assistantEntry('claude-sonnet-4-6', 'end_turn', {
+            input_tokens: 1000, output_tokens: 500,
+            cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
+          }) + '\n');
+
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', state: 'busy',
+              meta: { _transcript_offset: '0' },
+            });
+          });
+
+          await handleSessionEnd('s1', '/tmp', { session_id: 's1', cwd: '/tmp', transcript_path: txPath } as any);
+
+          const s = getSession('s1');
+          assert.ok(s);
+          assert.ok(s.cost_usd != null && s.cost_usd > 0, 'cost_usd should be set');
+        });
+
+        it('clears context_pct on close', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', state: 'busy', context_pct: 42,
+            });
+          });
+
+          await handleSessionEnd('s1', '/tmp', null);
+
+          const s = getSession('s1');
+          assert.ok(s);
+          assert.strictEqual(s.context_pct, undefined);
+        });
+
+        it('cleans up internal meta tracking fields', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', state: 'busy',
+              meta: {
+                _transcript_offset: '500',
+                _total_input: '1000',
+                _total_output: '500',
+                _total_cache_write: '0',
+                _total_cache_read: '0',
+              },
+            });
+          });
+
+          await handleSessionEnd('s1', '/tmp', null);
+
+          const s = getSession('s1');
+          assert.ok(s);
+          assert.strictEqual(s.meta._transcript_offset, undefined);
+          assert.strictEqual(s.meta._total_input, undefined);
+          assert.strictEqual(s.meta._total_output, undefined);
+          assert.strictEqual(s.meta._total_cache_write, undefined);
+          assert.strictEqual(s.meta._total_cache_read, undefined);
+        });
       });
     });
   });

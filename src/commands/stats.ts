@@ -5,7 +5,7 @@
 import { statSync } from 'node:fs';
 import { getSessions, getStoreDir } from '../store/index.ts';
 import { listClaudeSessions } from '../claude/sessions.ts';
-import { formatFileSize } from '../util/format.ts';
+import { formatFileSize, formatCost } from '../util/format.ts';
 
 export function statsCommand(): void {
   const all = getSessions({ state: ['busy', 'idle', 'waiting', 'closed', 'archived'] });
@@ -35,4 +35,9 @@ export function statsCommand(): void {
   console.log(`  This week:       ${thisWeek} sessions created`);
   console.log(`  Claude storage:  ${formatFileSize(claudeStorage)} across ${claudeSessions.length} transcripts`);
   console.log(`  c storage:       ${formatFileSize(cStorage)}`);
+
+  const totalCost = all.reduce((sum, s) => sum + (s.cost_usd ?? 0), 0);
+  if (totalCost >= 0.005) {
+    console.log(`  Total cost:      ${formatCost(totalCost)}`);
+  }
 }

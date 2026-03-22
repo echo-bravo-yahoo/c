@@ -153,6 +153,53 @@ describe('c', () => {
         });
       });
 
+      describe('cost_usd persistence', () => {
+        it('round-trips cost_usd through TOML write/read', () => {
+          const session = createTestSession({ id: 'cost-1', cost_usd: 15.67 });
+
+          const tomlData = {
+            version: 1,
+            machine_id: 'test',
+            sessions: { [session.id]: { ...session } },
+          };
+          const content = TOML.stringify(tomlData as unknown as TOML.JsonMap);
+          const parsed = TOML.parse(content) as Record<string, unknown>;
+          const sessions = parsed.sessions as Record<string, Record<string, unknown>>;
+
+          assert.strictEqual(sessions['cost-1'].cost_usd, 15.67);
+        });
+
+        it('round-trips context_pct through TOML write/read', () => {
+          const session = createTestSession({ id: 'ctx-1', context_pct: 42 });
+
+          const tomlData = {
+            version: 1,
+            machine_id: 'test',
+            sessions: { [session.id]: { ...session } },
+          };
+          const content = TOML.stringify(tomlData as unknown as TOML.JsonMap);
+          const parsed = TOML.parse(content) as Record<string, unknown>;
+          const sessions = parsed.sessions as Record<string, Record<string, unknown>>;
+
+          assert.strictEqual(sessions['ctx-1'].context_pct, 42);
+        });
+
+        it('handles missing cost_usd gracefully', () => {
+          const session = createTestSession({ id: 'no-cost' });
+
+          const tomlData = {
+            version: 1,
+            machine_id: 'test',
+            sessions: { [session.id]: { ...session } },
+          };
+          const content = TOML.stringify(tomlData as unknown as TOML.JsonMap);
+          const parsed = TOML.parse(content) as Record<string, unknown>;
+          const sessions = parsed.sessions as Record<string, Record<string, unknown>>;
+
+          assert.strictEqual(sessions['no-cost'].cost_usd, undefined);
+        });
+      });
+
       describe('lock file', () => {
         it('creates lock file with pid', () => {
           // Simulate lock file creation

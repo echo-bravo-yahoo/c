@@ -82,6 +82,31 @@ describe('c', () => {
         const output = cli.console.logs.join('\n');
         assert.ok(output.includes('Active sessions: 0'));
       });
+
+      describe('cost summary', () => {
+        it('shows total cost when sessions have cost data', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', cost_usd: 5 },
+            { id: 's2', state: 'closed', cost_usd: 10 },
+            { id: 's3', state: 'busy', cost_usd: 0.50 },
+          );
+          await cli.run('stats');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('$15.50'), 'should show total cost');
+        });
+
+        it('omits cost line when no sessions have cost', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy' },
+            { id: 's2', state: 'closed' },
+          );
+          await cli.run('stats');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(!output.includes('$'), 'should not show cost line');
+        });
+      });
     });
   });
 });

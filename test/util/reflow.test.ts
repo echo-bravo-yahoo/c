@@ -73,11 +73,11 @@ describe('c', () => {
       }
 
       describe('column visibility at various widths', () => {
-        it('shows all 7 columns at 200 width', () => {
+        it('shows all columns at 200 width', () => {
           const sessions = makeSessions();
           const layout = layoutAt(sessions, 200);
 
-          assert.strictEqual(layout.visible.size, 7);
+          assert.strictEqual(layout.visible.size, COLUMN_SPECS.length);
           const line = renderLine(sessions[0], sessions, 200);
           // Should contain all parts: ID, name, status, repo, branch, size, time
           assert.ok(line.includes('test-uui'), 'has ID');
@@ -90,15 +90,15 @@ describe('c', () => {
 
         it('drops resources first at narrower width', () => {
           const sessions = makeSessions();
-          // Just below the point where all 7 columns fit at minimums
+          // Just below the point where all columns fit at minimums
           const narrow = ALL_MIN + GUTTER - 1;
           const layout = layoutAt(sessions, narrow);
 
           assert.ok(!layout.visible.has('resources'), 'resources dropped');
-          assert.strictEqual(layout.visible.size, 6);
+          assert.strictEqual(layout.visible.size, COLUMN_SPECS.length - 1);
         });
 
-        it('drops time and resources at very narrow width', () => {
+        it('drops low-priority columns at very narrow width', () => {
           const sessions = makeSessions();
           // status(7) + idName(20) + repo(6) + branch(6) = 39 + gutter(2) = 41
           const layout = layoutAt(sessions, 41);
@@ -108,6 +108,7 @@ describe('c', () => {
           assert.ok(layout.visible.has('repo'));
           assert.ok(layout.visible.has('branch'));
           assert.ok(!layout.visible.has('time'), 'time dropped');
+          assert.ok(!layout.visible.has('cost'), 'cost dropped');
           assert.ok(!layout.visible.has('size'), 'size dropped');
           assert.ok(!layout.visible.has('resources'), 'resources dropped');
         });
@@ -171,7 +172,7 @@ describe('c', () => {
           ];
 
           // At 41: status(7) + idName(20) + repo(6) + branch(6) + gutter(2) = 41
-          // time and resources are dropped
+          // time, cost, size, and resources are dropped
           const layout = computeColumnLayout(measureColumns(sessions), 41);
           const line = strip(formatSessionLine(sessions[0], layout));
 

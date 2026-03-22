@@ -20,6 +20,7 @@ export interface HookInput {
   tool_input?: Record<string, unknown>;
   tool_output?: string;
   stop_hook_active?: boolean;
+  transcript_path?: string;
 }
 
 /**
