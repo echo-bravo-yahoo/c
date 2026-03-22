@@ -250,6 +250,18 @@ function listRepos(options: ListOptions): void {
 
   const sorted = [...repos.values()].sort((a, b) => b.lastActive.getTime() - a.lastActive.getTime());
 
+  if (options.json) {
+    const output = sorted.map(r => ({
+      name: r.name,
+      directory: r.directory,
+      active: r.active,
+      total: r.total,
+      last_active_at: r.lastActive.toISOString(),
+    }));
+    process.stdout.write(JSON.stringify(output, null, 2) + '\n');
+    return;
+  }
+
   for (const repo of sorted) {
     const counts = repo.active
       ? `${repo.active} active, ${repo.total} total`

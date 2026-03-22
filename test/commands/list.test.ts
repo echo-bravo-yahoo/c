@@ -227,6 +227,24 @@ describe('c', () => {
           assert.ok(!output.includes('web'), 'archived repo should not appear by default');
         });
 
+        it('--json outputs structured data to stdout', async () => {
+          await cli.seed(
+            { id: 's1', directory: '/home/u/api', state: 'busy' },
+            { id: 's2', directory: '/home/u/api', state: 'closed' },
+            { id: 's3', directory: '/home/u/web', state: 'idle' },
+          );
+          await cli.run('list', '--repos', '--json');
+
+          const raw = cli.stdout.output.join('');
+          const arr = JSON.parse(raw) as { name: string; directory: string; active: number; total: number; last_active_at: string }[];
+          assert.strictEqual(arr.length, 2);
+          const api = arr.find(r => r.name === 'api')!;
+          assert.strictEqual(api.directory, '/home/u/api');
+          assert.strictEqual(api.active, 1);
+          assert.strictEqual(api.total, 2);
+          assert.ok(typeof api.last_active_at === 'string');
+        });
+
         it('--state all includes archived in counts', async () => {
           await cli.seed(
             { id: 's1', directory: '/home/u/api', state: 'busy' },
