@@ -7,3 +7,4 @@ dist/
 .claude/audit/
 .config/
 coverage/
+scripts/audit-tests-output.json
