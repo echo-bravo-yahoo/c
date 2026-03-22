@@ -49,6 +49,7 @@ export function sortSessions(
         case 'status':  cmp = STATE_PRIORITY[a.state] - STATE_PRIORITY[b.state]; break;
         case 'repo':    cmp = getRepoName(a.directory).localeCompare(getRepoName(b.directory)); break;
         case 'cost':    cmp = (a.cost_usd ?? 0) - (b.cost_usd ?? 0); break;
+        case 'usage':   cmp = (a.context_pct ?? 0) - (b.context_pct ?? 0); break;
       }
       if (cmp !== 0) return desc ? -cmp : cmp;
     }

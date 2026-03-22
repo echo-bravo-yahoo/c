@@ -35,7 +35,7 @@ const ALL_STATES: SessionState[] = ['busy', 'idle', 'waiting', 'closed', 'archiv
 
 // Default direction per field: true = desc
 const DEFAULT_DESC: Record<string, boolean> = {
-  active: true, created: true, size: true, cost: true,
+  active: true, created: true, size: true, cost: true, usage: true,
   name: false, status: false, repo: false,
 };
 

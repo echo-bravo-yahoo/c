@@ -837,6 +837,46 @@ describe('c', () => {
           assert.strictEqual(arr[1].id, 'smid');
           assert.strictEqual(arr[2].id, 'shigh');
         });
+
+        it('--sort usage sorts by context_pct descending', async () => {
+          await cli.seed(
+            { id: 'slow', state: 'busy', name: 'Low', context_pct: 10 },
+            { id: 'shigh', state: 'busy', name: 'High', context_pct: 80 },
+            { id: 'smid', state: 'busy', name: 'Mid', context_pct: 45 },
+          );
+          await cli.run('list', '--sort', 'usage', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr[0].id, 'shigh');
+          assert.strictEqual(arr[1].id, 'smid');
+          assert.strictEqual(arr[2].id, 'slow');
+        });
+
+        it('--sort +usage sorts by context_pct ascending', async () => {
+          await cli.seed(
+            { id: 'slow', state: 'busy', name: 'Low', context_pct: 10 },
+            { id: 'shigh', state: 'busy', name: 'High', context_pct: 80 },
+            { id: 'smid', state: 'busy', name: 'Mid', context_pct: 45 },
+          );
+          await cli.run('list', '--sort', '+usage', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr[0].id, 'slow');
+          assert.strictEqual(arr[1].id, 'smid');
+          assert.strictEqual(arr[2].id, 'shigh');
+        });
+
+        it('--sort usage treats missing context_pct as 0', async () => {
+          await cli.seed(
+            { id: 'snone', state: 'busy', name: 'None' },
+            { id: 'ssome', state: 'busy', name: 'Some', context_pct: 50 },
+          );
+          await cli.run('list', '--sort', 'usage', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr[0].id, 'ssome');
+          assert.strictEqual(arr[1].id, 'snone');
+        });
       });
 
       describe('column truncation', () => {
