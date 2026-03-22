@@ -4,7 +4,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { setupCLI, type CLIHarness } from '../helpers/cli.ts';
+import { setupCLI, stripAnsi, type CLIHarness } from '../helpers/cli.ts';
 
 describe('c', () => {
   describe('commands', () => {
@@ -197,7 +197,7 @@ describe('c', () => {
           );
           await cli.run('show', 'schild01');
 
-          const output = cli.console.logs.join('\n');
+          const output = stripAnsi(cli.console.logs.join('\n'));
           assert.ok(output.includes('Family tree:'), 'should have Family tree label');
           assert.ok(output.includes('sparent'), 'should show parent ID');
           assert.ok(output.includes('schild0'), 'should show child ID');

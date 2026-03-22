@@ -4,7 +4,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { setupCLI, type CLIHarness } from '../helpers/cli.ts';
+import { setupCLI, stripAnsi, type CLIHarness } from '../helpers/cli.ts';
 
 describe('c', () => {
   describe('commands', () => {
@@ -18,7 +18,7 @@ describe('c', () => {
           await cli.seed({ id: 'abc-123-uuid' });
           await cli.run('find', 'abc');
 
-          assert.ok(cli.console.logs.some(l => l.includes('abc')));
+          assert.ok(cli.console.logs.some(l => stripAnsi(l).includes('abc')));
         });
 
         it('matches name', async () => {

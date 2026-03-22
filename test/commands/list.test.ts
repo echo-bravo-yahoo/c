@@ -36,12 +36,13 @@ mock.module(resolve('src/claude/sessions.ts'), {
 });
 
 type CLIHarness = import('../helpers/cli.ts').CLIHarness;
-const { setupCLI } = await import('../helpers/cli.ts');
+const { setupCLI, stripAnsi } = await import('../helpers/cli.ts');
 const { readIndex } = await import('../../src/store/index.ts');
 readIndexFn = readIndex;
 
-// shortId() takes first 8 chars. Keep test IDs <= 8 chars so assertions
-// on console output match the displayed value exactly.
+// shortId() takes first 8 chars — IDs longer than 8 chars are truncated.
+// highlightId() injects ANSI codes inside the ID, so use stripAnsi()
+// before includes() assertions on formatted output.
 
 describe('c', () => {
   describe('commands', () => {
@@ -324,7 +325,7 @@ describe('c', () => {
           );
           await cli.run('list', '--state', 'busy,idle');
 
-          const output = cli.console.logs.join('\n');
+          const output = stripAnsi(cli.console.logs.join('\n'));
           assert.ok(output.includes('sbusy'));
           assert.ok(output.includes('sidle'));
           assert.ok(!output.includes('swait'));
@@ -340,7 +341,7 @@ describe('c', () => {
 
           // Bare list excludes archived
           await cli.run('list');
-          const bareOutput = cli.console.logs.join('\n');
+          const bareOutput = stripAnsi(cli.console.logs.join('\n'));
           assert.ok(bareOutput.includes('sbusy'));
           assert.ok(!bareOutput.includes('sarch'));
 
@@ -349,7 +350,7 @@ describe('c', () => {
 
           // --state archived shows archived
           await cli.run('list', '--state', 'archived');
-          const stateOutput = cli.console.logs.join('\n');
+          const stateOutput = stripAnsi(cli.console.logs.join('\n'));
           assert.ok(!stateOutput.includes('sbusy'));
           assert.ok(stateOutput.includes('sarch'));
         });
@@ -364,7 +365,7 @@ describe('c', () => {
           );
           await cli.run('list', '--state', 'all');
 
-          const output = cli.console.logs.join('\n');
+          const output = stripAnsi(cli.console.logs.join('\n'));
           assert.ok(output.includes('sbusy'));
           assert.ok(output.includes('sidle'));
           assert.ok(output.includes('swait'));
@@ -702,7 +703,7 @@ describe('c', () => {
           );
           await cli.run('list', '--flat');
 
-          const output = cli.console.logs.join('\n');
+          const output = stripAnsi(cli.console.logs.join('\n'));
           assert.ok(output.includes('sparent'));
           assert.ok(output.includes('schild'));
           // \u2514 = └ (bottom-left corner), \u250c = ┌ (top-left corner)
@@ -717,7 +718,7 @@ describe('c', () => {
           );
           await cli.run('list', '--bottom-up');
 
-          const output = cli.console.logs.join('\n');
+          const output = stripAnsi(cli.console.logs.join('\n'));
           const childIdx = output.indexOf('schild');
           const parentIdx = output.indexOf('sparent');
           assert.ok(childIdx >= 0, 'child should be in output');
@@ -734,7 +735,7 @@ describe('c', () => {
           );
           await cli.run('list', '--flat', '--bottom-up');
 
-          const output = cli.console.logs.join('\n');
+          const output = stripAnsi(cli.console.logs.join('\n'));
           assert.ok(output.includes('sparent'));
           assert.ok(output.includes('schild'));
           assert.ok(!output.includes('\u2514'), 'flat wins: no bottom-left connector');

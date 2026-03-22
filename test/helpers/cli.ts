@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createProgram } from '../../src/index.ts';
-import { captureConsole, captureStdout, mockProcessExit } from '../setup.ts';
+import { captureConsole, captureStdout, mockProcessExit, stripAnsi } from '../setup.ts';
 import { updateIndex, getSession, readIndex, resetIndexCache } from '../../src/store/index.ts';
 import { resetGitHubCache } from '../../src/detection/github.ts';
 import { resetGitCaches } from '../../src/detection/git.ts';
@@ -24,6 +24,8 @@ export interface CLIHarness {
   session: (id: string) => ReturnType<typeof getSession>;
   index: () => ReturnType<typeof readIndex>;
 }
+
+export { stripAnsi };
 
 export function setupCLI(): CLIHarness {
   const tmpDir = mkdtempSync(join(tmpdir(), 'c-test-'));
