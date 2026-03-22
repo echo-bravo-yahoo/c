@@ -2,16 +2,81 @@
  * Git branch and worktree detection
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import TOML from '@iarna/toml';
 import { exec } from '../util/exec.ts';
+import { getStoreDir } from '../store/index.ts';
 
 // Process-level cache for getRepoSlug (avoids repeated git calls)
 const _repoSlugCache = new Map<string, string | undefined>();
+
+// --- Persistent disk cache for repo slugs ---
+
+const SLUG_CACHE_PATH = path.join(getStoreDir(), 'repo-slugs.toml');
+const SLUG_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+interface SlugCacheEntry {
+  slug: string; // empty string means "no slug" (non-GitHub or missing dir)
+  timestamp: number;
+}
+
+let _slugDiskCache: Map<string, SlugCacheEntry> | null = null;
+let _slugDiskCacheDirty = false;
+
+function loadSlugDiskCache(): Map<string, SlugCacheEntry> {
+  if (_slugDiskCache) return _slugDiskCache;
+  _slugDiskCache = new Map();
+
+  try {
+    if (fs.existsSync(SLUG_CACHE_PATH)) {
+      const content = fs.readFileSync(SLUG_CACHE_PATH, 'utf-8');
+      const raw = TOML.parse(content) as Record<string, unknown>;
+      const entries = (raw.entries ?? {}) as Record<string, Record<string, unknown>>;
+      const now = Date.now();
+      for (const [dir, entry] of Object.entries(entries)) {
+        const timestamp = Number(entry.timestamp ?? 0);
+        if (now - timestamp < SLUG_CACHE_TTL_MS) {
+          _slugDiskCache.set(dir, {
+            slug: String(entry.slug ?? ''),
+            timestamp,
+          });
+        }
+      }
+    }
+  } catch {
+    // Ignore corrupt cache
+  }
+
+  return _slugDiskCache;
+}
+
+function saveSlugDiskCache(): void {
+  if (!_slugDiskCacheDirty || !_slugDiskCache) return;
+
+  const entries: Record<string, Record<string, unknown>> = {};
+  for (const [dir, entry] of _slugDiskCache) {
+    entries[dir] = { slug: entry.slug, timestamp: entry.timestamp };
+  }
+
+  try {
+    fs.writeFileSync(SLUG_CACHE_PATH, TOML.stringify({ entries } as TOML.JsonMap));
+    _slugDiskCacheDirty = false;
+  } catch {
+    // Ignore write errors
+  }
+}
+
+// Flush disk cache on process exit
+process.on('exit', saveSlugDiskCache);
 
 /**
  * Reset git caches (for testing)
  */
 export function resetGitCaches(): void {
   _repoSlugCache.clear();
+  _slugDiskCache = null;
+  _slugDiskCacheDirty = false;
 }
 
 /**
@@ -69,7 +134,8 @@ export function extractRepoRoot(dir: string): string | null {
 }
 
 /**
- * Get the org/repo slug from the GitHub remote URL
+ * Get the org/repo slug from the GitHub remote URL.
+ * Uses a persistent disk cache to avoid spawning git subprocesses on every invocation.
  */
 export function getRepoSlug(cwd?: string): string | undefined {
   const key = cwd ?? '';
@@ -83,9 +149,28 @@ export function getRepoSlug(cwd?: string): string | undefined {
     return slug;
   }
 
+  // Check persistent disk cache before spawning git
+  const diskCache = loadSlugDiskCache();
+  const cached = diskCache.get(key);
+  if (cached) {
+    const slug = cached.slug || undefined;
+    _repoSlugCache.set(key, slug);
+    return slug;
+  }
+
+  // Skip git call if directory doesn't exist (deleted worktrees, etc.)
+  if (key && !fs.existsSync(key)) {
+    _repoSlugCache.set(key, undefined);
+    diskCache.set(key, { slug: '', timestamp: Date.now() });
+    _slugDiskCacheDirty = true;
+    return undefined;
+  }
+
   const url = exec('git remote get-url origin', { cwd });
   if (!url) {
     _repoSlugCache.set(key, undefined);
+    diskCache.set(key, { slug: '', timestamp: Date.now() });
+    _slugDiskCacheDirty = true;
     return undefined;
   }
 
@@ -94,6 +179,8 @@ export function getRepoSlug(cwd?: string): string | undefined {
   const match = url.match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
   const slug = match?.[1];
   _repoSlugCache.set(key, slug);
+  diskCache.set(key, { slug: slug ?? '', timestamp: Date.now() });
+  _slugDiskCacheDirty = true;
   return slug;
 }
 

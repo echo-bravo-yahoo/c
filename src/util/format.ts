@@ -26,6 +26,7 @@ export interface TableOptions {
   bottomUp?: boolean;
   sortSpecs?: SortSpec[];
   sizeMap?: Map<string, number>;
+  skipTranscript?: boolean;
 }
 
 const STATE_PRIORITY: Record<SessionState, number> = {
@@ -115,9 +116,9 @@ export function formatDuration(ms: number): string {
  * Get display name for a session
  * Priority: Claude's customTitle > c's name > Claude's summary
  */
-export function getDisplayName(session: Session): string {
+export function getDisplayName(session: Session, skipTranscript = false): string {
   // Check Claude's session index for titles
-  const { customTitle, summary } = getClaudeSessionTitles(session.id, session.project_key);
+  const { customTitle, summary } = getClaudeSessionTitles(session.id, session.project_key, skipTranscript);
 
   // customTitle = user explicitly renamed via /rename (highest priority)
   if (customTitle) return customTitle;
@@ -238,14 +239,14 @@ export function buildResourceText(session: Session): string {
 /**
  * Measure max content width per column across all sessions
  */
-export function measureColumns(sessions: Session[], sizeMap?: Map<string, number>): Map<ColumnKey, number> {
+export function measureColumns(sessions: Session[], sizeMap?: Map<string, number>, skipTranscript = false): Map<ColumnKey, number> {
   const widths = new Map<ColumnKey, number>();
 
   for (const session of sessions) {
     // +1 on each measurement accounts for minimum inter-column spacing
 
     // idName = ID (12) + name + trailing space
-    const nameWidth = displayWidth(getDisplayName(session));
+    const nameWidth = displayWidth(getDisplayName(session, skipTranscript));
     const idNameWidth = 12 + nameWidth + 1;
     widths.set('idName', Math.max(widths.get('idName') ?? 0, idNameWidth));
 
@@ -319,7 +320,7 @@ export function getBranchDisplay(session: Session): { text: string; color: 'cyan
 /**
  * Format a session as a single line for list views
  */
-export function formatSessionLine(session: Session, layout: ColumnLayout, depth = 0, prefixMap?: Map<string, number>, repoSlug?: string, sizeMap?: Map<string, number>, bottomUp?: boolean): string {
+export function formatSessionLine(session: Session, layout: ColumnLayout, depth = 0, prefixMap?: Map<string, number>, repoSlug?: string, sizeMap?: Map<string, number>, bottomUp?: boolean, skipTranscript?: boolean): string {
   const parts: string[] = [];
 
   // ID column (always visible when idName is visible)
@@ -335,7 +336,7 @@ export function formatSessionLine(session: Session, layout: ColumnLayout, depth 
     parts.push(idCol);
 
     // Name column (shrink by indent to maintain alignment)
-    const name = getDisplayName(session);
+    const name = getDisplayName(session, skipTranscript);
     const nameWidth = layout.name - (depth * 2);
     const nameCol = name
       ? chalk.whiteBright(fixedWidth(name, nameWidth))
@@ -703,10 +704,11 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
     : orderSessionsWithChildren(sortedSessions, { ...options, sizeMap });
 
   // Measure content and compute layout, accounting for nesting depth
-  const contentWidths = measureColumns(sessions, sizeMap);
+  const skip = options?.skipTranscript ?? false;
+  const contentWidths = measureColumns(sessions, sizeMap, skip);
   for (const row of ordered) {
     if (row.type !== 'session') continue;
-    const nameLen = displayWidth(getDisplayName(row.session));
+    const nameLen = displayWidth(getDisplayName(row.session, skip));
     const idNameWidth = ID_FIXED_WIDTH + nameLen + 1 + row.depth * 2;
     contentWidths.set('idName', Math.max(contentWidths.get('idName') ?? 0, idNameWidth));
   }
@@ -751,7 +753,7 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
     if (row.type === 'gap') {
       console.log(formatGapLine(row.count, row.depth));
     } else if (row.type === 'session') {
-      console.log(formatSessionLine(row.session, layout, row.depth, prefixMap, getSlug(row.session.directory), sizeMap, bottomUp));
+      console.log(formatSessionLine(row.session, layout, row.depth, prefixMap, getSlug(row.session.directory), sizeMap, bottomUp, skip));
     }
   }
 }

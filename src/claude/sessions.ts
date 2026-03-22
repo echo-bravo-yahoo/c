@@ -222,11 +222,15 @@ function getTitleLookup(): Map<string, { customTitle: string | null; summary: st
  * Get session titles from Claude's index
  * Returns { customTitle, summary } so caller can decide priority
  * Uses cached title lookup for O(1) access per session
- * Falls back to reading custom-title from transcript tail if not in index
+ *
+ * When skipTranscript is false (default), falls back to reading the
+ * transcript tail for sessions not in the index. This is expensive (~10-35ms
+ * per session) and should be skipped for bulk operations like `c list`.
  */
 export function getClaudeSessionTitles(
   sessionId: string,
-  _projectKey: string
+  _projectKey: string,
+  skipTranscript = false,
 ): { customTitle: string | null; summary: string | null } {
   // Check per-session memoization
   const memoized = _titleCache.get(sessionId);
@@ -239,18 +243,17 @@ export function getClaudeSessionTitles(
   const indexed = lookup.get(sessionId);
 
   if (indexed) {
-    let { customTitle } = indexed;
-    if (!customTitle) {
-      // Check transcript for recent /rename not yet in index
-      const cs = getClaudeSession(sessionId);
-      if (cs) customTitle = getCustomTitleFromTranscriptTail(cs.transcriptPath);
-    }
-    const result = { customTitle, summary: indexed.summary };
+    const result = { customTitle: indexed.customTitle, summary: indexed.summary };
     _titleCache.set(sessionId, result);
     return result;
   }
 
-  // Not in any index — check transcript directly
+  if (skipTranscript) {
+    _titleCache.set(sessionId, empty);
+    return empty;
+  }
+
+  // Not in any index — check transcript directly (expensive)
   const cs = getClaudeSession(sessionId);
   if (cs) {
     const result = { customTitle: getCustomTitleFromTranscriptTail(cs.transcriptPath), summary: null };

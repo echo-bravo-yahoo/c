@@ -129,6 +129,7 @@ export async function listCommand(rawOptions: ListOptions): Promise<void> {
     flat: options.flat,
     bottomUp: options.bottomUp,
     sortSpecs,
+    skipTranscript: true,
   };
 
   printSessionTable(sessions, terminalWidth, getAllSessions(), tableOptions);

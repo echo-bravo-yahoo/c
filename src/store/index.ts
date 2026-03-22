@@ -314,15 +314,25 @@ export function getCurrentSession(directory: string = process.cwd()): Session | 
 /**
  * Reconcile stale sessions by closing active sessions that no longer exist in Claude's storage.
  * This handles cases where SessionEnd hook didn't fire (Ctrl-C, crash, etc).
+ * Also cleans up orphaned status cache files for sessions no longer in the index.
  */
 export async function reconcileStaleSessions(): Promise<number> {
   // Import here to avoid circular dependency
   const { listClaudeSessions } = await import('../claude/sessions.ts');
+  const { listStatusCacheIds, deleteStatusCache } = await import('./status-cache.ts');
 
   const index = readIndex();
   const activeSessions = Object.values(index.sessions).filter(
     (s) => s.state === 'busy' || s.state === 'idle' || s.state === 'waiting'
   );
+
+  // Clean up orphaned status cache files (from deleted sessions)
+  const indexIds = new Set(Object.keys(index.sessions));
+  for (const cachedId of listStatusCacheIds()) {
+    if (!indexIds.has(cachedId)) {
+      deleteStatusCache(cachedId);
+    }
+  }
 
   if (activeSessions.length === 0) return 0;
 
