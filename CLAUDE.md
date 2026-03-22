@@ -87,6 +87,46 @@ it('does something', async () => {
 - Seed sessions via `cli.seed()`, assert store state via `cli.session()` / `cli.index()`.
 - Assert console output via `cli.console.logs` / `cli.console.errors`, stdout via `cli.stdout.output`, exit codes via `cli.exit.exitCode`.
 
+### Asserting JSON output
+
+For commands that support `--json`, extract the seed to a variable and assert the full output with `deepStrictEqual`. This pins the JSON contract — any field added, removed, or renamed breaks the test.
+
+```ts
+it('JSON matches seeded session', async () => {
+  const t = new Date('2025-06-01T12:00:00Z');
+  const seed = {
+    id: 's1', state: 'busy' as const, name: 'Test',
+    directory: '/home/u/proj',
+    created_at: t, last_active_at: t,
+    resources: { branch: 'main' },
+    tags: ['wip'],
+    meta: { priority: 'high' },
+  };
+  await cli.seed(seed);
+  await cli.run('list', '--json');
+
+  assert.deepStrictEqual(JSON.parse(cli.stdout.output.join('')), [{
+    ...seed,
+    project_key: '-home-test-project',
+    created_at: t.toISOString(),
+    last_active_at: t.toISOString(),
+    tags: { values: seed.tags },
+  }]);
+});
+```
+
+Three transformations between seed and expected output:
+1. **Dates**: `Date` objects → `.toISOString()` strings
+2. **Tags**: `string[]` → `{ values: string[] }`
+3. **Defaults**: `project_key` auto-filled as `'-home-test-project'` by `createTestSession`
+
+Fields not in the seed use `createTestSession` defaults — include them explicitly (`directory: '/home/test/project'`, `state: 'busy'`, `resources: {}`, `servers: {}`, `tags: { values: [] }`, `meta: {}`).
+
+- Use `deepStrictEqual` over field-by-field `strictEqual` — it catches both missing and unexpected fields.
+- Use fixed dates (`new Date('2025-06-01T12:00:00Z')`) so ISO strings are deterministic.
+- For multi-item output, match each item individually or assert the full array.
+- JSON output goes to `cli.stdout.output` (via `process.stdout.write`), not `cli.console.logs`.
+
 ### Commands that access Claude session data
 Commands that import from `src/claude/sessions.ts` (e.g. `list`, `repair`) need `mock.module` **before** any imports that pull in that module. Use dynamic imports:
 

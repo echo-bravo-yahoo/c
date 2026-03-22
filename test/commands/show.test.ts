@@ -216,29 +216,6 @@ describe('c', () => {
       });
 
       describe('--json output', () => {
-        it('outputs valid JSON to stdout', async () => {
-          await cli.seed({ id: 'abc12345', state: 'busy', directory: '/tmp/proj' });
-          await cli.run('show', 'abc12345', '--json');
-
-          const raw = cli.stdout.output.join('');
-          let parsed: unknown;
-          assert.doesNotThrow(() => { parsed = JSON.parse(raw); }, 'output should be valid JSON');
-          const obj = parsed as Record<string, unknown>;
-          assert.strictEqual(obj.id, 'abc12345');
-          assert.strictEqual(obj.state, 'busy');
-          assert.strictEqual(obj.directory, '/tmp/proj');
-        });
-
-        it('serializes dates as ISO strings', async () => {
-          await cli.seed({ id: 'abc12345' });
-          await cli.run('show', 'abc12345', '--json');
-
-          const raw = cli.stdout.output.join('');
-          const obj = JSON.parse(raw) as Record<string, unknown>;
-          assert.match(obj.created_at as string, /^\d{4}-\d{2}-\d{2}T/, 'created_at should be ISO');
-          assert.match(obj.last_active_at as string, /^\d{4}-\d{2}-\d{2}T/, 'last_active_at should be ISO');
-        });
-
         it('JSON matches seeded session', async () => {
           const t = new Date('2025-06-01T12:00:00Z');
           const seed = {

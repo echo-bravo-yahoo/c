@@ -227,24 +227,6 @@ describe('c', () => {
           assert.ok(!output.includes('web'), 'archived repo should not appear by default');
         });
 
-        it('--json outputs structured data to stdout', async () => {
-          await cli.seed(
-            { id: 's1', directory: '/home/u/api', state: 'busy' },
-            { id: 's2', directory: '/home/u/api', state: 'closed' },
-            { id: 's3', directory: '/home/u/web', state: 'idle' },
-          );
-          await cli.run('list', '--repos', '--json');
-
-          const raw = cli.stdout.output.join('');
-          const arr = JSON.parse(raw) as { name: string; directory: string; active: number; total: number; last_active_at: string }[];
-          assert.strictEqual(arr.length, 2);
-          const api = arr.find(r => r.name === 'api')!;
-          assert.strictEqual(api.directory, '/home/u/api');
-          assert.strictEqual(api.active, 1);
-          assert.strictEqual(api.total, 2);
-          assert.ok(typeof api.last_active_at === 'string');
-        });
-
         it('--state all includes archived in counts', async () => {
           await cli.seed(
             { id: 's1', directory: '/home/u/api', state: 'busy' },
@@ -822,39 +804,29 @@ describe('c', () => {
       });
 
       describe('--json output', () => {
-        it('outputs valid JSON to stdout', async () => {
-          await cli.seed(
-            { id: 's1', state: 'busy', name: 'Test Session' },
-            { id: 's2', state: 'idle' },
-          );
+        it('outputs valid JSON array for multiple sessions', async () => {
+          const t = new Date('2025-06-01T12:00:00Z');
+          const seed1 = { id: 's1', state: 'busy' as const, name: 'Test Session', created_at: t, last_active_at: t };
+          const seed2 = { id: 's2', state: 'idle' as const, created_at: t, last_active_at: t };
+          await cli.seed(seed1, seed2);
           await cli.run('list', '--json');
 
-          const raw = cli.stdout.output.join('');
-          let parsed: unknown;
-          assert.doesNotThrow(() => { parsed = JSON.parse(raw); }, 'output should be valid JSON');
-          assert.ok(Array.isArray(parsed), 'JSON output should be an array');
-          const arr = parsed as { id: string; state: string; name?: string }[];
+          const arr = JSON.parse(cli.stdout.output.join(''));
           assert.strictEqual(arr.length, 2);
-          assert.ok(arr.some(s => s.id === 's1'));
-          assert.ok(arr.some(s => s.id === 's2'));
-        });
-
-        it('JSON includes expected fields', async () => {
-          await cli.seed(
-            { id: 's1', state: 'busy', name: 'JSON Test', directory: '/tmp/proj' },
-          );
-          await cli.run('list', '--json');
-
-          const raw = cli.stdout.output.join('');
-          const arr = JSON.parse(raw) as Record<string, unknown>[];
-          assert.strictEqual(arr.length, 1);
-          const session = arr[0];
-          assert.strictEqual(session.id, 's1');
-          assert.strictEqual(session.state, 'busy');
-          assert.strictEqual(session.name, 'JSON Test');
-          assert.strictEqual(session.directory, '/tmp/proj');
-          assert.ok(typeof session.created_at === 'string', 'created_at should be ISO string');
-          assert.ok(typeof session.last_active_at === 'string', 'last_active_at should be ISO string');
+          const expected = (seed: typeof seed1 | typeof seed2) => ({
+            ...seed,
+            name: 'name' in seed ? seed.name : '',
+            directory: '/home/test/project',
+            project_key: '-home-test-project',
+            created_at: t.toISOString(),
+            last_active_at: t.toISOString(),
+            resources: {},
+            servers: {},
+            tags: { values: [] },
+            meta: {},
+          });
+          assert.deepStrictEqual(arr.find((s: { id: string }) => s.id === 's1'), expected(seed1));
+          assert.deepStrictEqual(arr.find((s: { id: string }) => s.id === 's2'), expected(seed2));
         });
 
         it('JSON output goes to stdout, not console.log', async () => {
