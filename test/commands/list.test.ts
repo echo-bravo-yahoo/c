@@ -200,13 +200,19 @@ describe('c', () => {
           assert.ok(newIdx < oldIdx, 'newer repo should appear first');
         });
 
-        it('handles worktree directories correctly', async () => {
+        it('collapses worktree sessions into parent repo', async () => {
           await cli.seed(
-            { id: 's1', directory: '/home/u/myrepo/.claude/worktrees/bugfix', state: 'busy' },
+            { id: 's1', directory: '/home/u/myrepo', state: 'busy' },
+            { id: 's2', directory: '/home/u/myrepo/.claude/worktrees/bugfix', state: 'idle' },
           );
           await cli.run('list', '--repos');
 
-          assert.ok(cli.console.logs.some(l => l.includes('myrepo')), 'should show parent repo name');
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('myrepo'), 'should show parent repo name');
+          assert.ok(output.includes('2 active, 2 total'), 'worktree session should be merged into parent');
+          // Should show the repo root, not the worktree path
+          assert.ok(output.includes('/home/u/myrepo'), 'should show repo root directory');
+          assert.ok(!output.includes('.claude/worktrees'), 'should not show worktree path');
         });
 
         it('respects --state filter', async () => {

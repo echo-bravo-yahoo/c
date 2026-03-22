@@ -222,12 +222,14 @@ function listRepos(options: ListOptions): void {
     return;
   }
 
-  // Group by directory
+  // Group by repo root (collapse worktrees into their parent repo)
   const repos = new Map<string, { name: string; directory: string; total: number; active: number; lastActive: Date }>();
 
   for (const s of sessions) {
     const name = getRepoName(s.directory);
-    const key = s.directory;
+    // Resolve worktree paths to their parent repo directory
+    const worktreeMatch = s.directory.match(/^(.+?)\/\.(?:claude\/)?worktrees\//);
+    const key = worktreeMatch ? worktreeMatch[1] : s.directory;
     const existing = repos.get(key);
     const isActive = ['busy', 'idle', 'waiting'].includes(s.state);
 
@@ -238,7 +240,7 @@ function listRepos(options: ListOptions): void {
     } else {
       repos.set(key, {
         name,
-        directory: s.directory,
+        directory: key,
         total: 1,
         active: isActive ? 1 : 0,
         lastActive: s.last_active_at,
