@@ -20,6 +20,7 @@ export interface NewOptions {
   note?: string;
   meta?: string[];
   noWorktree?: boolean;
+  ephemeral?: boolean;
   model?: string;
   permissionMode?: string;
   effort?: string;
@@ -92,7 +93,7 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   if (options.pr) session.resources.pr = options.pr;
   if (options.branch) session.resources.branch = options.branch;
 
-  const { useWorktree, worktreeName } = resolveWorktreeConfig(name, !!options.noWorktree, cwd);
+  const { useWorktree, worktreeName } = resolveWorktreeConfig(name, !!options.noWorktree || !!options.ephemeral, cwd);
 
   if (useWorktree && !worktreeName) {
     console.error(chalk.red(`Name "${name}" cannot be used as a worktree name. Use --no-worktree or choose a different name.`));
@@ -109,20 +110,27 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   const meta = parseMeta(options.meta, options.note);
   Object.assign(session.meta, meta);
 
-  // Save to c's index
-  await updateIndex((index) => {
-    index.sessions[sessionId] = session;
-    index.sessions[sessionId].pid = process.pid;
-    if (process.env.TMUX_PANE) {
-      index.sessions[sessionId].resources.tmux_pane = process.env.TMUX_PANE;
-    }
-  });
+  // Save to c's index (skip for ephemeral sessions)
+  if (!options.ephemeral) {
+    await updateIndex((index) => {
+      index.sessions[sessionId] = session;
+      index.sessions[sessionId].pid = process.pid;
+      if (process.env.TMUX_PANE) {
+        index.sessions[sessionId].resources.tmux_pane = process.env.TMUX_PANE;
+      }
+    });
+  }
 
   const displayName = name || shortId(sessionId);
-  console.log(chalk.dim(`Starting session: ${displayName}.`));
+  const label = options.ephemeral ? 'ephemeral session' : `session: ${displayName}`;
+  console.log(chalk.dim(`Starting ${label}.`));
   setTmuxPaneTitle(displayName);
 
   const args = buildNewArgs(sessionId, useWorktree, worktreeName, options);
+
+  if (options.ephemeral) {
+    process.env.C_EPHEMERAL = '1';
+  }
 
   let exitCode: number;
   try {
@@ -130,12 +138,14 @@ export async function newCommand(name: string | undefined, options: NewOptions):
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(chalk.red(`Failed to launch Claude: ${msg}.`));
-    await updateIndex((index) => {
-      delete index.sessions[sessionId];
-    });
+    if (!options.ephemeral) {
+      await updateIndex((index) => {
+        delete index.sessions[sessionId];
+      });
+    }
     process.exit(1);
   }
-  if (exitCode !== 0) {
+  if (exitCode !== 0 && !options.ephemeral) {
     await updateIndex((index) => {
       delete index.sessions[sessionId];
     });

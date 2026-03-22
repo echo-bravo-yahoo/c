@@ -123,12 +123,14 @@ export function createProgram(): Command {
     .option('--note <text>', 'Add a note')
     .option('--meta <key=value...>', 'Set metadata (repeatable)')
     .option('--no-worktree', 'Skip worktree creation even when named')
+    .option('--ephemeral', 'Launch without logging to session index')
     .allowUnknownOption()
     .action(async (name, options) => {
       const passthroughArgs = parsePassthroughArgs();
       await newCommand(name, {
         ...options,
         noWorktree: options.worktree === false,
+        ephemeral: options.ephemeral,
         passthroughArgs: passthroughArgs.length ? passthroughArgs : undefined,
       });
     });

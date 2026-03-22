@@ -157,6 +157,38 @@ describe('c', () => {
         });
       });
 
+      describe('ephemeral session suppression', () => {
+        let savedEphemeral: string | undefined;
+
+        beforeEach(() => {
+          savedEphemeral = process.env.C_EPHEMERAL;
+        });
+
+        afterEach(() => {
+          if (savedEphemeral !== undefined) {
+            process.env.C_EPHEMERAL = savedEphemeral;
+          } else {
+            delete process.env.C_EPHEMERAL;
+          }
+        });
+
+        it('does not create a session when C_EPHEMERAL is set', async () => {
+          process.env.C_EPHEMERAL = '1';
+          await handleSessionStart('ephemeral-session', '/some/project', null);
+
+          assert.strictEqual(getSession('ephemeral-session'), undefined);
+        });
+
+        it('creates a session normally when C_EPHEMERAL is not set', async () => {
+          delete process.env.C_EPHEMERAL;
+          await handleSessionStart('normal-session', '/some/project', null);
+
+          const s = getSession('normal-session');
+          assert.ok(s);
+          assert.strictEqual(s.state, 'busy');
+        });
+      });
+
       describe('transient session filtering on resume', () => {
         it('does not create a session for a transient ID during resume', async () => {
           const realId = 'real-session-uuid';

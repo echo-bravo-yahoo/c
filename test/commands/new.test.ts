@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { resetSessionCounter } from '../fixtures/sessions.ts';
 import { createSession } from '../../src/store/schema.ts';
 import { updateIndex, getSession, resetIndexCache } from '../../src/store/index.ts';
-import { parseMeta, buildNewArgs } from '../../src/commands/new.ts';
+import { parseMeta, buildNewArgs, resolveWorktreeConfig } from '../../src/commands/new.ts';
 import type { NewOptions } from '../../src/commands/new.ts';
 
 describe('c', () => {
@@ -133,6 +133,14 @@ describe('c', () => {
           assert.strictEqual(args[1], 'abc-123');
           assert.strictEqual(args[2], '--worktree');
           assert.strictEqual(args[3], 'my-feature');
+        });
+      });
+
+      describe('resolveWorktreeConfig', () => {
+        it('disables worktree when noWorktree is true even with a name', () => {
+          const result = resolveWorktreeConfig('my-feature', true, '/some/path');
+          assert.strictEqual(result.useWorktree, false);
+          assert.strictEqual(result.worktreeName, undefined);
         });
       });
 

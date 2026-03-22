@@ -137,6 +137,12 @@ export async function handleSessionStart(
     return;
   }
 
+  // Skip creation for ephemeral sessions (launched with c new --ephemeral)
+  if (process.env.C_EPHEMERAL === '1') {
+    debugLog(`[hook] session-start: skipping creation for ephemeral session ${sessionId}`);
+    return;
+  }
+
   // Create new session
   debugLog(`[title] session-start: new session path — TMUX_PANE=${process.env.TMUX_PANE ?? 'unset'}`);
   const now = new Date();
