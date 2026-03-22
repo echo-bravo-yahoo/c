@@ -54,7 +54,7 @@ const SUBCOMMANDS = [
   'log',
   'memory',
   'stats',
-  'clean',
+  'repair',
   'completion',
   'tmux-status',
   'tmux-pick',

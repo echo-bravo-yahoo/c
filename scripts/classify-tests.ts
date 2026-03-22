@@ -38,7 +38,7 @@ const TYPE_MAP: Record<string, TestType> = {
   // CLI harness integration tests
   'test/commands/archive.test.ts': 'integration',
   'test/commands/bankruptcy.test.ts': 'integration',
-  'test/commands/clean.test.ts': 'integration',
+  'test/commands/repair.test.ts': 'integration',
   'test/commands/close.test.ts': 'integration',
   'test/commands/delete.test.ts': 'integration',
   'test/commands/dir.test.ts': 'integration',
@@ -103,7 +103,7 @@ const APPROACH_MAP: Record<string, Approach[]> = {
   // CLI harness
   'test/commands/archive.test.ts': ['cli-harness', 'real-filesystem'],
   'test/commands/bankruptcy.test.ts': ['cli-harness', 'real-filesystem'],
-  'test/commands/clean.test.ts': ['cli-harness', 'real-filesystem', 'mock-module'],
+  'test/commands/repair.test.ts': ['cli-harness', 'real-filesystem', 'mock-module'],
   'test/commands/close.test.ts': ['cli-harness', 'real-filesystem'],
   'test/commands/delete.test.ts': ['cli-harness', 'real-filesystem'],
   'test/commands/dir.test.ts': ['cli-harness', 'real-filesystem'],

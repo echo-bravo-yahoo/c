@@ -13,7 +13,7 @@ graph TD
         NEW[new] --> |spawn claude| CLAUDE[Claude CLI]
         RESUME[resume] --> |spawn claude| CLAUDE
         LIST[list / show / find]
-        MUTATE[archive / close / bankruptcy<br>link / unlink / tag / untag<br>name / meta / clean]
+        MUTATE[archive / close / bankruptcy<br>link / unlink / tag / untag<br>name / meta / repair]
     end
 
     subgraph "Hooks (src/hooks/)"
@@ -88,7 +88,7 @@ it('does something', async () => {
 - Assert console output via `cli.console.logs` / `cli.console.errors`, stdout via `cli.stdout.output`, exit codes via `cli.exit.exitCode`.
 
 ### Commands that access Claude session data
-Commands that import from `src/claude/sessions.ts` (e.g. `list`, `clean`) need `mock.module` **before** any imports that pull in that module. Use dynamic imports:
+Commands that import from `src/claude/sessions.ts` (e.g. `list`, `repair`) need `mock.module` **before** any imports that pull in that module. Use dynamic imports:
 
 ```ts
 import { mock } from 'node:test';
@@ -100,6 +100,8 @@ mock.module(resolve('src/claude/sessions.ts'), {
 
 const { setupCLI } = await import('../helpers/cli.ts');
 ```
+
+The mock must stub **every** named export from the module — not just those the command under test imports directly. Transitive imports (e.g. `format.ts` imports `getClaudeSessionTitles`) will throw a cryptic `SyntaxError: does not provide an export named '...'` if any export is missing. See `test/commands/repair.test.ts` for the full export list.
 
 ### Running individual test files
 Files that use `mock.module()` require the experimental flag:
