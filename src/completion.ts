@@ -68,6 +68,22 @@ const LIST_FLAGS = [
   '--min-width', '--max-width',
 ];
 
+// Flags per subcommand (commands with no flags are omitted)
+const COMMAND_FLAGS: Record<string, string[]> = {
+  new:        ['--jira', '--pr', '--branch', '--note', '--meta', '--no-worktree', '--ephemeral', '--model', '--permission-mode', '--effort', '--agent'],
+  resume:     ['--model', '--permission-mode', '--effort', '--agent', '--fork-session'],
+  show:       ['--json'],
+  find:       ['--json'],
+  close:      ['-a', '--archive'],
+  link:       ['--pr', '--jira', '--branch'],
+  unlink:     ['--pr', '--jira', '--branch'],
+  open:       ['--pr', '--jira'],
+  log:        ['-n', '--lines', '--prompts', '--tail'],
+  memory:     ['--raw'],
+  delete:     ['--orphans', '--closed'],
+  bankruptcy: ['--skip'],
+};
+
 /**
  * Get session completions (short IDs + names)
  */
@@ -246,14 +262,18 @@ export function getCompletions(before: string, line: string): string[] {
   if (flag === '--worktree') return getWorktreeCompletions();
   if (flag === '--sort') return ['active', 'created', 'name', 'size', 'status', 'repo'];
 
+  // Check if the user is typing a flag (current word starts with -)
+  const currentWord = line.trimEnd().split(/\s+/).pop() ?? '';
+  if (currentWord.startsWith('-')) {
+    if (subcommand === 'list' || !subcommand) return LIST_FLAGS;
+    return COMMAND_FLAGS[subcommand] ?? [];
+  }
+
+  // Positional completions below
+
   // Handle flags for list command (or bare flags with no subcommand = implicit list)
   if (subcommand === 'list' || !subcommand) {
     return LIST_FLAGS;
-  }
-
-  // Commands that take session ID as second arg
-  if (subcommand && SESSION_COMMANDS.includes(subcommand)) {
-    return getSessionCompletions();
   }
 
   // tag/untag: first arg is tag name, second is session ID
@@ -263,6 +283,11 @@ export function getCompletions(before: string, line: string): string[] {
       return getSessionCompletions();
     }
     return getTagCompletions();
+  }
+
+  // Commands that take session ID as second arg
+  if (subcommand && SESSION_COMMANDS.includes(subcommand)) {
+    return getSessionCompletions();
   }
 
   return [];
@@ -277,7 +302,7 @@ export function initCompletion(): void {
     const results = getCompletions(before, line);
     // Filter by partial word for shells that don't filter (zsh compadd --)
     const partial = line.trim().split(/\s+/).pop() ?? '';
-    if (partial && !partial.startsWith('-')) {
+    if (partial) {
       const filtered = results.filter(r => r.toLowerCase().startsWith(partial.toLowerCase()));
       if (filtered.length > 0) return filtered;
     }
