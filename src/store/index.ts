@@ -265,6 +265,14 @@ export function findSessionsByName(name: string): Session[] {
 }
 
 /**
+ * Find all sessions with an exact _custom_title match
+ */
+export function findSessionsByTitle(title: string): Session[] {
+  const index = readIndex();
+  return Object.values(index.sessions).filter(s => s.meta._custom_title === title);
+}
+
+/**
  * Find all sessions matching a prefix (by ID)
  */
 export function findSessions(prefix: string): Session[] {

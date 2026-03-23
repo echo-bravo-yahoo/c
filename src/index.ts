@@ -164,11 +164,12 @@ export function createProgram(): Command {
 
   // Resume
   const resumeCmd = program
-    .command('resume <id>')
+    .command('resume <id...>')
     .alias('r')
     .description('Resume a Claude session')
     .allowUnknownOption()
-    .action(async (id, options) => {
+    .action(async (idParts, options) => {
+      const id = idParts.join(' ');
       const passthroughArgs = parsePassthroughArgs();
       await resumeCommand(id, {
         model: options.model,

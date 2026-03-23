@@ -37,20 +37,25 @@ mock.module(resolve(__dirname, '../../src/claude/sessions.ts'), {
 // Dynamic import inside before() so describe/it blocks register synchronously.
 let buildResumeArgs: typeof import('../../src/commands/resume.ts').buildResumeArgs;
 let relocateTranscript: typeof import('../../src/commands/resume.ts').relocateTranscript;
+let resolveSessionForResume: typeof import('../../src/commands/resume.ts').resolveSessionForResume;
 let updateIndex: typeof import('../../src/store/index.ts').updateIndex;
 let getSession: typeof import('../../src/store/index.ts').getSession;
 let findSessionsByName: typeof import('../../src/store/index.ts').findSessionsByName;
+let findSessionsByTitle: typeof import('../../src/store/index.ts').findSessionsByTitle;
 let resetIndexCache: typeof import('../../src/store/index.ts').resetIndexCache;
 let createTestSession: typeof import('../fixtures/sessions.ts').createTestSession;
 let resetSessionCounter: typeof import('../fixtures/sessions.ts').resetSessionCounter;
 let shortId: typeof import('../../src/util/format.ts').shortId;
+let setupCLI: typeof import('../helpers/cli.ts').setupCLI;
+type CLIHarness = import('../helpers/cli.ts').CLIHarness;
 
 describe('c', () => {
   before(async () => {
-    ({ buildResumeArgs, relocateTranscript } = await import('../../src/commands/resume.ts'));
-    ({ updateIndex, getSession, findSessionsByName, resetIndexCache } = await import('../../src/store/index.ts'));
+    ({ buildResumeArgs, relocateTranscript, resolveSessionForResume } = await import('../../src/commands/resume.ts'));
+    ({ updateIndex, getSession, findSessionsByName, findSessionsByTitle, resetIndexCache } = await import('../../src/store/index.ts'));
     ({ createTestSession, resetSessionCounter } = await import('../fixtures/sessions.ts'));
     ({ shortId } = await import('../../src/util/format.ts'));
+    ({ setupCLI } = await import('../helpers/cli.ts'));
   });
 
   describe('commands', () => {
@@ -195,6 +200,204 @@ describe('c', () => {
         it('returns undefined when session missing', async () => {
           const s = getSession('nonexistent');
           assert.strictEqual(s, undefined);
+        });
+
+        it('finds session by _custom_title', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', name: '', meta: { _custom_title: 'claude code statusline' },
+            });
+          });
+          const matches = findSessionsByTitle('claude code statusline');
+          assert.strictEqual(matches.length, 1);
+          assert.strictEqual(matches[0].id, 's1');
+        });
+
+        it('rejects partial _custom_title match', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', meta: { _custom_title: 'claude code statusline' },
+            });
+          });
+          const matches = findSessionsByTitle('claude code');
+          assert.strictEqual(matches.length, 0);
+        });
+
+        it('_custom_title match is case-sensitive', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', meta: { _custom_title: 'Fix Auth' },
+            });
+          });
+          const matches = findSessionsByTitle('fix auth');
+          assert.strictEqual(matches.length, 0);
+        });
+      });
+
+      describe('resolveSessionForResume', () => {
+        let tmpDir: string;
+        let savedCHome: string | undefined;
+        let savedExit: typeof process.exit;
+        let savedError: typeof console.error;
+        let exitCode: number | undefined;
+        let consoleErrors: string[];
+
+        beforeEach(() => {
+          tmpDir = join(tmpdir(), `c-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+          mkdirSync(tmpDir, { recursive: true });
+          savedCHome = process.env.C_HOME;
+          process.env.C_HOME = tmpDir;
+          resetIndexCache();
+          exitCode = undefined;
+          consoleErrors = [];
+          savedExit = process.exit;
+          process.exit = ((code?: number) => { exitCode = code ?? 0; }) as typeof process.exit;
+          savedError = console.error;
+          console.error = (...args: unknown[]) => {
+            consoleErrors.push(args.map(String).join(' '));
+          };
+        });
+
+        afterEach(() => {
+          process.exit = savedExit;
+          console.error = savedError;
+          process.env.C_HOME = savedCHome;
+          if (savedCHome === undefined) delete process.env.C_HOME;
+          rmSync(tmpDir, { recursive: true, force: true });
+          resetIndexCache();
+        });
+
+        it('resolves session by _custom_title', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', name: '', meta: { _custom_title: 'my fancy session' },
+            });
+          });
+          const session = await resolveSessionForResume('my fancy session');
+          assert.ok(session);
+          assert.strictEqual(session.id, 's1');
+        });
+
+        it('resolves session by multi-word name', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', name: 'my fancy session',
+            });
+          });
+          const session = await resolveSessionForResume('my fancy session');
+          assert.ok(session);
+          assert.strictEqual(session.id, 's1');
+        });
+
+        it('_custom_title exact match ignores prefix overlap', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({ id: 's1', meta: { _custom_title: 'foo' } });
+            idx.sessions['s2'] = createTestSession({ id: 's2', meta: { _custom_title: 'foobar' } });
+          });
+          const session = await resolveSessionForResume('foo');
+          assert.ok(session);
+          assert.strictEqual(session.id, 's1');
+        });
+
+        it('_custom_title exact match ignores substring overlap', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({ id: 's1', meta: { _custom_title: 'fix bug' } });
+            idx.sessions['s2'] = createTestSession({ id: 's2', meta: { _custom_title: 'fix bug in auth' } });
+          });
+          const session = await resolveSessionForResume('fix bug');
+          assert.ok(session);
+          assert.strictEqual(session.id, 's1');
+        });
+
+        it('exact name match ignores prefix overlap', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({ id: 's1', name: 'deploy' });
+            idx.sessions['s2'] = createTestSession({ id: 's2', name: 'deploy feature' });
+          });
+          const session = await resolveSessionForResume('deploy');
+          assert.ok(session);
+          assert.strictEqual(session.id, 's1');
+        });
+
+        it('errors on multiple _custom_title matches', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['abc12345-0000-0000-0000-000000000001'] = createTestSession({
+              id: 'abc12345-0000-0000-0000-000000000001', meta: { _custom_title: 'same title' },
+            });
+            idx.sessions['def67890-0000-0000-0000-000000000001'] = createTestSession({
+              id: 'def67890-0000-0000-0000-000000000001', meta: { _custom_title: 'same title' },
+            });
+          });
+          await resolveSessionForResume('same title');
+          assert.strictEqual(exitCode, 1);
+          assert.ok(consoleErrors.some(l => l.includes('Multiple sessions')));
+        });
+
+        it('name match wins over _custom_title on different session', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({ id: 's1', name: 'my task' });
+            idx.sessions['s2'] = createTestSession({ id: 's2', name: '', meta: { _custom_title: 'my task' } });
+          });
+          const session = await resolveSessionForResume('my task');
+          assert.ok(session);
+          assert.strictEqual(session.id, 's1');
+        });
+
+        it('name match short-circuits _custom_title ambiguity', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({ id: 's1', name: 'foo' });
+            idx.sessions['s2'] = createTestSession({ id: 's2', meta: { _custom_title: 'foo' } });
+            idx.sessions['s3'] = createTestSession({ id: 's3', meta: { _custom_title: 'foo' } });
+          });
+          const session = await resolveSessionForResume('foo');
+          assert.ok(session);
+          assert.strictEqual(session.id, 's1');
+        });
+
+        it('finds session by _custom_title when name differs', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', name: 'old name', meta: { _custom_title: 'new title' },
+            });
+          });
+          const session = await resolveSessionForResume('new title');
+          assert.ok(session);
+          assert.strictEqual(session.id, 's1');
+        });
+      });
+
+      describe('variadic id parsing', () => {
+        let cli: CLIHarness;
+        beforeEach(() => { cli = setupCLI(); });
+        afterEach(() => { cli.cleanup(); });
+
+        // resume exits with "no longer exists in Claude's storage" because
+        // getClaudeSession is mocked to return undefined. That error proves the
+        // session WAS found by name — if the id were wrong, the error would be
+        // "Session not found" instead.
+
+        it('joins multi-word id and parses --model flag', async () => {
+          await cli.seed({ id: 's1', name: 'my cool thing' });
+          await cli.run('resume', 'my', 'cool', 'thing', '--model', 'haiku');
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.ok(cli.console.errors.some(l => l.includes('no longer exists')));
+          assert.ok(!cli.console.errors.some(l => l.includes('Session not found')));
+        });
+
+        it('joins multi-word id and parses --fork-session flag', async () => {
+          await cli.seed({ id: 's1', name: 'my cool thing' });
+          await cli.run('resume', 'my', 'cool', 'thing', '--fork-session');
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.ok(cli.console.errors.some(l => l.includes('no longer exists')));
+          assert.ok(!cli.console.errors.some(l => l.includes('Session not found')));
+        });
+
+        it('joins multi-word id and parses multiple flags', async () => {
+          await cli.seed({ id: 's1', name: 'my cool thing' });
+          await cli.run('resume', 'my', 'cool', 'thing', '--model', 'haiku', '--effort', 'high');
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.ok(cli.console.errors.some(l => l.includes('no longer exists')));
+          assert.ok(!cli.console.errors.some(l => l.includes('Session not found')));
         });
       });
 

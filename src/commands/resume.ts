@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, renameSync, cpSync } from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
-import { getSession, findSessions, findSessionsByName, updateIndex } from '../store/index.ts';
+import { getSession, findSessions, findSessionsByName, findSessionsByTitle, updateIndex } from '../store/index.ts';
 import { getClaudeSession, findClaudeSessionIdsByTitle, encodeProjectKey, PROJECTS_DIR } from '../claude/sessions.ts';
 import { extractRepoRoot } from '../detection/git.ts';
 import { createSession } from '../store/schema.ts';
@@ -38,6 +38,18 @@ export async function resolveSessionForResume(idOrPrefix: string): Promise<Sessi
       const ids = nameMatches.map(m => shortId(m.id));
       console.error(chalk.red(`Multiple sessions named "${idOrPrefix}": ${ids.join(', ')}.`));
       process.exit(1);
+    }
+
+    // Try cached _custom_title from transcript (covers display name gap)
+    if (!session) {
+      const titleMatches = findSessionsByTitle(idOrPrefix);
+      if (titleMatches.length === 1) {
+        session = titleMatches[0];
+      } else if (titleMatches.length >= 2) {
+        const ids = titleMatches.map(m => shortId(m.id));
+        console.error(chalk.red(`Multiple sessions titled "${idOrPrefix}": ${ids.join(', ')}.`));
+        process.exit(1);
+      }
     }
 
     // Try Claude's customTitle fallback
