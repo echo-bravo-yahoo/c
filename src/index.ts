@@ -21,6 +21,7 @@ import { nameCommand } from './commands/name.ts';
 import { metaCommand } from './commands/meta.ts';
 import { findCommand } from './commands/find.ts';
 import { repairCommand } from './commands/repair.ts';
+import { installRepairSchedule, uninstallRepairSchedule } from './commands/repair-schedule.ts';
 import { dirCommand } from './commands/dir.ts';
 import { initCommand } from './commands/init.ts';
 import { execCommand } from './commands/exec.ts';
@@ -366,8 +367,14 @@ export function createProgram(): Command {
   program
     .command('repair [id]')
     .description('Auto-fix inconsistent session state')
-    .action(async (id) => {
-      await repairCommand(id);
+    .option('--thorough', 'Run expensive repairs (GitHub API, transcript parsing)')
+    .option('--quiet', 'Suppress output when no issues found')
+    .option('--install-schedule', 'Install launchd agent for periodic repair')
+    .option('--uninstall-schedule', 'Remove launchd agent for periodic repair')
+    .action(async (id, options) => {
+      if (options.installSchedule) return installRepairSchedule();
+      if (options.uninstallSchedule) return uninstallRepairSchedule();
+      await repairCommand(id, { thorough: options.thorough, quiet: options.quiet });
     });
 
   // tmux integration

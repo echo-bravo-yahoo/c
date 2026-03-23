@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
 let mockClaudeSessions: Array<{ id: string }> = [];
 let mockTranscriptPath: string | null = null;
 let mockCustomTitle: string | null = null;
+let mockTranscriptUsage: { cost_usd: number } | null = null;
 
 // Mock claude/sessions before any imports that pull it in
 mock.module(resolve('src/claude/sessions.ts'), {
@@ -32,6 +33,12 @@ mock.module(resolve('src/claude/sessions.ts'), {
   },
 });
 
+mock.module(resolve('src/claude/usage.ts'), {
+  namedExports: {
+    readTranscriptUsage: () => mockTranscriptUsage,
+  },
+});
+
 const { setupCLI } = await import('../helpers/cli.ts');
 import type { CLIHarness } from '../helpers/cli.ts';
 
@@ -42,6 +49,7 @@ beforeEach(() => {
   mockClaudeSessions = [];
   mockTranscriptPath = null;
   mockCustomTitle = null;
+  mockTranscriptUsage = null;
 });
 
 afterEach(() => {
@@ -113,7 +121,20 @@ describe('c repair', () => {
     assert.strictEqual(cli.session('s2')?.state, 'closed');
   });
 
-  it('backfills _custom_title from transcript when missing', async () => {
+  it('backfills _custom_title from transcript when missing (thorough)', async () => {
+    await cli.seed({ id: 's1', state: 'closed' });
+    mockClaudeSessions = [{ id: 's1' }];
+    mockTranscriptPath = '/tmp/fake/s1.jsonl';
+    mockCustomTitle = 'My Renamed Session';
+
+    await cli.run('repair', '--thorough');
+
+    const s = cli.session('s1');
+    assert.strictEqual(s?.meta._custom_title, 'My Renamed Session');
+    assert.ok(cli.console.logs.some((l) => l.includes('Backfilled title')));
+  });
+
+  it('skips title backfill without --thorough', async () => {
     await cli.seed({ id: 's1', state: 'closed' });
     mockClaudeSessions = [{ id: 's1' }];
     mockTranscriptPath = '/tmp/fake/s1.jsonl';
@@ -122,8 +143,7 @@ describe('c repair', () => {
     await cli.run('repair');
 
     const s = cli.session('s1');
-    assert.strictEqual(s?.meta._custom_title, 'My Renamed Session');
-    assert.ok(cli.console.logs.some((l) => l.includes('Backfilled title')));
+    assert.strictEqual(s?.meta._custom_title, undefined);
   });
 
   it('skips backfill when _custom_title already present', async () => {
@@ -132,10 +152,90 @@ describe('c repair', () => {
     mockTranscriptPath = '/tmp/fake/s1.jsonl';
     mockCustomTitle = 'New Title';
 
-    await cli.run('repair');
+    await cli.run('repair', '--thorough');
 
     const s = cli.session('s1');
     assert.strictEqual(s?.meta._custom_title, 'Existing');
     assert.ok(!cli.console.logs.some((l) => l.includes('Backfilled')));
+  });
+
+  it('backfills JIRA from branch name (thorough)', async () => {
+    await cli.seed({ id: 's1', state: 'closed', resources: { branch: 'feature/MAC-1234-fix-bug' } });
+    mockClaudeSessions = [{ id: 's1' }];
+
+    await cli.run('repair', '--thorough');
+
+    const s = cli.session('s1');
+    assert.strictEqual(s?.resources.jira, 'MAC-1234');
+    assert.ok(cli.console.logs.some((l) => l.includes('JIRA MAC-1234')));
+  });
+
+  it('skips JIRA backfill without --thorough', async () => {
+    await cli.seed({ id: 's1', state: 'closed', resources: { branch: 'feature/MAC-1234-fix-bug' } });
+    mockClaudeSessions = [{ id: 's1' }];
+
+    await cli.run('repair');
+
+    const s = cli.session('s1');
+    assert.strictEqual(s?.resources.jira, undefined);
+  });
+
+  it('skips JIRA backfill when already present', async () => {
+    await cli.seed({
+      id: 's1', state: 'closed',
+      resources: { branch: 'feature/MAC-1234-fix-bug', jira: 'MAC-9999' },
+    });
+    mockClaudeSessions = [{ id: 's1' }];
+
+    await cli.run('repair', '--thorough');
+
+    const s = cli.session('s1');
+    assert.strictEqual(s?.resources.jira, 'MAC-9999');
+  });
+
+  it('backfills cost from transcript (thorough)', async () => {
+    await cli.seed({ id: 's1', state: 'closed' });
+    mockClaudeSessions = [{ id: 's1' }];
+    mockTranscriptPath = '/tmp/fake/s1.jsonl';
+    mockTranscriptUsage = { cost_usd: 1.23 };
+
+    await cli.run('repair', '--thorough');
+
+    const s = cli.session('s1');
+    assert.strictEqual(s?.cost_usd, 1.23);
+    assert.ok(cli.console.logs.some((l) => l.includes('cost $1.23')));
+  });
+
+  it('skips cost backfill when cost already set', async () => {
+    await cli.seed({ id: 's1', state: 'closed', cost_usd: 5.0 });
+    mockClaudeSessions = [{ id: 's1' }];
+    mockTranscriptPath = '/tmp/fake/s1.jsonl';
+    mockTranscriptUsage = { cost_usd: 1.23 };
+
+    await cli.run('repair', '--thorough');
+
+    const s = cli.session('s1');
+    assert.strictEqual(s?.cost_usd, 5.0);
+  });
+
+  it('skips cost backfill for non-closed sessions', async () => {
+    await cli.seed({ id: 's1', state: 'archived' });
+    mockClaudeSessions = [{ id: 's1' }];
+    mockTranscriptPath = '/tmp/fake/s1.jsonl';
+    mockTranscriptUsage = { cost_usd: 1.23 };
+
+    await cli.run('repair', '--thorough');
+
+    const s = cli.session('s1');
+    assert.strictEqual(s?.cost_usd, undefined);
+  });
+
+  it('suppresses output with --quiet when no issues', async () => {
+    await cli.seed({ id: 's1', state: 'closed' });
+    mockClaudeSessions = [{ id: 's1' }];
+
+    await cli.run('repair', '--quiet');
+
+    assert.ok(!cli.console.logs.some((l) => l.includes('No issues found')));
   });
 });

@@ -57,8 +57,15 @@ export function getPRNumber(url: string): number | undefined {
  * List all open PRs for the repository
  */
 export function listOpenPRs(cwd?: string): PullRequest[] {
+  return listPRs(cwd, 'open');
+}
+
+/**
+ * List PRs for the repository, filtered by state.
+ */
+export function listPRs(cwd?: string, state: 'open' | 'merged' | 'closed' | 'all' = 'open'): PullRequest[] {
   const output = exec(
-    'gh pr list --json url,number,title,state,headRefName 2>/dev/null',
+    `gh pr list --state ${state} --json url,number,title,state,headRefName 2>/dev/null`,
     { cwd }
   );
 
