@@ -155,10 +155,11 @@ export function createProgram(): Command {
 
   // Show
   program
-    .command('show <id>')
+    .command('show <id...>')
     .description('Show session details')
     .option('--json', 'Output as JSON')
-    .action((id, options) => {
+    .action((idParts, options) => {
+      const id = idParts.join(' ');
       showCommand(id, { json: options.json });
     });
 

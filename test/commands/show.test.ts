@@ -36,6 +36,60 @@ describe('c', () => {
           assert.strictEqual(cli.exit.exitCode, 1);
           assert.ok(cli.console.errors.some(l => l.includes('not found')));
         });
+
+        it('finds session by exact name', async () => {
+          await cli.seed({ id: 'abc12345', name: 'Resume session by name' });
+          await cli.run('show', 'Resume session by name');
+
+          assert.strictEqual(cli.exit.exitCode, null);
+          assert.ok(cli.console.logs.some(l => l.includes('abc12345')));
+        });
+
+        it('finds session by _custom_title', async () => {
+          await cli.seed({ id: 'abc12345', meta: { _custom_title: 'my fancy title' } });
+          await cli.run('show', 'my fancy title');
+
+          assert.strictEqual(cli.exit.exitCode, null);
+          assert.ok(cli.console.logs.some(l => l.includes('abc12345')));
+        });
+
+        it('resolves unquoted multi-word name', async () => {
+          await cli.seed({ id: 'abc12345', name: 'my cool thing' });
+          await cli.run('show', 'my', 'cool', 'thing');
+
+          assert.strictEqual(cli.exit.exitCode, null);
+          assert.ok(cli.console.logs.some(l => l.includes('abc12345')));
+        });
+
+        it('parses --json after multi-word name', async () => {
+          await cli.seed({ id: 'abc12345', name: 'my cool thing' });
+          await cli.run('show', 'my', 'cool', 'thing', '--json');
+
+          assert.strictEqual(cli.exit.exitCode, null);
+          assert.ok(cli.stdout.output.join('').includes('abc12345'));
+        });
+
+        it('errors on multiple name matches', async () => {
+          await cli.seed(
+            { id: 'abc12345-0000-0000-0000-000000000001', name: 'same name' },
+            { id: 'def67890-0000-0000-0000-000000000001', name: 'same name' },
+          );
+          await cli.run('show', 'same name');
+
+          assert.strictEqual(cli.exit.exitCode, 1);
+          assert.ok(cli.console.errors.some(l => l.includes('Multiple sessions')));
+        });
+
+        it('name match wins over _custom_title on different session', async () => {
+          await cli.seed(
+            { id: 'sname001', name: 'my task' },
+            { id: 'stitle01', name: '', meta: { _custom_title: 'my task' } },
+          );
+          await cli.run('show', 'my task');
+
+          assert.strictEqual(cli.exit.exitCode, null);
+          assert.ok(cli.console.logs.some(l => l.includes('sname001')));
+        });
       });
 
       describe('display fields', () => {

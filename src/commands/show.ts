@@ -3,18 +3,46 @@
  */
 
 import chalk from 'chalk';
-import { getSession } from '../store/index.ts';
-import { formatSessionDetails } from '../util/format.ts';
+import { getSession, findSessionsByName, findSessionsByTitle, findSessions } from '../store/index.ts';
+import { formatSessionDetails, shortId, highlightId } from '../util/format.ts';
 
 export interface ShowOptions {
   json?: boolean;
 }
 
 export function showCommand(idOrPrefix: string, options?: ShowOptions): void {
-  const session = getSession(idOrPrefix);
+  let session = getSession(idOrPrefix);
 
   if (!session) {
-    console.error(chalk.red(`Session not found: ${idOrPrefix}.`));
+    const nameMatches = findSessionsByName(idOrPrefix);
+    if (nameMatches.length === 1) {
+      session = nameMatches[0];
+    } else if (nameMatches.length >= 2) {
+      const ids = nameMatches.map(m => shortId(m.id));
+      console.error(chalk.red(`Multiple sessions named "${idOrPrefix}": ${ids.join(', ')}.`));
+      process.exit(1);
+    }
+  }
+
+  if (!session) {
+    const titleMatches = findSessionsByTitle(idOrPrefix);
+    if (titleMatches.length === 1) {
+      session = titleMatches[0];
+    } else if (titleMatches.length >= 2) {
+      const ids = titleMatches.map(m => shortId(m.id));
+      console.error(chalk.red(`Multiple sessions titled "${idOrPrefix}": ${ids.join(', ')}.`));
+      process.exit(1);
+    }
+  }
+
+  if (!session) {
+    const matches = findSessions(idOrPrefix);
+    if (matches.length >= 2) {
+      const ids = matches.map(m => highlightId(shortId(m.id), idOrPrefix.length));
+      console.error(chalk.red(`Multiple sessions starting with ${idOrPrefix}: ${ids.join(', ')}.`));
+    } else {
+      console.error(chalk.red(`Session not found: ${idOrPrefix}.`));
+    }
     process.exit(1);
   }
 
