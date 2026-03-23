@@ -116,7 +116,7 @@ export function formatDuration(ms: number): string {
 
 /**
  * Get display name for a session
- * Priority: Claude's customTitle > c's name > Claude's summary
+ * Priority: Claude's customTitle > cached _custom_title > c's name > Claude's summary
  */
 export function getDisplayName(session: Session, skipTranscript = false): string {
   // Check Claude's session index for titles
@@ -124,6 +124,10 @@ export function getDisplayName(session: Session, skipTranscript = false): string
 
   // customTitle = user explicitly renamed via /rename (highest priority)
   if (customTitle) return customTitle;
+
+  // _custom_title = cached from transcript by hooks (same source as customTitle,
+  // covers the case where Claude's sessions-index.json hasn't been updated yet)
+  if (session.meta._custom_title) return session.meta._custom_title;
 
   // c's name = user explicitly renamed via `c name`
   if (session.name) return session.name;

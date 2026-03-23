@@ -8,7 +8,7 @@ import { readIndex, updateIndex, getSession } from '../store/index.ts';
 import { listStatusCacheIds, deleteStatusCache } from '../store/status-cache.ts';
 import { getCurrentBranch } from '../detection/git.ts';
 import { getDisplayName, shortId } from '../util/format.ts';
-import { listClaudeSessions } from '../claude/sessions.ts';
+import { listClaudeSessions, findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.ts';
 import type { Session } from '../store/schema.ts';
 
 /**
@@ -82,10 +82,22 @@ export async function repairCommand(idOrPrefix?: string): Promise<void> {
           fixes.push(`Detected branch ${branch} for ${label}`);
         }
       }
+
+      // 4. Backfill _custom_title from transcript when missing
+      if (!session.meta._custom_title) {
+        const transcriptPath = findTranscriptPath(id);
+        if (transcriptPath) {
+          const title = getCustomTitleFromTranscriptTail(transcriptPath);
+          if (title) {
+            session.meta._custom_title = title;
+            fixes.push(`Backfilled title "${title}" for ${label}`);
+          }
+        }
+      }
     }
   });
 
-  // 4. Stale status cache — only when repairing all sessions
+  // 5. Stale status cache — only when repairing all sessions
   if (!targetSession) {
     const index = readIndex();
     const indexIds = new Set(Object.keys(index.sessions));

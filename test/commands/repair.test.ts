@@ -7,6 +7,11 @@ import assert from 'node:assert';
 import { mock } from 'node:test';
 import { resolve } from 'node:path';
 
+// Mutable mock state
+let mockClaudeSessions: Array<{ id: string }> = [];
+let mockTranscriptPath: string | null = null;
+let mockCustomTitle: string | null = null;
+
 // Mock claude/sessions before any imports that pull it in
 mock.module(resolve('src/claude/sessions.ts'), {
   namedExports: {
@@ -14,14 +19,14 @@ mock.module(resolve('src/claude/sessions.ts'), {
     listClaudeSessions: () => mockClaudeSessions,
     getClaudeSession: () => null,
     getClaudeSessionsForDirectory: () => [],
-    findTranscriptPath: () => null,
+    findTranscriptPath: () => mockTranscriptPath,
     encodeProjectKey: (dir: string) => dir.replace(/\//g, '-'),
     decodeProjectKey: (key: string) => key.replace(/-/g, '/'),
     readClaudeSessionIndex: () => null,
     getClaudeSessionTitles: () => ({}),
     findClaudeSessionIdsByTitle: () => [],
     getPlanExecutionInfo: () => null,
-    getCustomTitleFromTranscriptTail: () => null,
+    getCustomTitleFromTranscriptTail: () => mockCustomTitle,
     CLAUDE_DIR: '/tmp/mock-claude',
     PROJECTS_DIR: '/tmp/mock-claude/projects',
   },
@@ -31,11 +36,12 @@ const { setupCLI } = await import('../helpers/cli.ts');
 import type { CLIHarness } from '../helpers/cli.ts';
 
 let cli: CLIHarness;
-let mockClaudeSessions: Array<{ id: string }>;
 
 beforeEach(() => {
   cli = setupCLI();
   mockClaudeSessions = [];
+  mockTranscriptPath = null;
+  mockCustomTitle = null;
 });
 
 afterEach(() => {
@@ -105,5 +111,31 @@ describe('c repair', () => {
     // (stale PID check still clears the PID field, but doesn't change state)
     assert.strictEqual(cli.session('s1')?.state, 'archived');
     assert.strictEqual(cli.session('s2')?.state, 'closed');
+  });
+
+  it('backfills _custom_title from transcript when missing', async () => {
+    await cli.seed({ id: 's1', state: 'closed' });
+    mockClaudeSessions = [{ id: 's1' }];
+    mockTranscriptPath = '/tmp/fake/s1.jsonl';
+    mockCustomTitle = 'My Renamed Session';
+
+    await cli.run('repair');
+
+    const s = cli.session('s1');
+    assert.strictEqual(s?.meta._custom_title, 'My Renamed Session');
+    assert.ok(cli.console.logs.some((l) => l.includes('Backfilled title')));
+  });
+
+  it('skips backfill when _custom_title already present', async () => {
+    await cli.seed({ id: 's1', state: 'closed', meta: { _custom_title: 'Existing' } });
+    mockClaudeSessions = [{ id: 's1' }];
+    mockTranscriptPath = '/tmp/fake/s1.jsonl';
+    mockCustomTitle = 'New Title';
+
+    await cli.run('repair');
+
+    const s = cli.session('s1');
+    assert.strictEqual(s?.meta._custom_title, 'Existing');
+    assert.ok(!cli.console.logs.some((l) => l.includes('Backfilled')));
   });
 });
