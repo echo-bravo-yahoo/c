@@ -185,6 +185,9 @@ Sends SIGINT to the session process (5s timeout), marks the session archived, bu
 ### `--no-worktree` flag
 `c new "name" --no-worktree` creates a named session without passing `--worktree` to Claude, even inside a git repo. Useful for sessions that don't need branch isolation.
 
+### `c repair --thorough`
+Runs expensive enrichment steps in addition to fast local fixes: title backfill from transcripts, JIRA from branch names, branch for closed sessions, PR from GitHub API (grouped by repo), cost from full transcript. Use `--quiet` to suppress "No issues found" output. `--install-schedule` / `--uninstall-schedule` manage a launchd agent that runs thorough repair every 5 minutes.
+
 ## Notes
 - `/rename` titles are read directly from Claude's transcript files
 - Interactive Claude TUI cannot be tested from within a Claude session — `spawn('claude', ..., { stdio: 'inherit' })` deadlocks on TTY. Use `--print` mode for non-interactive flag/arg testing; test interactive launch from a separate terminal.
