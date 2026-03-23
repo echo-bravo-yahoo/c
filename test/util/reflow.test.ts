@@ -197,14 +197,14 @@ describe('c', () => {
           assert.ok(layout.status <= 9, 'status not excessively wide');
           assert.ok(layout.status >= 7, 'status at least min');
 
-          // Verify: exactly 1 space between "closed" and next column
+          // Verify: status pad (1 space) + empty usage column before next content
           const line = renderLine(sessions[1], sessions, 120);
           const closedIdx = line.indexOf('closed');
           assert.ok(closedIdx > -1);
           const afterClosed = line.slice(closedIdx + 'closed'.length);
-          // First non-space char should be at position 1 (one space)
           const nextCharIdx = afterClosed.search(/\S/);
-          assert.strictEqual(nextCharIdx, 1, 'exactly 1 space after "closed"');
+          const expectedGap = (layout.status - 'closed'.length) + layout.usage;
+          assert.strictEqual(nextCharIdx, expectedGap, 'status pad + empty usage column');
         });
 
         it('accommodates "archived" in status column', () => {

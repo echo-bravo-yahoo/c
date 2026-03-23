@@ -217,7 +217,7 @@ export function formatCost(usd: number): string {
 }
 
 /**
- * Format session state with color, optionally appending context %
+ * Format session state with color
  */
 export function formatStatus(session: Session): string {
   let base: string;
@@ -239,20 +239,6 @@ export function formatStatus(session: Session): string {
       break;
     default:
       base = session.state;
-  }
-
-  // Append context % for active sessions
-  if (session.context_pct != null && ['busy', 'idle', 'waiting'].includes(session.state)) {
-    const pct = session.context_pct;
-    let colored: string;
-    if (pct >= 60) {
-      colored = chalk.red(`${pct}%`);
-    } else if (pct >= 33) {
-      colored = chalk.yellow(`${pct}%`);
-    } else {
-      colored = chalk.green(`${pct}%`);
-    }
-    base += ' ' + colored;
   }
 
   return base;
@@ -286,13 +272,15 @@ export function measureColumns(sessions: Session[], sizeMap?: Map<string, number
     const idNameWidth = 12 + nameWidth + 1;
     widths.set('idName', Math.max(widths.get('idName') ?? 0, idNameWidth));
 
-    // status (account for context % suffix like "busy 42%")
-    let statusLen = session.state.length;
-    if (session.context_pct != null && ['busy', 'idle', 'waiting'].includes(session.state)) {
-      statusLen += 1 + `${session.context_pct}%`.length; // space + "NN%"
-    }
-    const statusWidth = statusLen + 1;
+    // status
+    const statusWidth = session.state.length + 1;
     widths.set('status', Math.max(widths.get('status') ?? 0, statusWidth));
+
+    // usage (context %)
+    if (session.context_pct != null && ['busy', 'idle', 'waiting'].includes(session.state)) {
+      const usageWidth = `${session.context_pct}%`.length + 1;
+      widths.set('usage', Math.max(widths.get('usage') ?? 0, usageWidth));
+    }
 
     // cost
     if (session.cost_usd != null && session.cost_usd >= 0.005) {
@@ -395,6 +383,21 @@ export function formatSessionLine(session: Session, layout: ColumnLayout, depth 
     const statusText = session.state;
     const statusPad = ' '.repeat(Math.max(1, layout.status - statusText.length));
     parts.push(formatStatus(session) + statusPad);
+  }
+
+  // Usage column (context %)
+  if (layout.visible.has('usage')) {
+    if (session.context_pct != null && ['busy', 'idle', 'waiting'].includes(session.state)) {
+      const pct = session.context_pct;
+      const pctText = `${pct}%`;
+      let colorFn: (s: string) => string;
+      if (pct >= 60) colorFn = chalk.red;
+      else if (pct >= 33) colorFn = chalk.yellow;
+      else colorFn = chalk.green;
+      parts.push(colorFn(fixedWidth(pctText, layout.usage)));
+    } else {
+      parts.push(fixedWidth('', layout.usage));
+    }
   }
 
   // Repo column
@@ -785,6 +788,9 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
   }
   if (layout.visible.has('status')) {
     headerParts.push(fixedWidth('State', layout.status));
+  }
+  if (layout.visible.has('usage')) {
+    headerParts.push(fixedWidth('Usage', layout.usage));
   }
   if (layout.visible.has('repo')) {
     headerParts.push(fixedWidth('Repo', layout.repo));

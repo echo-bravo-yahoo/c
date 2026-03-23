@@ -48,6 +48,7 @@ describe('c', () => {
           assert.strictEqual(layout.branch, 6);
           assert.strictEqual(layout.time, 6);
           assert.strictEqual(layout.cost, 5);
+          assert.strictEqual(layout.usage, 4);
           assert.strictEqual(layout.size, 7);
           assert.strictEqual(layout.resources, 4);
         });
@@ -57,7 +58,7 @@ describe('c', () => {
           const tooNarrow = ALL_MIN + GUTTER - 1;
           const layout = computeColumnLayout(emptyWidths(), tooNarrow);
 
-          // resources (priority 8) should be dropped
+          // resources (priority 9) should be dropped
           assert.ok(!layout.visible.has('resources'), 'resources should be dropped');
           assert.strictEqual(layout.visible.size, COLUMN_SPECS.length - 1);
           assert.ok(layout.visible.has('status'));
@@ -66,6 +67,7 @@ describe('c', () => {
           assert.ok(layout.visible.has('branch'));
           assert.ok(layout.visible.has('time'));
           assert.ok(layout.visible.has('cost'));
+          assert.ok(layout.visible.has('usage'));
           assert.ok(layout.visible.has('size'));
         });
 
@@ -79,6 +81,7 @@ describe('c', () => {
           assert.ok(!layout.visible.has('branch'), 'branch should be dropped');
           assert.ok(!layout.visible.has('time'), 'time should be dropped');
           assert.ok(!layout.visible.has('cost'), 'cost should be dropped');
+          assert.ok(!layout.visible.has('usage'), 'usage should be dropped');
           assert.ok(!layout.visible.has('size'), 'size should be dropped');
           assert.ok(!layout.visible.has('resources'), 'resources should be dropped');
         });
@@ -119,6 +122,7 @@ describe('c', () => {
           assert.strictEqual(layout.branch, 6);
           assert.strictEqual(layout.time, 6);
           assert.strictEqual(layout.cost, 5);
+          assert.strictEqual(layout.usage, 4);
           assert.strictEqual(layout.size, 7);
           assert.strictEqual(layout.resources, 4);
         });
@@ -132,6 +136,7 @@ describe('c', () => {
             branch: 30,
             time: 12,
             cost: 8,
+            usage: 5,
             size: 9,
             resources: 24,
           });
@@ -148,6 +153,7 @@ describe('c', () => {
           assert.strictEqual(layout.branch, 6);
           assert.strictEqual(layout.time, 6);
           assert.strictEqual(layout.cost, 5);
+          assert.strictEqual(layout.usage, 4);
           assert.strictEqual(layout.size, 7);
           assert.strictEqual(layout.resources, 4);
         });
@@ -172,6 +178,7 @@ describe('c', () => {
             branch: 100,
             time: 100,
             cost: 100,
+            usage: 100,
             size: 100,
             resources: 100,
           });
@@ -184,6 +191,7 @@ describe('c', () => {
           assert.ok(layout.branch <= 30, 'branch capped at max 30');
           assert.ok(layout.time <= 12, 'time capped at max 12');
           assert.ok(layout.cost <= 8, 'cost capped at max 8');
+          assert.ok(layout.usage <= 6, 'usage capped at max 6');
           assert.ok(layout.size <= 10, 'size capped at max 10');
           assert.ok(layout.resources <= 24, 'resources capped at max 24');
         });
@@ -197,6 +205,7 @@ describe('c', () => {
             branch: 6,
             time: 6,
             cost: 5,
+            usage: 4,
             size: 5,
             resources: 4,
           });
@@ -218,6 +227,7 @@ describe('c', () => {
             layout.branch +
             layout.time +
             layout.cost +
+            layout.usage +
             layout.size +
             layout.resources;
 
@@ -234,8 +244,31 @@ describe('c', () => {
           assert.strictEqual(layout.branch, 0);
           assert.strictEqual(layout.time, 0);
           assert.strictEqual(layout.cost, 0);
+          assert.strictEqual(layout.usage, 0);
           assert.strictEqual(layout.size, 0);
           assert.strictEqual(layout.resources, 0);
+        });
+
+        describe('usage column', () => {
+          it('includes usage column when terminal is wide enough', () => {
+            const content = widths({ usage: 5 });
+            const layout = computeColumnLayout(content, 200);
+            assert.ok(layout.visible.has('usage'), 'usage should be visible');
+          });
+
+          it('drops usage column before size and resources', () => {
+            // status(7) + idName(20) + repo(6) + branch(6) + time(6) + cost(5) + gutter(2) = 52
+            const layout = computeColumnLayout(emptyWidths(), 52);
+            assert.ok(!layout.visible.has('usage'), 'usage should be dropped');
+            assert.ok(layout.visible.has('cost'), 'cost should still be visible');
+          });
+
+          it('allocates usage width between min and max', () => {
+            const content = widths({ usage: 5 });
+            const layout = computeColumnLayout(content, 200);
+            assert.ok(layout.usage >= 4, 'usage width should be at least min (4)');
+            assert.ok(layout.usage <= 6, 'usage width should be at most max (6)');
+          });
         });
 
         describe('cost column', () => {

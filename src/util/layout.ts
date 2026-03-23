@@ -2,7 +2,7 @@
  * Dynamic column layout for session tables
  */
 
-export type ColumnKey = 'status' | 'idName' | 'repo' | 'branch' | 'time' | 'cost' | 'resources' | 'size';
+export type ColumnKey = 'status' | 'idName' | 'repo' | 'branch' | 'time' | 'cost' | 'usage' | 'resources' | 'size';
 
 export interface ColumnSpec {
   key: ColumnKey;
@@ -19,6 +19,7 @@ export interface ColumnLayout {
   repo: number;
   branch: number;
   cost: number;
+  usage: number;
   resources: number;
   size: number;
   time: number;
@@ -36,8 +37,9 @@ export const COLUMN_SPECS: readonly ColumnSpec[] = [
   { key: 'branch',    label: 'Worktree/Branch', min:  6, max: 30, priority: 4 },
   { key: 'time',      label: 'Last Active',     min:  6, max: 12, priority: 5 },
   { key: 'cost',      label: 'Cost',            min:  5, max:  8, priority: 6 },
-  { key: 'size',      label: 'Size',            min:  7, max: 10, priority: 7 },
-  { key: 'resources', label: 'Resources',       min:  4, max: 24, priority: 8 },
+  { key: 'usage',     label: 'Usage',           min:  4, max:  6, priority: 7 },
+  { key: 'size',      label: 'Size',            min:  7, max: 10, priority: 8 },
+  { key: 'resources', label: 'Resources',       min:  4, max: 24, priority: 9 },
 ];
 
 /**
@@ -122,6 +124,7 @@ export function computeColumnLayout(
     repo: widths.get('repo') ?? 0,
     branch: widths.get('branch') ?? 0,
     cost: widths.get('cost') ?? 0,
+    usage: widths.get('usage') ?? 0,
     resources: widths.get('resources') ?? 0,
     size: widths.get('size') ?? 0,
     time: widths.get('time') ?? 0,
