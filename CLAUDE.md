@@ -3,6 +3,16 @@
 ## Build
 npm run build
 
+Output: `dist/` (mirrors `src/` structure). Config: `tsconfig.json`. No bundler — just `tsc`.
+
+Rebuild after moving changes onto main (merge, cherry-pick, rebase) so the global `c` binary reflects the new code.
+
+## Run
+
+- **Repo root:** `c <command>` runs the built `dist/index.js` via the global symlink. Requires a build first.
+- **Repo root (dev):** `c-dev [--] [args]` runs source directly via `tsx` — no build needed.
+- **Worktree:** `c-dev <worktree-name> [--] [args]` runs worktree source via `tsx` — no build needed.
+
 ## Architecture
 - Hooks in `src/hooks/` handle Claude Code lifecycle events
 - Session state stored via `src/store/`
