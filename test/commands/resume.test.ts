@@ -31,6 +31,8 @@ mock.module(resolve(__dirname, '../../src/claude/sessions.ts'), {
     findTranscriptPath: () => null,
     getCustomTitleFromTranscriptTail: () => null,
     getPlanExecutionInfo: () => null,
+    PLANS_DIR: join(tmpdir(), 'c-resume-test-plans'),
+    extractPlanTitle: () => null,
   },
 });
 

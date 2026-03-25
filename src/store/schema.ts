@@ -10,6 +10,7 @@ export interface SessionResources {
   pr?: string;
   jira?: string;
   tmux_pane?: string;
+  plan?: string;
 }
 
 export interface SessionServers {

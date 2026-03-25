@@ -30,6 +30,8 @@ mock.module(resolve('src/claude/sessions.ts'), {
     getCustomTitleFromTranscriptTail: () => null,
     CLAUDE_DIR: '/tmp/mock-claude',
     PROJECTS_DIR: '/tmp/mock-claude/projects',
+    PLANS_DIR: '/tmp/mock-claude/plans',
+    extractPlanTitle: () => null,
   },
 });
 

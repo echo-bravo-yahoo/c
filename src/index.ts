@@ -28,6 +28,7 @@ import { execCommand } from './commands/exec.ts';
 import { openCommand } from './commands/open.ts';
 import { logCommand } from './commands/log.ts';
 import { memoryCommand } from './commands/memory.ts';
+import { planCommand } from './commands/plan.ts';
 import { statsCommand } from './commands/stats.ts';
 import { tmuxStatusCommand } from './commands/tmux/status.ts';
 import { tmuxPickCommand } from './commands/tmux/pick.ts';
@@ -224,12 +225,14 @@ export function createProgram(): Command {
     .option('--pr <url>', 'Link PR URL')
     .option('--jira <ticket>', 'Link JIRA ticket')
     .option('--branch <name>', 'Link branch name')
+    .option('--plan <slug>', 'Link plan document slug')
     .action(async (id, options) => {
       await linkCommand(
         {
           pr: options.pr,
           jira: options.jira,
           branch: options.branch,
+          plan: options.plan,
         },
         id
       );
@@ -242,12 +245,14 @@ export function createProgram(): Command {
     .option('--pr', 'Unlink PR')
     .option('--jira', 'Unlink JIRA')
     .option('--branch', 'Unlink branch')
+    .option('--plan', 'Unlink plan')
     .action(async (id, options) => {
       await unlinkCommand(
         {
           pr: options.pr,
           jira: options.jira,
           branch: options.branch,
+          plan: options.plan,
         },
         id
       );
@@ -333,6 +338,7 @@ export function createProgram(): Command {
     .description('Open session resources in browser')
     .option('--pr', 'Open PR')
     .option('--jira', 'Open JIRA ticket')
+    .option('--plan', 'Open plan document')
     .action((id, options) => {
       openCommand(id, options);
     });
@@ -355,6 +361,19 @@ export function createProgram(): Command {
     .option('--raw', 'Output without syntax highlighting')
     .action((id, options) => {
       memoryCommand(id, { raw: options.raw });
+    });
+
+  // Plan
+  program
+    .command('plan [id]')
+    .description("Show session's plan document")
+    .option('--raw', 'Output without syntax highlighting')
+    .option('--open', 'Open plan file in default application')
+    .option('--edit', 'Open plan in $EDITOR')
+    .option('--copy', 'Copy plan content to clipboard')
+    .option('--path', 'Print plan file path')
+    .action((id, options) => {
+      planCommand(id, { raw: options.raw, open: options.open, edit: options.edit, copy: options.copy, path: options.path });
     });
 
   // Stats

@@ -10,7 +10,7 @@ import { getCurrentBranch, getRepoSlug } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
 import { listPRs } from '../detection/pr.ts';
 import { getDisplayName, shortId } from '../util/format.ts';
-import { listClaudeSessions, findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.ts';
+import { listClaudeSessions, findTranscriptPath, getCustomTitleFromTranscriptTail, getPlanExecutionInfo } from '../claude/sessions.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
 import type { Session } from '../store/schema.ts';
 
@@ -116,7 +116,16 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
         }
       }
 
-      // 6. Backfill branch for closed sessions
+      // 6. Backfill plan slug from transcript
+      if (!session.resources.plan) {
+        const planInfo = getPlanExecutionInfo(id);
+        if (planInfo) {
+          session.resources.plan = planInfo.slug;
+          fixes.push(`Detected plan ${planInfo.slug} for ${label}`);
+        }
+      }
+
+      // 7. Backfill branch for closed sessions
       if (
         session.state === 'closed' &&
         !session.resources.branch &&
@@ -151,7 +160,7 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
       ? { [targetSession.id]: index.sessions[targetSession.id] }
       : index.sessions;
 
-    // 7. Backfill PR from GitHub — group by repo, one API call per repo
+    // 8. Backfill PR from GitHub — group by repo, one API call per repo
     const needsPR = new Map<string, { cwd: string; sessionIds: string[] }>();
     for (const [id, session] of Object.entries(sessions)) {
       if (!session || session.resources.pr || !session.resources.branch) continue;
@@ -178,7 +187,7 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
       }
     }
 
-    // 8. Backfill cost from transcript
+    // 9. Backfill cost from transcript
     const costFixes: Array<{ id: string; cost_usd: number }> = [];
     for (const [id, session] of Object.entries(sessions)) {
       if (!session || session.state !== 'closed') continue;

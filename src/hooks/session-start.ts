@@ -160,6 +160,11 @@ export async function handleSessionStart(
     session.resources.tmux_pane = process.env.TMUX_PANE;
   }
 
+  // Store plan slug as resource on the execution session
+  if (planSlug) {
+    session.resources.plan = planSlug;
+  }
+
   // Use plan title as session name if available, fall back to slug
   if (planTitle) {
     session.name = planTitle;
@@ -193,6 +198,14 @@ export async function handleSessionStart(
   // Save to index
   await updateIndex((index) => {
     index.sessions[sessionId] = session;
+
+    // Backfill plan on parent (planning) session
+    if (parentSessionId && planSlug) {
+      const parent = index.sessions[parentSessionId];
+      if (parent && !parent.resources.plan) {
+        parent.resources.plan = planSlug;
+      }
+    }
   });
 
   writeCacheFromSession(sessionId, session, cwd);
@@ -203,7 +216,7 @@ function writeCacheFromSession(
   session: {
     name?: string;
     state?: string;
-    resources: { branch?: string; worktree?: string; pr?: string; jira?: string };
+    resources: { branch?: string; worktree?: string; pr?: string; jira?: string; plan?: string };
   },
   cwd: string
 ): void {
@@ -228,6 +241,7 @@ function writeCacheFromSession(
     state: session.state,
     message_count: indexEntry?.messageCount != null ? String(indexEntry.messageCount) : undefined,
     first_prompt: indexEntry?.firstPrompt || undefined,
+    plan: session.resources.plan,
   };
   writeStatusCache(cacheId, cache);
 }

@@ -281,13 +281,13 @@ export function findClaudeSessionIdsByTitle(title: string): string[] {
   return ids;
 }
 
-const PLANS_DIR = path.join(CLAUDE_DIR, 'plans');
+export const PLANS_DIR = path.join(CLAUDE_DIR, 'plans');
 
 /**
  * Extract the H1 title from a plan file
  * Plan files start with "# Plan: <title>" or just "# <title>"
  */
-function extractPlanTitle(slug: string): string | null {
+export function extractPlanTitle(slug: string): string | null {
   const planPath = path.join(PLANS_DIR, `${slug}.md`);
   if (!fs.existsSync(planPath)) {
     return null;

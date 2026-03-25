@@ -22,6 +22,8 @@ mock.module(resolve('src/claude/sessions.ts'), {
     encodeProjectKey: (d: string) => d,
     CLAUDE_DIR: '/tmp/mock-claude',
     PROJECTS_DIR: '/tmp/mock-claude/projects',
+    PLANS_DIR: '/tmp/mock-claude/plans',
+    extractPlanTitle: () => null,
   },
 });
 

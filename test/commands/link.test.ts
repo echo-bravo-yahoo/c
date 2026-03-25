@@ -38,6 +38,14 @@ describe('c', () => {
           assert.strictEqual(s.resources.branch, 'feature/new-thing');
         });
 
+        it('attaches plan slug', async () => {
+          await cli.seed({ id: 'abc12345' });
+          await cli.run('link', '--plan', 'my-cool-plan', 'abc12345');
+
+          const s = cli.session('abc12345')!;
+          assert.strictEqual(s.resources.plan, 'my-cool-plan');
+        });
+
         it('attaches multiple resources', async () => {
           await cli.seed({ id: 'abc12345' });
           await cli.run('link', '--pr', 'https://github.com/org/repo/pull/42', '--jira', 'MAC-123', '--branch', 'feature/MAC-123-thing', 'abc12345');

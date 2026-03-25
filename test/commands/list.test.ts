@@ -32,6 +32,8 @@ mock.module(resolve('src/claude/sessions.ts'), {
     encodeProjectKey: (d: string) => d,
     CLAUDE_DIR: '/tmp/mock-claude',
     PROJECTS_DIR: '/tmp/mock-claude/projects',
+    PLANS_DIR: '/tmp/mock-claude/plans',
+    extractPlanTitle: () => null,
   },
 });
 
@@ -941,7 +943,7 @@ describe('c', () => {
             id: 's1', state: 'busy' as const, name: 'Full Session',
             directory: '/home/u/proj',
             created_at: t, last_active_at: t,
-            resources: { branch: 'main', pr: 'https://github.com/o/r/pull/1', jira: 'PROJ-1', worktree: 'wt-1' },
+            resources: { branch: 'main', pr: 'https://github.com/o/r/pull/1', jira: 'PROJ-1', worktree: 'wt-1', plan: 'test-plan' },
             servers: { '123:8080': 'node server.js' },
             tags: ['wip', 'urgent'],
             meta: { priority: 'high' },

@@ -4,7 +4,8 @@
 
 import chalk from 'chalk';
 import type { Session, SessionState } from '../store/schema.ts';
-import { getClaudeSessionTitles, getClaudeSession, listClaudeSessions, readClaudeSessionIndex } from '../claude/sessions.ts';
+import { getClaudeSessionTitles, getClaudeSession, listClaudeSessions, readClaudeSessionIndex, PLANS_DIR } from '../claude/sessions.ts';
+import { join } from 'node:path';
 import { getAllSessions } from '../store/index.ts';
 import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.ts';
 import { getRepoSlug } from '../detection/git.ts';
@@ -539,6 +540,10 @@ export function formatSessionDetails(session: Session): string {
   }
   if (session.resources.jira) {
     lines.push('  JIRA: ' + chalk.yellow(hyperlink(buildJiraUrl(session.resources.jira), session.resources.jira)));
+  }
+  if (session.resources.plan) {
+    const planPath = join(PLANS_DIR, `${session.resources.plan}.md`);
+    lines.push('  Plan: ' + chalk.blue(hyperlink(`file://${planPath}`, session.resources.plan)));
   }
   if (Object.keys(session.resources).length === 0) {
     lines.push(chalk.dim('  (none)'));

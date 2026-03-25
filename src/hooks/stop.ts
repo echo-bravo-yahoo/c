@@ -3,7 +3,7 @@
  */
 
 import { updateIndex, getCurrentSession } from '../store/index.ts';
-import { findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.ts';
+import { findTranscriptPath, getCustomTitleFromTranscriptTail, getPlanExecutionInfo } from '../claude/sessions.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
 import { debugLog } from '../util/debug.ts';
@@ -52,6 +52,15 @@ export async function handleStop(
       s.meta._custom_title = customTitle;
       newTitle = customTitle;
       debugLog(`[title] stop: title changed → ${JSON.stringify(newTitle)}`);
+    }
+
+    // Detect plan creation (ExitPlanMode in transcript)
+    if (!s.resources.plan) {
+      const planInfo = getPlanExecutionInfo(targetId);
+      if (planInfo) {
+        s.resources.plan = planInfo.slug;
+        debugLog(`[plan] stop: detected plan ${planInfo.slug}`);
+      }
     }
 
     // Capture usage/cost from transcript

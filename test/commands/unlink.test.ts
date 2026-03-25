@@ -38,6 +38,14 @@ describe('c', () => {
           assert.strictEqual(s.resources.branch, undefined);
         });
 
+        it('detaches plan', async () => {
+          await cli.seed({ id: 'abc12345', resources: { plan: 'my-plan-slug' } });
+          await cli.run('unlink', '--plan', 'abc12345');
+
+          const s = cli.session('abc12345')!;
+          assert.strictEqual(s.resources.plan, undefined);
+        });
+
         it('detaches multiple resources', async () => {
           await cli.seed({
             id: 'abc12345',

@@ -3,17 +3,35 @@
  */
 
 import chalk from 'chalk';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { getSession, getCurrentSession } from '../store/index.ts';
+import { PLANS_DIR } from '../claude/sessions.ts';
 import { exec } from '../util/exec.ts';
 
 export function openCommand(
   idOrPrefix?: string,
-  options?: { pr?: boolean; jira?: boolean }
+  options?: { pr?: boolean; jira?: boolean; plan?: boolean }
 ): void {
   const session = idOrPrefix ? getSession(idOrPrefix) : getCurrentSession();
   if (!session) {
     console.error(chalk.red(idOrPrefix ? `Session not found: ${idOrPrefix}.` : 'No active session.'));
     process.exit(1);
+  }
+
+  if (options?.plan) {
+    const slug = session.resources.plan;
+    if (!slug) {
+      console.error(chalk.red('No plan linked.'));
+      process.exit(1);
+    }
+    const planPath = join(PLANS_DIR, `${slug}.md`);
+    if (!existsSync(planPath)) {
+      console.error(chalk.red(`Plan file not found: ${planPath}`));
+      process.exit(1);
+    }
+    exec(`open "${planPath}"`);
+    return;
   }
 
   let url: string | undefined;

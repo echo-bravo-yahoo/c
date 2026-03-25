@@ -215,6 +215,18 @@ describe('c', () => {
           assert.ok(output.includes('PROJ-99'), 'should show JIRA ticket');
         });
 
+        it('shows plan', async () => {
+          await cli.seed({
+            id: 'abc12345',
+            resources: { plan: 'my-cool-plan' },
+          });
+          await cli.run('show', 'abc12345');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('Plan:'), 'should have Plan label');
+          assert.ok(output.includes('my-cool-plan'), 'should show plan slug');
+        });
+
         it('shows worktree', async () => {
           await cli.seed({
             id: 'abc12345',
@@ -276,7 +288,7 @@ describe('c', () => {
             id: 'abc12345', state: 'busy' as const, name: 'Full Session',
             directory: '/home/u/proj',
             created_at: t, last_active_at: t,
-            resources: { branch: 'main', pr: 'https://github.com/o/r/pull/1', jira: 'PROJ-1', worktree: 'wt-1' },
+            resources: { branch: 'main', pr: 'https://github.com/o/r/pull/1', jira: 'PROJ-1', worktree: 'wt-1', plan: 'test-plan' },
             servers: { '123:8080': 'node server.js' },
             tags: ['wip', 'urgent'],
             meta: { priority: 'high' },

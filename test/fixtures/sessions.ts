@@ -44,6 +44,7 @@ export function createTestSession(overrides: SessionOverrides = {}): Session {
       worktree: overrides.resources?.worktree,
       pr: overrides.resources?.pr,
       jira: overrides.resources?.jira,
+      plan: overrides.resources?.plan,
     },
     servers: overrides.servers ?? {},
     tags: { values: overrides.tags ?? [] },
