@@ -2,8 +2,9 @@
  * UserPromptSubmit hook - clear waiting state
  */
 
-import { updateIndex, getCurrentSession } from '../store/index.ts';
+import { updateIndex, getCurrentSession, getSession } from '../store/index.ts';
 import { findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.ts';
+import { registerNewSession } from './session-start.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
 import { debugLog } from '../util/debug.ts';
@@ -20,6 +21,12 @@ export async function handleUserPrompt(
   if (!targetId) {
     debugLog(`[title] user-prompt: no targetId (sessionId=${sessionId})`);
     return;
+  }
+
+  // Deferred registration: SessionStart may have had no stdin payload
+  if (!getSession(targetId)) {
+    debugLog(`[title] user-prompt: deferred registration for ${targetId}`);
+    await registerNewSession(targetId, cwd);
   }
 
   let newTitle: string | undefined;

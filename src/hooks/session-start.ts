@@ -143,21 +143,12 @@ export async function handleSessionStart(
     return;
   }
 
-  // Create new session
-  debugLog(`[title] session-start: new session path — TMUX_PANE=${process.env.TMUX_PANE ?? 'unset'}`);
-  const now = new Date();
-  const projectKey = encodeProjectKey(cwd);
-
-  const session = createSession(sessionId, cwd, projectKey, now);
+  const session = await registerNewSession(sessionId, cwd);
+  if (!session) return;
 
   // Link to parent session if this is a plan execution
   if (parentSessionId) {
     session.parent_session_id = parentSessionId;
-  }
-
-  // Store tmux pane for title updates from subsequent hooks
-  if (process.env.TMUX_PANE) {
-    session.resources.tmux_pane = process.env.TMUX_PANE;
   }
 
   // Store plan slug as resource on the execution session
@@ -175,6 +166,53 @@ export async function handleSessionStart(
   // Set tmux pane title for plan child sessions
   if (session.name) {
     setTmuxPaneTitle(session.name, session.resources.tmux_pane);
+  }
+
+  // Save plan-specific fields and backfill parent
+  if (parentSessionId || planSlug || planTitle) {
+    await updateIndex((index) => {
+      const s = index.sessions[sessionId];
+      if (!s) return;
+      if (parentSessionId) s.parent_session_id = parentSessionId;
+      if (planSlug) s.resources.plan = planSlug;
+      if (planTitle) s.name = planTitle;
+      else if (planSlug) s.name = planSlug;
+
+      if (parentSessionId && planSlug) {
+        const parent = index.sessions[parentSessionId];
+        if (parent && !parent.resources.plan) {
+          parent.resources.plan = planSlug;
+        }
+      }
+    });
+  }
+
+  writeCacheFromSession(sessionId, session, cwd);
+}
+
+/**
+ * Register a new session in the index with git detection.
+ * Extracted so user-prompt can call it as a deferred fallback
+ * when SessionStart has no stdin payload.
+ */
+export async function registerNewSession(
+  sessionId: string,
+  cwd: string,
+): Promise<ReturnType<typeof createSession> | undefined> {
+  if (process.env.C_EPHEMERAL === '1') {
+    debugLog(`[hook] registerNewSession: skipping ephemeral session ${sessionId}`);
+    return undefined;
+  }
+
+  debugLog(`[hook] registerNewSession: creating session ${sessionId} — TMUX_PANE=${process.env.TMUX_PANE ?? 'unset'}`);
+  const now = new Date();
+  const projectKey = encodeProjectKey(cwd);
+
+  const session = createSession(sessionId, cwd, projectKey, now);
+
+  // Store tmux pane for title updates from subsequent hooks
+  if (process.env.TMUX_PANE) {
+    session.resources.tmux_pane = process.env.TMUX_PANE;
   }
 
   // Detect git info
@@ -198,17 +236,9 @@ export async function handleSessionStart(
   // Save to index
   await updateIndex((index) => {
     index.sessions[sessionId] = session;
-
-    // Backfill plan on parent (planning) session
-    if (parentSessionId && planSlug) {
-      const parent = index.sessions[parentSessionId];
-      if (parent && !parent.resources.plan) {
-        parent.resources.plan = planSlug;
-      }
-    }
   });
 
-  writeCacheFromSession(sessionId, session, cwd);
+  return session;
 }
 
 function writeCacheFromSession(

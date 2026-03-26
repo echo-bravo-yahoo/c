@@ -7,8 +7,9 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { handleSessionStart, findWorktreeMatch } from '../../src/hooks/session-start.ts';
+import { handleSessionStart, findWorktreeMatch, registerNewSession } from '../../src/hooks/session-start.ts';
 import { updateIndex, getSession } from '../../src/store/index.ts';
+import { encodeProjectKey } from '../../src/claude/sessions.ts';
 import { createTestSession } from '../fixtures/sessions.ts';
 import { setupTempStore, type TempStore } from '../helpers/store.ts';
 
@@ -237,6 +238,34 @@ describe('c', () => {
           const s = getSession(newId);
           assert.ok(s);
           assert.strictEqual(s.state, 'busy');
+        });
+      });
+
+      describe('registerNewSession', () => {
+        it('creates a session with busy state', async () => {
+          await registerNewSession('reg-session', '/some/project');
+
+          const s = getSession('reg-session');
+          assert.ok(s);
+          assert.strictEqual(s.state, 'busy');
+        });
+
+        it('sets directory and project_key', async () => {
+          const cwd = '/home/user/myproject';
+          await registerNewSession('reg-session', cwd);
+
+          const s = getSession('reg-session');
+          assert.ok(s);
+          assert.strictEqual(s.directory, cwd);
+          assert.strictEqual(s.project_key, encodeProjectKey(cwd));
+        });
+
+        it('does not create when C_EPHEMERAL is set', async () => {
+          process.env.C_EPHEMERAL = '1';
+          await registerNewSession('eph-session', '/some/project');
+          delete process.env.C_EPHEMERAL;
+
+          assert.strictEqual(getSession('eph-session'), undefined);
         });
       });
 
