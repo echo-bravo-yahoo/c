@@ -77,21 +77,20 @@ describe('c repair', () => {
     assert.ok(cli.console.logs.some((l) => l.includes('stale PID')));
   });
 
-  it('closes stuck sessions with no PID and no Claude data', async () => {
+  it('closes stuck sessions with no PID', async () => {
     await cli.seed({ id: 's1', state: 'busy' });
-    mockClaudeSessions = []; // no Claude session
     await cli.run('repair');
     const s = cli.session('s1');
     assert.strictEqual(s?.state, 'closed');
     assert.ok(cli.console.logs.some((l) => l.includes('stuck')));
   });
 
-  it('does not close sessions that have Claude data', async () => {
+  it('closes active sessions with no PID even when Claude data exists', async () => {
     await cli.seed({ id: 's1', state: 'idle' });
     mockClaudeSessions = [{ id: 's1' }];
     await cli.run('repair');
     const s = cli.session('s1');
-    assert.strictEqual(s?.state, 'idle');
+    assert.strictEqual(s?.state, 'closed');
   });
 
   it('scopes to a single session when ID is provided', async () => {

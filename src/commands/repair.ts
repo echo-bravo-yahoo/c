@@ -10,7 +10,7 @@ import { getCurrentBranch, getRepoSlug } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
 import { listPRs } from '../detection/pr.ts';
 import { getDisplayName, shortId } from '../util/format.ts';
-import { listClaudeSessions, findTranscriptPath, getCustomTitleFromTranscriptTail, getPlanExecutionInfo } from '../claude/sessions.ts';
+import { findTranscriptPath, getCustomTitleFromTranscriptTail, getPlanExecutionInfo } from '../claude/sessions.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
 import type { Session } from '../store/schema.ts';
 
@@ -46,8 +46,6 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
     }
   }
 
-  const claudeSessions = listClaudeSessions();
-  const claudeIds = new Set(claudeSessions.map((s) => s.id));
 
   // Fix index issues in a single updateIndex call
   await updateIndex((index) => {
@@ -69,14 +67,13 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
         }
       }
 
-      // 2. Stuck active states — no PID and no Claude session
+      // 2. Stuck active states — no PID
       if (
         ['busy', 'idle', 'waiting'].includes(session.state) &&
-        session.pid == null &&
-        !claudeIds.has(id)
+        session.pid == null
       ) {
         session.state = 'closed';
-        fixes.push(`Closed stuck ${label} (no PID, no Claude data)`);
+        fixes.push(`Closed stuck ${label} (no PID)`);
       }
 
       // 3. Missing branches — re-detect for active sessions
