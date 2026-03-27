@@ -61,6 +61,68 @@ describe('c', () => {
         });
       });
 
+      describe('sessionId fallback via getCurrentSession', () => {
+        it('processes existing session when sessionId is undefined', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['fallback-session'] = createTestSession({
+              id: 'fallback-session',
+              directory: store.tmpDir,
+              state: 'idle',
+              last_active_at: new Date('2024-01-01'),
+            });
+          });
+
+          await handleSessionStart(undefined, store.tmpDir, null);
+
+          const s = getSession('fallback-session');
+          assert.ok(s);
+          assert.strictEqual(s.state, 'busy');
+          assert.ok(s.last_active_at.getTime() > new Date('2024-01-01').getTime());
+        });
+
+        it('stores tmux_pane when sessionId is undefined', async () => {
+          const savedTmuxPane = process.env.TMUX_PANE;
+          process.env.TMUX_PANE = '%99';
+
+          await updateIndex((idx) => {
+            idx.sessions['pane-session'] = createTestSession({
+              id: 'pane-session',
+              directory: store.tmpDir,
+              state: 'idle',
+            });
+          });
+
+          await handleSessionStart(undefined, store.tmpDir, null);
+
+          const s = getSession('pane-session');
+          assert.ok(s);
+          assert.strictEqual(s.resources.tmux_pane, '%99');
+
+          if (savedTmuxPane !== undefined) {
+            process.env.TMUX_PANE = savedTmuxPane;
+          } else {
+            delete process.env.TMUX_PANE;
+          }
+        });
+
+        it('no-op when no session matches cwd', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['other'] = createTestSession({
+              id: 'other',
+              directory: '/different/project',
+              state: 'busy',
+            });
+          });
+
+          await handleSessionStart(undefined, store.tmpDir, null);
+
+          // other session should be untouched
+          const s = getSession('other');
+          assert.ok(s);
+          assert.strictEqual(s.directory, '/different/project');
+        });
+      });
+
       describe('concurrent session support', () => {
         it('preserves existing sessions when starting a new one', async () => {
           await updateIndex((idx) => {

@@ -3,7 +3,7 @@
  */
 
 import { updateIndex, getCurrentSession } from '../store/index.ts';
-import { findTranscriptPath, getCustomTitleFromTranscriptTail, getPlanExecutionInfo } from '../claude/sessions.ts';
+import { findTranscriptPath, getCustomTitleFromTranscriptTail, getClaudeSessionTitles, getPlanExecutionInfo } from '../claude/sessions.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
 import { debugLog } from '../util/debug.ts';
@@ -42,12 +42,16 @@ export async function handleStop(
     s.last_active_at = new Date();
     pane = s.resources.tmux_pane;
 
-    // Sync tmux pane title with /rename changes from the transcript
+    // Sync tmux pane title with /rename changes
+    // Read from Claude's sessions-index.json first (updated immediately by /rename),
+    // fall back to transcript tail for sessions not yet in the index
+    const { customTitle: indexTitle } = getClaudeSessionTitles(targetId, s.project_key);
     const transcriptPath = input?.transcript_path ?? findTranscriptPath(targetId);
-    const customTitle = transcriptPath
+    const transcriptTitle = !indexTitle && transcriptPath
       ? getCustomTitleFromTranscriptTail(transcriptPath)
       : null;
-    debugLog(`[title] stop: transcriptPath=${transcriptPath} customTitle=${JSON.stringify(customTitle)} stored=${JSON.stringify(s.meta._custom_title)} pane=${pane}`);
+    const customTitle = indexTitle ?? transcriptTitle;
+    debugLog(`[title] stop: indexTitle=${JSON.stringify(indexTitle)} transcriptTitle=${JSON.stringify(transcriptTitle)} stored=${JSON.stringify(s.meta._custom_title)} pane=${pane}`);
     if (customTitle && customTitle !== s.meta._custom_title) {
       s.meta._custom_title = customTitle;
       newTitle = customTitle;

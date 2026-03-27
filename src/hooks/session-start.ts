@@ -2,7 +2,7 @@
  * SessionStart hook - register new session
  */
 
-import { updateIndex, getSession, getSessions } from '../store/index.ts';
+import { updateIndex, getSession, getSessions, getCurrentSession } from '../store/index.ts';
 import { createSession } from '../store/schema.ts';
 import { getCurrentBranch, getWorktreeInfo, getRepoSlug, listWorktrees } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
@@ -32,7 +32,13 @@ export async function handleSessionStart(
   input: HookInput | null
 ): Promise<void> {
   if (!sessionId) {
-    debugLog(`[title] session-start: no sessionId`);
+    // Claude 2.1.83+ may not send stdin for SessionStart.
+    // Fall back to getCurrentSession to process existing sessions.
+    debugLog(`[title] session-start: no sessionId — trying getCurrentSession fallback`);
+    const fallback = getCurrentSession(cwd);
+    if (fallback) {
+      await processExistingSession(fallback.id, cwd);
+    }
     return;
   }
 
@@ -71,69 +77,7 @@ export async function handleSessionStart(
   // Check if session already exists (e.g., created by `c new`)
   const existing = getSession(sessionId);
   if (existing) {
-    debugLog(`[title] session-start: existing session path`);
-    const updatedIndex = await updateIndex((index) => {
-      const s = index.sessions[sessionId];
-      if (!s) return;
-
-      s.last_active_at = new Date();
-      s.state = 'busy';
-
-      // Resolve worktree path if session was created with --worktree
-      // The cwd from hook may be the original repo, not the worktree
-      let branchCwd = cwd;
-      if (s.resources.worktree) {
-        const worktrees = listWorktrees(cwd);
-        const wt = findWorktreeMatch(s.resources.worktree, worktrees);
-        if (wt) {
-          branchCwd = wt.path;
-          // Update directory to worktree path so resume uses the correct CWD
-          // (Claude stores the transcript under the worktree's project key)
-          s.directory = wt.path;
-          s.project_key = encodeProjectKey(wt.path);
-          // Also set the branch directly from worktree info
-          if (!s.resources.branch) {
-            s.resources.branch = wt.branch;
-          }
-        }
-      }
-
-      // Store tmux pane if not already set
-      if (process.env.TMUX_PANE && !s.resources.tmux_pane) {
-        s.resources.tmux_pane = process.env.TMUX_PANE;
-      }
-
-      // Merge git info if not already set by user
-      const branch = getCurrentBranch(branchCwd);
-      if (branch && !s.resources.branch) {
-        s.resources.branch = branch;
-        if (!s.resources.jira) {
-          const jira = extractJiraFromBranch(branch);
-          if (jira) s.resources.jira = jira;
-        }
-      }
-
-      const worktree = getWorktreeInfo(branchCwd);
-      if (worktree && !s.resources.worktree) {
-        s.resources.worktree = worktree.name;
-      }
-
-      // Seed _custom_title baseline to prevent stop hook from treating
-      // a pre-existing /rename title as new on the first stop after resume
-      const transcriptPath = findTranscriptPath(sessionId);
-      const customTitle = transcriptPath
-        ? getCustomTitleFromTranscriptTail(transcriptPath)
-        : null;
-      if (customTitle) {
-        s.meta._custom_title = customTitle;
-      }
-      debugLog(`[title] session-start: seeded _custom_title=${JSON.stringify(customTitle)} tmux_pane=${s.resources.tmux_pane}`);
-    });
-
-    const s = updatedIndex.sessions[sessionId];
-    if (s) {
-      writeCacheFromSession(sessionId, s, cwd);
-    }
+    await processExistingSession(sessionId, cwd);
     return;
   }
 
@@ -188,6 +132,82 @@ export async function handleSessionStart(
   }
 
   writeCacheFromSession(sessionId, session, cwd);
+}
+
+/**
+ * Process an existing session on resume/start.
+ * Handles git detection, tmux pane storage, _custom_title seeding,
+ * tmux pane title, and status cache writing.
+ */
+async function processExistingSession(sessionId: string, cwd: string): Promise<void> {
+  debugLog(`[title] session-start: existing session path for ${sessionId}`);
+  const updatedIndex = await updateIndex((index) => {
+    const s = index.sessions[sessionId];
+    if (!s) return;
+
+    s.last_active_at = new Date();
+    s.state = 'busy';
+
+    // Resolve worktree path if session was created with --worktree
+    // The cwd from hook may be the original repo, not the worktree
+    let branchCwd = cwd;
+    if (s.resources.worktree) {
+      const worktrees = listWorktrees(cwd);
+      const wt = findWorktreeMatch(s.resources.worktree, worktrees);
+      if (wt) {
+        branchCwd = wt.path;
+        // Update directory to worktree path so resume uses the correct CWD
+        // (Claude stores the transcript under the worktree's project key)
+        s.directory = wt.path;
+        s.project_key = encodeProjectKey(wt.path);
+        // Also set the branch directly from worktree info
+        if (!s.resources.branch) {
+          s.resources.branch = wt.branch;
+        }
+      }
+    }
+
+    // Store tmux pane if not already set
+    if (process.env.TMUX_PANE && !s.resources.tmux_pane) {
+      s.resources.tmux_pane = process.env.TMUX_PANE;
+    }
+
+    // Merge git info if not already set by user
+    const branch = getCurrentBranch(branchCwd);
+    if (branch && !s.resources.branch) {
+      s.resources.branch = branch;
+      if (!s.resources.jira) {
+        const jira = extractJiraFromBranch(branch);
+        if (jira) s.resources.jira = jira;
+      }
+    }
+
+    const worktree = getWorktreeInfo(branchCwd);
+    if (worktree && !s.resources.worktree) {
+      s.resources.worktree = worktree.name;
+    }
+
+    // Seed _custom_title baseline to prevent stop hook from treating
+    // a pre-existing /rename title as new on the first stop after resume
+    const transcriptPath = findTranscriptPath(sessionId);
+    const customTitle = transcriptPath
+      ? getCustomTitleFromTranscriptTail(transcriptPath)
+      : null;
+    if (customTitle) {
+      s.meta._custom_title = customTitle;
+    }
+    debugLog(`[title] session-start: seeded _custom_title=${JSON.stringify(customTitle)} tmux_pane=${s.resources.tmux_pane}`);
+  });
+
+  const s = updatedIndex.sessions[sessionId];
+  if (s) {
+    // Set tmux pane title to custom title or session name
+    const displayTitle = s.meta._custom_title || s.name;
+    if (displayTitle) {
+      setTmuxPaneTitle(displayTitle, s.resources.tmux_pane);
+    }
+    writeCacheFromSession(sessionId, s, cwd);
+  }
 }
 
 /**

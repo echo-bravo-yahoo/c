@@ -3,7 +3,7 @@
  */
 
 import { updateIndex, getCurrentSession, getSession } from '../store/index.ts';
-import { findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.ts';
+import { findTranscriptPath, getCustomTitleFromTranscriptTail, getClaudeSessionTitles } from '../claude/sessions.ts';
 import { registerNewSession } from './session-start.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
@@ -43,11 +43,15 @@ export async function handleUserPrompt(
     s.last_active_at = new Date();
 
     // Sync tmux pane title with /rename changes since last stop
+    // Read from Claude's sessions-index.json first (updated immediately by /rename),
+    // fall back to transcript tail for sessions not yet in the index
+    const { customTitle: indexTitle } = getClaudeSessionTitles(targetId, s.project_key);
     const transcriptPath = findTranscriptPath(targetId);
-    const customTitle = transcriptPath
+    const transcriptTitle = !indexTitle && transcriptPath
       ? getCustomTitleFromTranscriptTail(transcriptPath)
       : null;
-    debugLog(`[title] user-prompt: transcriptPath=${transcriptPath} customTitle=${JSON.stringify(customTitle)} stored=${JSON.stringify(s.meta._custom_title)} pane=${s.resources.tmux_pane}`);
+    const customTitle = indexTitle ?? transcriptTitle;
+    debugLog(`[title] user-prompt: indexTitle=${JSON.stringify(indexTitle)} transcriptTitle=${JSON.stringify(transcriptTitle)} stored=${JSON.stringify(s.meta._custom_title)} pane=${s.resources.tmux_pane}`);
     if (customTitle && customTitle !== s.meta._custom_title) {
       s.meta._custom_title = customTitle;
       newTitle = customTitle;
