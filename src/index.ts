@@ -295,7 +295,7 @@ export function createProgram(): Command {
   program
     .command('find <query>')
     .alias('f')
-    .description('Search sessions')
+    .description('Search sessions by substring match across all data (id, name, title, directory, state, branch, worktree, pr, jira, tags, and meta)')
     .option('--json', 'Output as JSON')
     .action((query, options) => {
       findCommand(query, { json: options.json });
