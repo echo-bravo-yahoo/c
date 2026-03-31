@@ -329,6 +329,16 @@ export function createProgram(): Command {
       findCommand(query, { json: options.json });
     });
 
+  // Adopt
+  program
+    .command('adopt <session-id>')
+    .description('Promote an ephemeral session to tracked')
+    .option('--name <name>', 'Set session name')
+    .option('--json', 'Output as JSON')
+    .action(async (sessionId, options) => {
+      await adoptCommand(sessionId, { name: options.name, json: options.json });
+    });
+
   // Dir
   program
     .command('dir [id]')
