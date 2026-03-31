@@ -88,6 +88,13 @@ export function getCurrentBranch(cwd?: string): string | undefined {
 }
 
 /**
+ * Check if a git repo has at least one commit (HEAD is resolvable)
+ */
+export function hasCommits(cwd?: string): boolean {
+  return !!exec('git rev-parse HEAD', { cwd });
+}
+
+/**
  * Get the git root directory
  */
 export function getGitRoot(cwd?: string): string | undefined {

@@ -7,6 +7,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
+import { execSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -141,6 +142,18 @@ describe('c', () => {
           const result = resolveWorktreeConfig('my-feature', true, '/some/path');
           assert.strictEqual(result.useWorktree, false);
           assert.strictEqual(result.worktreeName, undefined);
+        });
+
+        it('disables worktree in a git repo with no commits', () => {
+          const dir = mkdtempSync(join(tmpdir(), 'c-empty-repo-'));
+          try {
+            execSync('git init', { cwd: dir, stdio: 'ignore' });
+            const result = resolveWorktreeConfig('my-feature', false, dir);
+            assert.strictEqual(result.useWorktree, false);
+            assert.strictEqual(result.worktreeName, undefined);
+          } finally {
+            rmSync(dir, { recursive: true, force: true });
+          }
         });
       });
 

@@ -9,7 +9,7 @@ import { createSession } from '../store/schema.ts';
 import { encodeProjectKey } from '../claude/sessions.ts';
 import { shortId } from '../util/format.ts';
 import { execReplace, setTmuxPaneTitle } from '../util/exec.ts';
-import { getGitRoot } from '../detection/git.ts';
+import { getGitRoot, hasCommits } from '../detection/git.ts';
 import { sanitizeWorktreeName } from '../util/sanitize.ts';
 import type { SessionMeta } from '../store/schema.ts';
 
@@ -54,7 +54,8 @@ export function resolveWorktreeConfig(
   cwd: string
 ): { useWorktree: boolean; worktreeName: string | undefined } {
   const inGitRepo = !!getGitRoot(cwd);
-  const useWorktree = !!(name && !noWorktree && inGitRepo);
+  const repoHasCommits = inGitRepo && hasCommits(cwd);
+  const useWorktree = !!(name && !noWorktree && repoHasCommits);
   const worktreeName = useWorktree ? sanitizeWorktreeName(name!) : undefined;
   return { useWorktree, worktreeName };
 }
@@ -104,6 +105,8 @@ export async function newCommand(name: string | undefined, options: NewOptions):
     session.resources.worktree = worktreeName;
   } else if (name && !options.noWorktree && !getGitRoot(cwd)) {
     console.log(chalk.dim('Not in a git repository. Skipping worktree creation.'));
+  } else if (name && !options.noWorktree && !hasCommits(cwd)) {
+    console.log(chalk.dim('Repository has no commits. Skipping worktree creation.'));
   }
 
   // Populate meta
