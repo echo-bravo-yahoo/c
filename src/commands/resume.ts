@@ -278,6 +278,11 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
   console.log(chalk.dim(`Resuming session ${displayName} in ${session.directory}...`));
   if (displayName) setTmuxPaneTitle(displayName);
 
+  // Set fork parent env var so session-start hook registers the forked session
+  if (options.forkSession) {
+    process.env.C_FORK_PARENT = session.id;
+  }
+
   const resumeArgs = buildResumeArgs(session.id, options);
 
   let exitCode: number;
@@ -299,6 +304,8 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
     });
     process.exit(1);
   }
+
+  delete process.env.C_FORK_PARENT;
 
   if (exitCode !== 0) {
     await updateIndex((index) => {

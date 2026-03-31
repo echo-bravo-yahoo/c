@@ -493,6 +493,11 @@ export function formatSessionDetails(session: Session): string {
   lines.push(chalk.dim('  Pane: ') + (session.resources.tmux_pane ?? '–'));
   lines.push(chalk.dim('  Created: ') + session.created_at.toLocaleString());
   lines.push(chalk.dim('  Last active: ') + session.last_active_at.toLocaleString());
+  if (session.parent_session_id && session.meta._fork_origin) {
+    const parentSession = getAllSessions().find(s => s.id === session.parent_session_id);
+    const parentLabel = parentSession ? (getDisplayName(parentSession) || shortId(parentSession.id)) : shortId(session.parent_session_id);
+    lines.push(chalk.dim('  Forked from: ') + chalk.cyan(parentLabel));
+  }
 
   // Duration
   const duration = session.last_active_at.getTime() - session.created_at.getTime();

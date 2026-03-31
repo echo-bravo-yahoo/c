@@ -47,6 +47,27 @@ export async function handleSessionStart(
   // avoid phantom index entries. New sessions (source="startup") are always
   // registered, even when started from within a resumed session's environment.
   if (input?.source === 'resume' && !getSession(sessionId)) {
+    // Fork detection: C_FORK_PARENT is set by `c fork` or `c resume --fork-session`
+    const forkParent = process.env.C_FORK_PARENT;
+    if (forkParent) {
+      debugLog(`[hook] session-start: fork detected, parent=${forkParent}`);
+      const session = await registerNewSession(sessionId, cwd);
+      if (session) {
+        const parent = getSession(forkParent);
+        session.parent_session_id = forkParent;
+        session.meta._fork_origin = 'true';
+        if (parent) {
+          for (const key of ['branch', 'worktree', 'jira', 'pr'] as const) {
+            if (parent.resources[key]) session.resources[key] = parent.resources[key];
+          }
+        }
+        await updateIndex((index) => { index.sessions[sessionId] = session; });
+        if (session.name || session.meta._custom_title) {
+          setTmuxPaneTitle(session.meta._custom_title || session.name!, session.resources.tmux_pane);
+        }
+      }
+      return;
+    }
     debugLog(`[title] session-start: skipping unknown session ${sessionId} during resume`);
     return;
   }

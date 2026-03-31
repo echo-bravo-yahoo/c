@@ -303,6 +303,63 @@ describe('c', () => {
         });
       });
 
+      describe('fork detection via C_FORK_PARENT', () => {
+        let savedForkParent: string | undefined;
+
+        beforeEach(() => {
+          savedForkParent = process.env.C_FORK_PARENT;
+        });
+
+        afterEach(() => {
+          if (savedForkParent !== undefined) {
+            process.env.C_FORK_PARENT = savedForkParent;
+          } else {
+            delete process.env.C_FORK_PARENT;
+          }
+        });
+
+        it('registers forked session when C_FORK_PARENT is set during resume', async () => {
+          const parentId = 'parent-session';
+          const forkId = 'forked-session';
+
+          await updateIndex((idx) => {
+            idx.sessions[parentId] = createTestSession({
+              id: parentId,
+              state: 'idle',
+              resources: { branch: 'main', jira: 'PROJ-123' },
+            });
+          });
+
+          process.env.C_FORK_PARENT = parentId;
+
+          await handleSessionStart(forkId, '/some/project', {
+            session_id: forkId,
+            cwd: '/some/project',
+            source: 'resume',
+          });
+
+          const s = getSession(forkId);
+          assert.ok(s, 'forked session should be registered');
+          assert.strictEqual(s.state, 'busy');
+          assert.strictEqual(s.parent_session_id, parentId);
+          assert.strictEqual(s.meta._fork_origin, 'true');
+          assert.strictEqual(s.resources.branch, 'main');
+          assert.strictEqual(s.resources.jira, 'PROJ-123');
+        });
+
+        it('still skips phantom sessions when C_FORK_PARENT is not set', async () => {
+          delete process.env.C_FORK_PARENT;
+
+          await handleSessionStart('phantom-id', '/some/project', {
+            session_id: 'phantom-id',
+            cwd: '/some/project',
+            source: 'resume',
+          });
+
+          assert.strictEqual(getSession('phantom-id'), undefined);
+        });
+      });
+
       describe('registerNewSession', () => {
         it('creates a session with busy state', async () => {
           await registerNewSession('reg-session', '/some/project');

@@ -28,6 +28,8 @@ import { execCommand } from './commands/exec.ts';
 import { openCommand } from './commands/open.ts';
 import { logCommand } from './commands/log.ts';
 import { memoryCommand } from './commands/memory.ts';
+import { adoptCommand } from './commands/adopt.ts';
+import { forkCommand } from './commands/fork.ts';
 import { planCommand } from './commands/plan.ts';
 import { statsCommand } from './commands/stats.ts';
 import { tmuxStatusCommand } from './commands/tmux/status.ts';
@@ -189,6 +191,32 @@ export function createProgram(): Command {
     { flags: '--effort <level>', description: 'Effort level (low, medium, high)' },
     { flags: '--agent <agent>', description: 'Named agent' },
     { flags: '--fork-session', description: 'Create a new session ID on resume' },
+  ]);
+
+  // Fork
+  const forkCmd = program
+    .command('fork <id...>')
+    .description('Fork a session (new ID with copied transcript)')
+    .option('--name <name>', 'Name the forked session')
+    .allowUnknownOption()
+    .action(async (idParts, options) => {
+      const id = idParts.join(' ');
+      const passthroughArgs = parsePassthroughArgs();
+      await forkCommand(id, {
+        name: options.name,
+        model: options.model,
+        permissionMode: options.permissionMode,
+        effort: options.effort,
+        agent: options.agent,
+        passthroughArgs: passthroughArgs.length ? passthroughArgs : undefined,
+      });
+    });
+
+  addClaudeOptions(forkCmd, [
+    { flags: '--model <model>', description: 'Claude model to use' },
+    { flags: '--permission-mode <mode>', description: 'Permission mode' },
+    { flags: '--effort <level>', description: 'Effort level (low, medium, high)' },
+    { flags: '--agent <agent>', description: 'Named agent' },
   ]);
 
   // Archive
