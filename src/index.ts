@@ -21,6 +21,7 @@ import { nameCommand } from './commands/name.ts';
 import { metaCommand } from './commands/meta.ts';
 import { findCommand } from './commands/find.ts';
 import { repairCommand } from './commands/repair.ts';
+import { refreshCommand } from './commands/refresh.ts';
 import { installRepairSchedule, uninstallRepairSchedule } from './commands/repair-schedule.ts';
 import { dirCommand } from './commands/dir.ts';
 import { initCommand } from './commands/init.ts';
@@ -434,6 +435,26 @@ export function createProgram(): Command {
       if (options.installSchedule) return installRepairSchedule();
       if (options.uninstallSchedule) return uninstallRepairSchedule();
       await repairCommand(id, { thorough: options.thorough, quiet: options.quiet });
+    });
+
+  // Refresh
+  program
+    .command('refresh <id...>')
+    .description('Check session health: PR status, branch divergence, relevance')
+    .option('--deep', 'Include Claude-powered relevance analysis')
+    .option('--model <model>', 'Model for --deep analysis (default: sonnet)')
+    .option('--act', 'Take actions: create tasks, update links')
+    .option('--json', 'Output report as JSON')
+    .option('--quiet', 'Suppress output (cron mode, still stores report)')
+    .action(async (idParts, options) => {
+      const id = idParts.join(' ');
+      await refreshCommand(id, {
+        deep: options.deep,
+        model: options.model,
+        act: options.act,
+        json: options.json,
+        quiet: options.quiet,
+      });
     });
 
   // tmux integration

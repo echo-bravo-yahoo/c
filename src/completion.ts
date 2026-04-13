@@ -27,6 +27,7 @@ const SESSION_COMMANDS = [
   'open',
   'log',
   'memory',
+  'refresh',
 ];
 
 // All subcommands
@@ -55,6 +56,7 @@ const SUBCOMMANDS = [
   'memory',
   'stats',
   'repair',
+  'refresh',
   'completion',
   'tmux-status',
   'tmux-pick',
@@ -82,6 +84,7 @@ const COMMAND_FLAGS: Record<string, string[]> = {
   memory:     ['--raw'],
   delete:     ['--orphans', '--closed'],
   bankruptcy: ['--skip'],
+  refresh:    ['--deep', '--model', '--act', '--json', '--quiet'],
 };
 
 /**
