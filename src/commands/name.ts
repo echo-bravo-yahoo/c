@@ -3,17 +3,19 @@
  */
 
 import chalk from 'chalk';
-import { updateIndex, getSession } from '../store/index.ts';
+import { resolveSession, updateIndex } from '../store/index.ts';
+import { ambiguityError } from '../util/format.ts';
 import { findTranscriptPath, getCustomTitleFromTranscriptTail } from '../claude/sessions.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
 
 export async function nameCommand(idOrPrefix: string, name: string): Promise<void> {
-  const session = getSession(idOrPrefix);
+  const result = resolveSession(idOrPrefix);
 
-  if (!session) {
-    console.error(chalk.red(`Session not found: ${idOrPrefix}`));
+  if (!result.session) {
+    console.error(chalk.red(ambiguityError(idOrPrefix, result.ambiguity)));
     process.exit(1);
   }
+  const session = result.session;
 
   await updateIndex((index) => {
     const s = index.sessions[session!.id];

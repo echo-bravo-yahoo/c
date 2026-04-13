@@ -8,7 +8,8 @@ import { execSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { marked, type MarkedExtension } from 'marked';
 import { markedTerminal } from 'marked-terminal';
-import { getSession, getCurrentSession } from '../store/index.ts';
+import { resolveSession, getCurrentSession } from '../store/index.ts';
+import { ambiguityError } from '../util/format.ts';
 import { PLANS_DIR } from '../claude/sessions.ts';
 import { exec } from '../util/exec.ts';
 
@@ -23,13 +24,20 @@ export interface PlanOptions {
 }
 
 export function planCommand(idOrPrefix?: string, options?: PlanOptions): void {
-  const session = idOrPrefix ? getSession(idOrPrefix) : getCurrentSession();
-  if (!session) {
-    const msg = idOrPrefix
-      ? `Session not found: ${idOrPrefix}.`
-      : 'No active session.';
-    console.error(chalk.red(msg));
-    process.exit(1);
+  let session;
+  if (idOrPrefix) {
+    const result = resolveSession(idOrPrefix);
+    if (!result.session) {
+      console.error(chalk.red(ambiguityError(idOrPrefix, result.ambiguity)));
+      process.exit(1);
+    }
+    session = result.session;
+  } else {
+    session = getCurrentSession();
+    if (!session) {
+      console.error(chalk.red('No active session.'));
+      process.exit(1);
+    }
   }
 
   const slug = session.resources.plan;

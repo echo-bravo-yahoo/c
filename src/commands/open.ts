@@ -5,7 +5,8 @@
 import chalk from 'chalk';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { getSession, getCurrentSession } from '../store/index.ts';
+import { resolveSession, getCurrentSession } from '../store/index.ts';
+import { ambiguityError } from '../util/format.ts';
 import { PLANS_DIR } from '../claude/sessions.ts';
 import { exec } from '../util/exec.ts';
 
@@ -13,10 +14,20 @@ export function openCommand(
   idOrPrefix?: string,
   options?: { pr?: boolean; jira?: boolean; plan?: boolean }
 ): void {
-  const session = idOrPrefix ? getSession(idOrPrefix) : getCurrentSession();
-  if (!session) {
-    console.error(chalk.red(idOrPrefix ? `Session not found: ${idOrPrefix}.` : 'No active session.'));
-    process.exit(1);
+  let session;
+  if (idOrPrefix) {
+    const result = resolveSession(idOrPrefix);
+    if (!result.session) {
+      console.error(chalk.red(ambiguityError(idOrPrefix, result.ambiguity)));
+      process.exit(1);
+    }
+    session = result.session;
+  } else {
+    session = getCurrentSession();
+    if (!session) {
+      console.error(chalk.red('No active session.'));
+      process.exit(1);
+    }
   }
 
   if (options?.plan) {

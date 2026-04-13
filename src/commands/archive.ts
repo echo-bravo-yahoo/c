@@ -3,8 +3,8 @@
  */
 
 import chalk from 'chalk';
-import { updateIndex, getSession, getCurrentSession } from '../store/index.ts';
-import { getDisplayName, shortId } from '../util/format.ts';
+import { resolveSession, updateIndex, getCurrentSession } from '../store/index.ts';
+import { ambiguityError, getDisplayName, shortId } from '../util/format.ts';
 import { signalSession } from '../util/process.ts';
 
 export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
@@ -32,12 +32,13 @@ export async function archiveCommand(idsOrPrefixes?: string[]): Promise<void> {
 
   // Multiple IDs
   for (const idOrPrefix of idsOrPrefixes) {
-    const session = getSession(idOrPrefix);
+    const result = resolveSession(idOrPrefix);
 
-    if (!session) {
-      console.error(chalk.red(`Session not found: ${idOrPrefix}.`));
+    if (!result.session) {
+      console.error(chalk.red(ambiguityError(idOrPrefix, result.ambiguity)));
       continue;
     }
+    const session = result.session;
 
     await signalSession(session.pid);
 

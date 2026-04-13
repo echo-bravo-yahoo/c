@@ -5,12 +5,12 @@
 import { existsSync, mkdirSync, renameSync, cpSync } from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
-import { getSession, findSessions, findSessionsByName, findSessionsByTitle, updateIndex } from '../store/index.ts';
+import { resolveSession, getSession, updateIndex } from '../store/index.ts';
 import { getClaudeSession, findClaudeSessionIdsByTitle, encodeProjectKey, PROJECTS_DIR } from '../claude/sessions.ts';
 import { extractRepoRoot } from '../detection/git.ts';
 import { createSession } from '../store/schema.ts';
 import { exec, spawnInteractive, setTmuxPaneTitle } from '../util/exec.ts';
-import { getDisplayName, shortId, highlightId } from '../util/format.ts';
+import { getDisplayName, shortId, ambiguityError } from '../util/format.ts';
 import type { Session } from '../store/schema.ts';
 
 export interface ResumeOptions {
@@ -23,81 +23,58 @@ export interface ResumeOptions {
 }
 
 /**
- * Multi-fallback session lookup: prefix → name → Claude title → Claude storage adoption.
+ * Multi-fallback session lookup: getSession (id/prefix/name/title) → Claude title → Claude storage adoption.
  * Returns the resolved session or undefined. Calls process.exit(1) on ambiguous matches.
  */
 export async function resolveSessionForResume(idOrPrefix: string): Promise<Session | undefined> {
-  let session = getSession(idOrPrefix);
+  const result = resolveSession(idOrPrefix);
+  let session = result.session;
 
+  // Report ambiguity from store-level resolution
+  if (!session && result.ambiguity) {
+    console.error(chalk.red(ambiguityError(idOrPrefix, result.ambiguity)));
+    process.exit(1);
+  }
+
+  // Try Claude's customTitle fallback (reads Claude's on-disk session files)
   if (!session) {
-    // Try exact name match in c's store
-    const nameMatches = findSessionsByName(idOrPrefix);
-    if (nameMatches.length === 1) {
-      session = nameMatches[0];
-    } else if (nameMatches.length >= 2) {
-      const ids = nameMatches.map(m => shortId(m.id));
+    const claudeIds = findClaudeSessionIdsByTitle(idOrPrefix);
+    const resolved = claudeIds
+      .map(id => getSession(id))
+      .filter((s): s is NonNullable<typeof s> => s != null);
+
+    if (resolved.length === 1) {
+      session = resolved[0];
+    } else if (resolved.length >= 2) {
+      const ids = resolved.map(m => shortId(m.id));
       console.error(chalk.red(`Multiple sessions named "${idOrPrefix}": ${ids.join(', ')}.`));
       process.exit(1);
     }
+  }
 
-    // Try cached _custom_title from transcript (covers display name gap)
-    if (!session) {
-      const titleMatches = findSessionsByTitle(idOrPrefix);
-      if (titleMatches.length === 1) {
-        session = titleMatches[0];
-      } else if (titleMatches.length >= 2) {
-        const ids = titleMatches.map(m => shortId(m.id));
-        console.error(chalk.red(`Multiple sessions titled "${idOrPrefix}": ${ids.join(', ')}.`));
-        process.exit(1);
-      }
+  // Fall back to Claude's storage for sessions not in c's index
+  if (!session) {
+    const claudeFallback = getClaudeSession(idOrPrefix);
+    if (claudeFallback) {
+      const newSession = createSession(
+        claudeFallback.id,
+        claudeFallback.directory,
+        claudeFallback.projectKey,
+        claudeFallback.modifiedAt
+      );
+      newSession.state = 'idle';
+      await updateIndex((index) => {
+        index.sessions[newSession.id] = newSession;
+      });
+      session = newSession;
+      console.error(chalk.dim(`Adopted session from Claude's storage.`));
     }
+  }
 
-    // Try Claude's customTitle fallback
-    if (!session) {
-      const claudeIds = findClaudeSessionIdsByTitle(idOrPrefix);
-      const resolved = claudeIds
-        .map(id => getSession(id))
-        .filter((s): s is NonNullable<typeof s> => s != null);
-
-      if (resolved.length === 1) {
-        session = resolved[0];
-      } else if (resolved.length >= 2) {
-        const ids = resolved.map(m => shortId(m.id));
-        console.error(chalk.red(`Multiple sessions named "${idOrPrefix}": ${ids.join(', ')}.`));
-        process.exit(1);
-      }
-    }
-
-    // Fall back to Claude's storage for sessions not in c's index
-    if (!session) {
-      const claudeFallback = getClaudeSession(idOrPrefix);
-      if (claudeFallback) {
-        const newSession = createSession(
-          claudeFallback.id,
-          claudeFallback.directory,
-          claudeFallback.projectKey,
-          claudeFallback.modifiedAt
-        );
-        newSession.state = 'idle';
-        await updateIndex((index) => {
-          index.sessions[newSession.id] = newSession;
-        });
-        session = newSession;
-        console.error(chalk.dim(`Adopted session from Claude's storage.`));
-      }
-    }
-
-    // No match found — show prefix collision or not-found error
-    if (!session) {
-      const matches = findSessions(idOrPrefix);
-      if (matches.length >= 2) {
-        const ids = matches.map(m => highlightId(shortId(m.id), idOrPrefix.length));
-        console.error(chalk.red(`Multiple sessions starting with ${idOrPrefix}: ${ids.join(', ')}.`));
-      } else {
-        console.error(chalk.red(`Session not found: ${idOrPrefix}.`));
-      }
-      process.exit(1);
-    }
+  // No match found
+  if (!session) {
+    console.error(chalk.red(`Session not found: ${idOrPrefix}.`));
+    process.exit(1);
   }
 
   return session;

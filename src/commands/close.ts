@@ -3,8 +3,8 @@
  */
 
 import chalk from 'chalk';
-import { getSession, getCurrentSession, updateIndex } from '../store/index.ts';
-import { getDisplayName } from '../util/format.ts';
+import { resolveSession, getCurrentSession, updateIndex } from '../store/index.ts';
+import { ambiguityError, getDisplayName } from '../util/format.ts';
 import { signalSession } from '../util/process.ts';
 
 export async function closeCommand(
@@ -43,12 +43,13 @@ export async function closeCommand(
 
   // Multiple IDs
   for (const idOrPrefix of idsOrPrefixes) {
-    const session = getSession(idOrPrefix);
+    const result = resolveSession(idOrPrefix);
 
-    if (!session) {
-      console.error(chalk.red(`Session not found: ${idOrPrefix}.`));
+    if (!result.session) {
+      console.error(chalk.red(ambiguityError(idOrPrefix, result.ambiguity)));
       continue;
     }
+    const session = result.session;
 
     if (session.state === 'closed' || session.state === 'archived') {
       console.error(chalk.red(`Session ${getDisplayName(session)} is already ${session.state}.`));

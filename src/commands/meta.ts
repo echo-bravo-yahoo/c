@@ -3,8 +3,8 @@
  */
 
 import chalk from 'chalk';
-import { updateIndex, getSession, getCurrentSession } from '../store/index.ts';
-import { getDisplayName } from '../util/format.ts';
+import { resolveSession, updateIndex, getCurrentSession } from '../store/index.ts';
+import { ambiguityError, getDisplayName } from '../util/format.ts';
 
 export async function metaCommand(keyValue: string, idOrPrefix?: string): Promise<void> {
   const eqIndex = keyValue.indexOf('=');
@@ -19,17 +19,18 @@ export async function metaCommand(keyValue: string, idOrPrefix?: string): Promis
   let session;
 
   if (idOrPrefix) {
-    session = getSession(idOrPrefix);
+    const result = resolveSession(idOrPrefix);
+    if (!result.session) {
+      console.error(chalk.red(ambiguityError(idOrPrefix, result.ambiguity)));
+      process.exit(1);
+    }
+    session = result.session;
   } else {
     session = getCurrentSession();
-  }
-
-  if (!session) {
-    const msg = idOrPrefix
-      ? `Session not found: ${idOrPrefix}`
-      : 'No active session in current directory';
-    console.error(chalk.red(msg));
-    process.exit(1);
+    if (!session) {
+      console.error(chalk.red('No active session in current directory'));
+      process.exit(1);
+    }
   }
 
   await updateIndex((index) => {

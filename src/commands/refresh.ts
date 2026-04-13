@@ -4,8 +4,8 @@
 
 import chalk from 'chalk';
 import { existsSync } from 'node:fs';
-import { getSession, updateIndex } from '../store/index.ts';
-import { getDisplayName, shortId } from '../util/format.ts';
+import { getSession, resolveSession, updateIndex } from '../store/index.ts';
+import { ambiguityError, getDisplayName, shortId } from '../util/format.ts';
 import { scoutLinks } from '../refresh/scout.ts';
 import { checkPR } from '../refresh/checks/pr.ts';
 import { checkBranch } from '../refresh/checks/branch.ts';
@@ -24,11 +24,12 @@ export interface RefreshOptions {
 }
 
 export async function refreshCommand(idOrPrefix: string, options: RefreshOptions = {}): Promise<void> {
-  const session = getSession(idOrPrefix);
-  if (!session) {
-    console.error(chalk.red(`Session not found: ${idOrPrefix}`));
+  const result = resolveSession(idOrPrefix);
+  if (!result.session) {
+    console.error(chalk.red(ambiguityError(idOrPrefix, result.ambiguity)));
     process.exit(1);
   }
+  const session = result.session;
 
   const dirExists = existsSync(session.directory);
   if (!dirExists && !options.quiet) {

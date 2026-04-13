@@ -3,7 +3,8 @@
  */
 
 import chalk from 'chalk';
-import { readIndex, updateIndex, getSession } from '../store/index.ts';
+import { readIndex, resolveSession, updateIndex } from '../store/index.ts';
+import { ambiguityError } from '../util/format.ts';
 import { signalSession } from '../util/process.ts';
 
 export async function bankruptcyCommand(options: { skip?: string[] }): Promise<void> {
@@ -13,11 +14,11 @@ export async function bankruptcyCommand(options: { skip?: string[] }): Promise<v
   const skipIds = new Set<string>();
   if (options.skip) {
     for (const idOrPrefix of options.skip) {
-      const session = getSession(idOrPrefix);
-      if (session) {
-        skipIds.add(session.id);
+      const result = resolveSession(idOrPrefix);
+      if (result.session) {
+        skipIds.add(result.session.id);
       } else {
-        console.error(chalk.red(`Skip target not found: ${idOrPrefix}.`));
+        console.error(chalk.red(ambiguityError(idOrPrefix, result.ambiguity)));
       }
     }
   }

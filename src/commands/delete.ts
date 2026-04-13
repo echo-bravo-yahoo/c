@@ -3,8 +3,8 @@
  */
 
 import chalk from 'chalk';
-import { updateIndex, getSession, getSessions } from '../store/index.ts';
-import { getDisplayName, shortId } from '../util/format.ts';
+import { resolveSession, updateIndex, getSessions } from '../store/index.ts';
+import { ambiguityError, getDisplayName, shortId } from '../util/format.ts';
 import { signalSession } from '../util/process.ts';
 import type { Session } from '../store/schema.ts';
 
@@ -31,11 +31,12 @@ export async function deleteCommand(
   }
 
   for (const idOrPrefix of idsOrPrefixes) {
-    const session = getSession(idOrPrefix);
-    if (!session) {
-      console.error(chalk.red(`Session not found: ${idOrPrefix}.`));
+    const result = resolveSession(idOrPrefix);
+    if (!result.session) {
+      console.error(chalk.red(ambiguityError(idOrPrefix, result.ambiguity)));
       continue;
     }
+    const session = result.session;
     await deleteOne(session);
     console.log(chalk.green(`Deleted "${getDisplayName(session) || shortId(session.id)}" (${shortId(session.id)}).`));
   }

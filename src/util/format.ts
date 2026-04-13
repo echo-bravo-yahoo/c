@@ -7,6 +7,7 @@ import type { Session, SessionState } from '../store/schema.ts';
 import { getClaudeSessionTitles, getClaudeSession, listClaudeSessions, readClaudeSessionIndex, PLANS_DIR } from '../claude/sessions.ts';
 import { join } from 'node:path';
 import { getAllSessions } from '../store/index.ts';
+import type { SessionMatch } from '../store/index.ts';
 import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.ts';
 import { getRepoSlug } from '../detection/git.ts';
 import { buildJiraUrl } from '../detection/jira.ts';
@@ -839,4 +840,25 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
       console.log(formatSessionLine(row.session, layout, row.depth, prefixMap, getSlug(row.session.directory), sizeMap, bottomUp, skip));
     }
   }
+}
+
+/**
+ * Format an error message for a failed session resolution.
+ * Uses ambiguity info from resolveSession when available.
+ */
+export function ambiguityError(
+  idOrPrefix: string,
+  ambiguity: SessionMatch['ambiguity'],
+): string {
+  if (!ambiguity) {
+    return `Session not found: ${idOrPrefix}.`;
+  }
+
+  const ids = ambiguity.matches.map(m => shortId(m.id));
+  const labels: Record<string, string> = {
+    id: `Multiple sessions starting with ${idOrPrefix}`,
+    name: `Multiple sessions named "${idOrPrefix}"`,
+    title: `Multiple sessions titled "${idOrPrefix}"`,
+  };
+  return `${labels[ambiguity.field]}: ${ids.join(', ')}.`;
 }

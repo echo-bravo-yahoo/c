@@ -235,25 +235,65 @@ export async function updateIndex(fn: (index: IndexFile) => IndexFile | void): P
 /**
  * Get a session by ID (supports partial ID matching)
  */
-export function getSession(idOrPrefix: string): Session | undefined {
+export type SessionMatch =
+  | { session: Session; ambiguity?: undefined }
+  | { session: undefined; ambiguity: { field: 'id' | 'name' | 'title'; matches: Session[] } }
+  | { session: undefined; ambiguity?: undefined };
+
+/**
+ * Resolve a session by ID (exact/prefix), name, or _custom_title.
+ * Returns the match and, on failure, any ambiguity info for error reporting.
+ */
+export function resolveSession(idOrPrefix: string): SessionMatch {
   const index = readIndex();
 
-  // Exact match first
+  // Exact ID match
   if (index.sessions[idOrPrefix]) {
-    return index.sessions[idOrPrefix];
+    return { session: index.sessions[idOrPrefix] };
   }
 
-  // Prefix match (case-insensitive)
+  // ID prefix match (case-insensitive)
   const lower = idOrPrefix.toLowerCase();
-  const matches = Object.values(index.sessions).filter(
+  const prefixMatches = Object.values(index.sessions).filter(
     (s) => s.id.toLowerCase().startsWith(lower)
   );
 
-  if (matches.length === 1) {
-    return matches[0];
+  if (prefixMatches.length === 1) {
+    return { session: prefixMatches[0] };
+  }
+  if (prefixMatches.length >= 2) {
+    return { session: undefined, ambiguity: { field: 'id', matches: prefixMatches } };
   }
 
-  return undefined;
+  // Exact name match
+  const nameMatches = Object.values(index.sessions).filter(
+    (s) => s.name === idOrPrefix
+  );
+
+  if (nameMatches.length === 1) {
+    return { session: nameMatches[0] };
+  }
+  if (nameMatches.length >= 2) {
+    return { session: undefined, ambiguity: { field: 'name', matches: nameMatches } };
+  }
+
+  // Cached _custom_title match (from /rename in transcripts)
+  const titleMatches = Object.values(index.sessions).filter(
+    (s) => s.meta._custom_title === idOrPrefix
+  );
+
+  if (titleMatches.length === 1) {
+    return { session: titleMatches[0] };
+  }
+  if (titleMatches.length >= 2) {
+    return { session: undefined, ambiguity: { field: 'title', matches: titleMatches } };
+  }
+
+  return { session: undefined };
+}
+
+export function getSession(idOrPrefix: string): Session | undefined {
+  return resolveSession(idOrPrefix).session;
 }
 
 /**

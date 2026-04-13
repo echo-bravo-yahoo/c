@@ -5,10 +5,10 @@
 import chalk from 'chalk';
 import * as path from 'node:path';
 import { readFileSync } from 'node:fs';
-import { getSession, getCurrentSession } from '../store/index.ts';
+import { resolveSession, getCurrentSession } from '../store/index.ts';
 import { findTranscriptPath } from '../claude/sessions.ts';
 import { spawnInteractive } from '../util/exec.ts';
-import { relativeTime } from '../util/format.ts';
+import { ambiguityError, relativeTime } from '../util/format.ts';
 
 export interface LogOptions {
   lines?: number;
@@ -138,13 +138,20 @@ function wrapText(text: string, width: number): string[] {
 }
 
 export async function logCommand(idOrPrefix?: string, options?: LogOptions): Promise<void> {
-  const session = idOrPrefix ? getSession(idOrPrefix) : getCurrentSession();
-  if (!session) {
-    const msg = idOrPrefix
-      ? `Session not found: ${idOrPrefix}.`
-      : 'No active session in current directory.';
-    console.error(chalk.red(msg));
-    process.exit(1);
+  let session;
+  if (idOrPrefix) {
+    const result = resolveSession(idOrPrefix);
+    if (!result.session) {
+      console.error(chalk.red(ambiguityError(idOrPrefix, result.ambiguity)));
+      process.exit(1);
+    }
+    session = result.session;
+  } else {
+    session = getCurrentSession();
+    if (!session) {
+      console.error(chalk.red('No active session in current directory.'));
+      process.exit(1);
+    }
   }
 
   const transcript = findTranscriptPath(session.id);

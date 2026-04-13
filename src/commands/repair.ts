@@ -4,12 +4,12 @@
 
 import chalk from 'chalk';
 import { existsSync } from 'node:fs';
-import { readIndex, updateIndex, getSession } from '../store/index.ts';
+import { readIndex, resolveSession, updateIndex } from '../store/index.ts';
 import { listStatusCacheIds, deleteStatusCache } from '../store/status-cache.ts';
 import { getCurrentBranch, getRepoSlug } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
 import { listPRs } from '../detection/pr.ts';
-import { getDisplayName, shortId } from '../util/format.ts';
+import { ambiguityError, getDisplayName, shortId } from '../util/format.ts';
 import { findTranscriptPath, getCustomTitleFromTranscriptTail, getPlanExecutionInfo } from '../claude/sessions.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
 import type { Session } from '../store/schema.ts';
@@ -39,11 +39,12 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
   // If ID provided, scope to that session only
   let targetSession: Session | undefined;
   if (idOrPrefix) {
-    targetSession = getSession(idOrPrefix);
-    if (!targetSession) {
-      console.error(chalk.red(`Session not found: ${idOrPrefix}.`));
+    const result = resolveSession(idOrPrefix);
+    if (!result.session) {
+      console.error(chalk.red(ambiguityError(idOrPrefix, result.ambiguity)));
       process.exit(1);
     }
+    targetSession = result.session;
   }
 
 

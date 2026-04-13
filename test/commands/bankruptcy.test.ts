@@ -90,7 +90,7 @@ describe('c', () => {
 
           assert.strictEqual(cli.session('aaa11111')!.state, 'archived');
           assert.strictEqual(cli.session('bbb22222')!.state, 'archived');
-          assert.ok(cli.console.errors.some(l => l.includes('Skip target not found')));
+          assert.ok(cli.console.errors.some(l => l.includes('Session not found: nonexistent.')));
         });
       });
 
