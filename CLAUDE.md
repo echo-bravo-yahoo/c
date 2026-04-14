@@ -77,7 +77,7 @@ graph TD
 
 ### Strategy
 - **Framework**: Node.js built-in `node:test` with `node:assert`
-- **Run all tests**: `npm test` (or `node --experimental-strip-types --test test/**/*.test.ts`)
+- **Run all tests**: `npm run test:llm` — uses the LLM-friendly reporter (compact, no progress bars)
 - **Run one file**: `node --experimental-strip-types --test test/commands/file.test.ts`
   - Files using `mock.module()` also need `--experimental-test-module-mocks`
 - **Test style**: Behavioral, end-to-end through the CLI. Seed state via `cli.seed()`, run the real command via `cli.run()`, assert outcomes on store and output. Do not reimplement command logic in tests.
