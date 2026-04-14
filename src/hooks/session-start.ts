@@ -102,9 +102,10 @@ export async function handleSessionStart(
     return;
   }
 
-  // Skip creation for ephemeral sessions (launched with c new --ephemeral)
+  // Skip index registration for ephemeral sessions, but still write status cache
   if (process.env.C_EPHEMERAL === '1') {
-    debugLog(`[hook] session-start: skipping creation for ephemeral session ${sessionId}`);
+    debugLog(`[hook] session-start: skipping index for ephemeral session ${sessionId}, writing cache`);
+    writeEphemeralCache(sessionId, cwd);
     return;
   }
 
@@ -280,6 +281,23 @@ export async function registerNewSession(
   });
 
   return session;
+}
+
+function writeEphemeralCache(sessionId: string, cwd: string): void {
+  const branch = getCurrentBranch(cwd);
+  const repo = getRepoSlug(cwd);
+  const worktreeInfo = getWorktreeInfo(cwd);
+  const jira = branch ? extractJiraFromBranch(branch) : null;
+
+  writeStatusCache(sessionId, {
+    branch: branch || undefined,
+    repo,
+    jira: jira || undefined,
+    jira_base: jira ? 'https://machinify.atlassian.net' : undefined,
+    worktree: worktreeInfo?.name,
+    worktree_path: worktreeInfo?.path,
+    ephemeral: '1',
+  });
 }
 
 function writeCacheFromSession(

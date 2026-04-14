@@ -44,6 +44,7 @@ export interface StatusCacheData {
   message_count?: string;
   first_prompt?: string;
   plan?: string;
+  ephemeral?: string;
 }
 
 /**
@@ -69,6 +70,7 @@ export function writeStatusCache(sessionId: string, data: StatusCacheData): void
     ['MESSAGE_COUNT', data.message_count],
     ['FIRST_PROMPT', data.first_prompt],
     ['PLAN', data.plan],
+    ['EPHEMERAL', data.ephemeral],
   ];
 
   for (const [key, value] of fields) {

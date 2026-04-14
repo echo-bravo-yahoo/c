@@ -250,6 +250,24 @@ describe('c', () => {
           assert.ok(s);
           assert.strictEqual(s.state, 'busy');
         });
+
+        it('writes a status cache with EPHEMERAL=1 when C_EPHEMERAL is set', async () => {
+          const { readFileSync, existsSync } = await import('node:fs');
+          const { join } = await import('node:path');
+
+          process.env.C_EPHEMERAL = '1';
+          await handleSessionStart('ephemeral-cache', '/some/project', null);
+
+          // No index entry
+          assert.strictEqual(getSession('ephemeral-cache'), undefined);
+
+          // Status cache exists with EPHEMERAL field
+          const cachePath = join(store.tmpDir, 'status', 'ephemeral-cache');
+          assert.ok(existsSync(cachePath), 'status cache file should exist');
+
+          const content = readFileSync(cachePath, 'utf-8');
+          assert.ok(content.includes('EPHEMERAL=1'), 'cache should contain EPHEMERAL=1');
+        });
       });
 
       describe('transient session filtering on resume', () => {
