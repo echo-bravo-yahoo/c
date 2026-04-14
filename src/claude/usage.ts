@@ -22,12 +22,15 @@ function emptyTokens(): TokenUsage {
 /**
  * Read transcript from byte offset, parse new assistant entries with stop_reason,
  * sum token usage, calculate cost and context %.
+ *
+ * @param contextWindow - Override the model's default context window size for context % calculation.
  */
 export function readTranscriptUsage(
   transcriptPath: string,
   fromOffset: number,
   existingTokens?: TokenUsage,
   existingCost?: number,
+  contextWindow?: number,
 ): TranscriptUsageResult | null {
   let fd: number;
   try {
@@ -101,7 +104,7 @@ export function readTranscriptUsage(
     if (!foundAny) return null;
 
     const contextPct = lastModel && lastInputUsage
-      ? calculateContextPct(lastModel, lastInputUsage)
+      ? calculateContextPct(lastModel, lastInputUsage, contextWindow)
       : 0;
 
     return {

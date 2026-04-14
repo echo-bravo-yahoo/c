@@ -4,7 +4,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { getModelPricing, calculateCost, calculateContextPct, type TokenUsage } from '../../src/claude/pricing.ts';
+import { getModelPricing, calculateCost, calculateContextPct, parseContextWindow, type TokenUsage } from '../../src/claude/pricing.ts';
 
 describe('c', () => {
   describe('claude', () => {
@@ -101,6 +101,42 @@ describe('c', () => {
             cache_read_input_tokens: 0,
           };
           assert.strictEqual(calculateContextPct('claude-opus-4-6', usage), 100);
+        });
+
+        it('uses explicit contextWindow override', () => {
+          const usage: TokenUsage = {
+            input_tokens: 100000,
+            output_tokens: 0,
+            cache_creation_input_tokens: 50000,
+            cache_read_input_tokens: 50000,
+          };
+          assert.strictEqual(calculateContextPct('claude-opus-4-6', usage), 100);
+          assert.strictEqual(calculateContextPct('claude-opus-4-6', usage, 1_000_000), 20);
+        });
+      });
+
+      describe('parseContextWindow', () => {
+        it('returns 1M for [1m] suffix', () => {
+          assert.strictEqual(parseContextWindow('opus[1m]'), 1_000_000);
+        });
+
+        it('returns value for [Nk] suffix', () => {
+          assert.strictEqual(parseContextWindow('opus[200k]'), 200_000);
+          assert.strictEqual(parseContextWindow('sonnet[128k]'), 128_000);
+        });
+
+        it('is case-insensitive', () => {
+          assert.strictEqual(parseContextWindow('opus[1M]'), 1_000_000);
+          assert.strictEqual(parseContextWindow('opus[200K]'), 200_000);
+        });
+
+        it('returns undefined for alias without suffix', () => {
+          assert.strictEqual(parseContextWindow('opus'), undefined);
+          assert.strictEqual(parseContextWindow('claude-opus-4-6'), undefined);
+        });
+
+        it('returns undefined for null', () => {
+          assert.strictEqual(parseContextWindow(null), undefined);
         });
       });
     });

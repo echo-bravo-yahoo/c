@@ -18,9 +18,17 @@ describe('c', () => {
   describe('hooks', () => {
     describe('session-end', () => {
       let store: TempStore;
+      let savedHome: string;
 
-      beforeEach(() => { store = setupTempStore(); });
-      afterEach(() => { store.cleanup(); });
+      beforeEach(() => {
+        store = setupTempStore();
+        savedHome = process.env.HOME!;
+        process.env.HOME = store.tmpDir;
+      });
+      afterEach(() => {
+        process.env.HOME = savedHome;
+        store.cleanup();
+      });
 
       it('closes session by explicit ID', async () => {
         await updateIndex((idx) => {
@@ -149,7 +157,7 @@ describe('c', () => {
           assert.strictEqual(s.context_pct, undefined);
         });
 
-        it('cleans up internal meta tracking fields', async () => {
+        it('cleans up internal meta but preserves offset', async () => {
           await updateIndex((idx) => {
             idx.sessions['s1'] = createTestSession({
               id: 's1', state: 'busy',
@@ -167,11 +175,41 @@ describe('c', () => {
 
           const s = getSession('s1');
           assert.ok(s);
-          assert.strictEqual(s.meta._transcript_offset, undefined);
+          assert.strictEqual(s.meta._transcript_offset, '500', 'offset preserved as high-water mark');
           assert.strictEqual(s.meta._total_input, undefined);
           assert.strictEqual(s.meta._total_output, undefined);
           assert.strictEqual(s.meta._total_cache_write, undefined);
           assert.strictEqual(s.meta._total_cache_read, undefined);
+        });
+
+        it('stop after session-end does not double-count cost', async () => {
+          const txPath = join(store.tmpDir, 'transcript.jsonl');
+          writeFileSync(txPath, assistantEntry('claude-sonnet-4-6', 'end_turn', {
+            input_tokens: 1000, output_tokens: 500,
+            cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
+          }) + '\n');
+
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', state: 'busy',
+              meta: { _transcript_offset: '0' },
+            });
+          });
+
+          await handleSessionEnd('s1', '/tmp', { session_id: 's1', cwd: '/tmp', transcript_path: txPath } as any);
+          const afterEnd = getSession('s1');
+          assert.ok(afterEnd);
+          const finalCost = afterEnd.cost_usd!;
+          assert.ok(finalCost > 0);
+
+          // Simulate a late stop hook (reactivate session first)
+          await updateIndex((idx) => { idx.sessions['s1'].state = 'busy'; });
+          const { handleStop } = await import('../../src/hooks/stop.ts');
+          await handleStop('s1', '/tmp', { session_id: 's1', cwd: '/tmp', transcript_path: txPath } as any);
+
+          const afterStop = getSession('s1');
+          assert.ok(afterStop);
+          assert.strictEqual(afterStop.cost_usd, finalCost, 'cost should not increase after session-end + stop');
         });
       });
     });

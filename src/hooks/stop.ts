@@ -5,6 +5,8 @@
 import { updateIndex, getCurrentSession } from '../store/index.ts';
 import { findTranscriptPath, getCustomTitleFromTranscriptTail, getClaudeSessionTitles, getPlanExecutionInfo } from '../claude/sessions.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
+import { readClaudeModelAlias } from '../claude/settings.ts';
+import { parseContextWindow } from '../claude/pricing.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
 import { debugLog } from '../util/debug.ts';
 import type { HookInput } from './index.ts';
@@ -77,7 +79,8 @@ export async function handleStop(
         cache_read_input_tokens: parseInt(s.meta._total_cache_read ?? '0', 10),
       };
       const existingCost = s.cost_usd ?? 0;
-      const result = readTranscriptUsage(transcriptPath, offset, existing, existingCost);
+      const contextWindow = parseContextWindow(readClaudeModelAlias(cwd));
+      const result = readTranscriptUsage(transcriptPath, offset, existing, existingCost, contextWindow);
       if (result) {
         s.cost_usd = result.cost_usd;
         s.context_pct = result.context_pct;

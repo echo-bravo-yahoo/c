@@ -17,9 +17,17 @@ describe('c', () => {
   describe('hooks', () => {
     describe('stop', () => {
       let store: TempStore;
+      let savedHome: string;
 
-      beforeEach(() => { store = setupTempStore(); });
-      afterEach(() => { store.cleanup(); });
+      beforeEach(() => {
+        store = setupTempStore();
+        savedHome = process.env.HOME!;
+        process.env.HOME = store.tmpDir;
+      });
+      afterEach(() => {
+        process.env.HOME = savedHome;
+        store.cleanup();
+      });
 
       it('transitions busy to idle', async () => {
         await updateIndex((idx) => {
@@ -217,6 +225,32 @@ describe('c', () => {
           const s = getSession('s1');
           assert.ok(s);
           assert.strictEqual(s.state, 'idle');
+        });
+
+        it('does not double-count when offset is at end of file', async () => {
+          const txPath = join(store.tmpDir, 'transcript.jsonl');
+          const entry = assistantEntry('claude-sonnet-4-6', 'end_turn', {
+            input_tokens: 1000, output_tokens: 500,
+            cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
+          }) + '\n';
+          writeFileSync(txPath, entry);
+
+          const offset = Buffer.byteLength(entry, 'utf-8');
+          const knownCost = 0.0105;
+
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', state: 'busy',
+              cost_usd: knownCost,
+              meta: { _transcript_offset: String(offset) },
+            });
+          });
+
+          await handleStop('s1', '/tmp', { session_id: 's1', cwd: '/tmp', transcript_path: txPath } as any);
+
+          const s = getSession('s1');
+          assert.ok(s);
+          assert.strictEqual(s.cost_usd, knownCost, 'cost should not change when no new data');
         });
 
         it('handles empty transcript gracefully', async () => {

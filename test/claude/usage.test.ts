@@ -196,6 +196,36 @@ describe('c', () => {
           assert.strictEqual(readTranscriptUsage(join(tmpDir, 'nope.jsonl'), 0), null);
         });
 
+        it('uses explicit contextWindow for context_pct', () => {
+          const tx = writeTx(
+            assistantEntry('claude-opus-4-6', 'end_turn', {
+              input_tokens: 192000, output_tokens: 1000,
+              cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
+            }),
+          );
+
+          const r1 = readTranscriptUsage(tx, 0);
+          assert.ok(r1);
+          assert.strictEqual(r1.context_pct, 96);
+
+          const r2 = readTranscriptUsage(tx, 0, undefined, undefined, 1_000_000);
+          assert.ok(r2);
+          assert.strictEqual(r2.context_pct, 19);
+        });
+
+        it('falls back to model default when contextWindow is undefined', () => {
+          const tx = writeTx(
+            assistantEntry('claude-sonnet-4-6', 'end_turn', {
+              input_tokens: 50000, output_tokens: 100,
+              cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
+            }),
+          );
+
+          const result = readTranscriptUsage(tx, 0, undefined, undefined, undefined);
+          assert.ok(result);
+          assert.strictEqual(result.context_pct, 25);
+        });
+
         it('handles offset beyond file size gracefully', () => {
           const tx = writeTx(
             assistantEntry('claude-sonnet-4-6', 'end_turn', {

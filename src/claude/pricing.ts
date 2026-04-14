@@ -40,12 +40,26 @@ export function calculateCost(model: string, usage: TokenUsage): number {
   );
 }
 
-export function calculateContextPct(model: string, usage: TokenUsage): number {
-  const p = getModelPricing(model);
+export function calculateContextPct(model: string, usage: TokenUsage, contextWindow?: number): number {
+  const window = contextWindow ?? getModelPricing(model).context_window;
   const contextTokens =
     usage.input_tokens +
     usage.cache_creation_input_tokens +
     usage.cache_read_input_tokens;
-  const pct = (contextTokens / p.context_window) * 100;
+  const pct = (contextTokens / window) * 100;
   return Math.min(Math.round(pct), 100);
+}
+
+/**
+ * Parse context window size from a Claude Code model alias.
+ * Aliases like "opus[1m]" declare a 1M context window via the suffix.
+ * Returns undefined when no suffix is present (callers fall back to PRICING table).
+ */
+export function parseContextWindow(modelAlias: string | null): number | undefined {
+  if (!modelAlias) return undefined;
+  const match = modelAlias.match(/\[(\d+)(k|m)\]$/i);
+  if (!match) return undefined;
+  const num = parseInt(match[1], 10);
+  const unit = match[2].toLowerCase();
+  return unit === 'm' ? num * 1_000_000 : num * 1_000;
 }

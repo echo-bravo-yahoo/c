@@ -45,14 +45,16 @@ export async function handleSessionEnd(
       const result = readTranscriptUsage(transcriptPath, offset, existing, existingCost);
       if (result) {
         s.cost_usd = result.cost_usd;
+        s.meta._transcript_offset = String(result.new_offset);
       }
     }
 
     // Context % is meaningless for closed sessions
     delete s.context_pct;
 
-    // Clean up internal tracking meta
-    delete s.meta._transcript_offset;
+    // Clean up internal tracking meta — keep _transcript_offset as a high-water
+    // mark so that any hook firing after session-end doesn't re-read from byte 0
+    // and double-count costs.
     delete s.meta._total_input;
     delete s.meta._total_output;
     delete s.meta._total_cache_write;
