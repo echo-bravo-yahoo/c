@@ -53,6 +53,16 @@ describe('c', () => {
           const result = encodeProjectKey('/tmp');
           assert.strictEqual(result, '-tmp');
         });
+
+        it('replaces spaces with hyphens', () => {
+          const result = encodeProjectKey('/mnt/d/Human Documents/notes');
+          assert.strictEqual(result, '-mnt-d-Human-Documents-notes');
+        });
+
+        it('replaces slashes, dots, and spaces together', () => {
+          const result = encodeProjectKey('/home/user/my project/app.config');
+          assert.strictEqual(result, '-home-user-my-project-app-config');
+        });
       });
 
       describe('decodeProjectKey', () => {
@@ -71,6 +81,19 @@ describe('c', () => {
           const result = decodeProjectKey('-tmp');
           assert.strictEqual(result, '/tmp');
         });
+
+        it('resolves space-encoded segment when directory with spaces exists on filesystem', () => {
+          // Use a fixed base path with no ambiguous dashes so decode resolves cleanly
+          const base = '/tmp/ctestspaces';
+          const withSpaces = path.join(base, 'Human Documents');
+          fs.mkdirSync(withSpaces, { recursive: true });
+          try {
+            const result = decodeProjectKey('-tmp-ctestspaces-Human-Documents');
+            assert.strictEqual(result, withSpaces);
+          } finally {
+            fs.rmSync(base, { recursive: true, force: true });
+          }
+        });
       });
 
       describe('project key round-trip', () => {
@@ -80,6 +103,19 @@ describe('c', () => {
           const encoded = encodeProjectKey(original);
           const decoded = decodeProjectKey(encoded);
           assert.strictEqual(decoded, original);
+        });
+
+        it('round-trips paths with spaces when directory exists on filesystem', () => {
+          const base = '/tmp/ctestspaces';
+          const withSpaces = path.join(base, 'Human Documents', 'notes');
+          fs.mkdirSync(withSpaces, { recursive: true });
+          try {
+            const encoded = encodeProjectKey(withSpaces);
+            const decoded = decodeProjectKey(encoded);
+            assert.strictEqual(decoded, withSpaces);
+          } finally {
+            fs.rmSync(base, { recursive: true, force: true });
+          }
         });
       });
 

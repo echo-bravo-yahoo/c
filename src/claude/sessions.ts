@@ -70,6 +70,15 @@ export function decodeProjectKey(projectKey: string): string {
       }
     }
 
+    // Try appending with a space (space in dir name was encoded as hyphen)
+    if (current !== '/') {
+      const withSpace = current + ' ' + part;
+      if (fs.existsSync(withSpace)) {
+        current = withSpace;
+        continue;
+      }
+    }
+
     // Neither exists yet, default to path segment
     current = asSegment;
   }
@@ -79,10 +88,10 @@ export function decodeProjectKey(projectKey: string): string {
 
 /**
  * Encode a directory path to Claude's project key format
- * Claude replaces both / and . with -
+ * Claude replaces /, ., and spaces with -
  */
 export function encodeProjectKey(directory: string): string {
-  return directory.replace(/[/.]/g, '-');
+  return directory.replace(/[/. ]/g, '-');
 }
 
 /**
