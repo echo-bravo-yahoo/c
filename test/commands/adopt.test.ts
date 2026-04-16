@@ -8,13 +8,15 @@ import { resolve } from 'node:path';
 
 let mockClaudeSession: unknown = null;
 let mockClaudeSessionTitles = { customTitle: null as string | null, summary: null as string | null };
+let mockClaudeSessionsByDir: unknown[] = [];
 
 mock.module(resolve('src/claude/sessions.ts'), {
   namedExports: {
     getClaudeSession: () => mockClaudeSession,
     getClaudeSessionTitles: () => mockClaudeSessionTitles,
     listClaudeSessions: () => [],
-    getClaudeSessionsForDirectory: () => [],
+    getClaudeSessionsForDirectory: (dir: string) =>
+      (mockClaudeSessionsByDir as Array<{ directory: string }>).filter((s) => s.directory === dir),
     readClaudeSessionIndex: () => null,
     findTranscriptPath: () => null,
     getCustomTitleFromTranscriptTail: () => null,
@@ -32,6 +34,20 @@ mock.module(resolve('src/claude/sessions.ts'), {
 const { setupCLI } = await import('../helpers/cli.ts');
 import type { CLIHarness } from '../helpers/cli.ts';
 
+const MOCK_DIR = process.cwd();
+
+function makeClaudeSession(id: string, directory = MOCK_DIR) {
+  return {
+    id,
+    projectKey: directory.replace(/\//g, '-'),
+    directory,
+    transcriptPath: `/tmp/${id}.jsonl`,
+    historyPath: '',
+    modifiedAt: new Date('2025-06-01T12:00:00Z'),
+    fileSize: 100,
+  };
+}
+
 describe('c', () => {
   describe('adopt', () => {
     let cli: CLIHarness;
@@ -40,6 +56,7 @@ describe('c', () => {
       cli = setupCLI();
       mockClaudeSession = null;
       mockClaudeSessionTitles = { customTitle: null, summary: null };
+      mockClaudeSessionsByDir = [];
     });
 
     afterEach(() => {
@@ -130,6 +147,80 @@ describe('c', () => {
       assert.strictEqual(output.id, 'ephemeral-json');
       assert.strictEqual(output.state, 'busy');
       assert.strictEqual(output.directory, '/tmp/project');
+    });
+
+    describe('--all-here', () => {
+      it('prints "no untracked sessions" when CWD has no Claude sessions', async () => {
+        mockClaudeSessionsByDir = [];
+        await cli.run('adopt', '--all-here');
+        assert.ok(cli.console.logs.some(l => l.includes('No untracked sessions')));
+        assert.strictEqual(cli.exit.exitCode, null);
+      });
+
+      it('adopts a single untracked session in CWD', async () => {
+        mockClaudeSessionsByDir = [makeClaudeSession('aaaaaaaa-0000-0000-0000-000000000001')];
+        await cli.run('adopt', '--all-here');
+        const s = cli.session('aaaaaaaa-0000-0000-0000-000000000001');
+        assert.ok(s, 'session should be tracked');
+        assert.strictEqual(s!.state, 'busy');
+        assert.ok(cli.console.logs.some(l => l.includes('Adopted session')));
+      });
+
+      it('adopts multiple untracked sessions in CWD', async () => {
+        mockClaudeSessionsByDir = [
+          makeClaudeSession('aaaaaaaa-0000-0000-0000-000000000001'),
+          makeClaudeSession('aaaaaaaa-0000-0000-0000-000000000002'),
+        ];
+        await cli.run('adopt', '--all-here');
+        assert.ok(cli.session('aaaaaaaa-0000-0000-0000-000000000001'));
+        assert.ok(cli.session('aaaaaaaa-0000-0000-0000-000000000002'));
+        assert.strictEqual(
+          cli.console.logs.filter(l => l.includes('Adopted session')).length,
+          2
+        );
+      });
+
+      it('skips already-tracked sessions without error', async () => {
+        await cli.seed({ id: 'aaaaaaaa-0000-0000-0000-000000000001', state: 'busy' });
+        mockClaudeSessionsByDir = [
+          makeClaudeSession('aaaaaaaa-0000-0000-0000-000000000001'),
+          makeClaudeSession('aaaaaaaa-0000-0000-0000-000000000002'),
+        ];
+        await cli.run('adopt', '--all-here');
+        assert.strictEqual(
+          cli.console.logs.filter(l => l.includes('Adopted session')).length,
+          1
+        );
+        assert.strictEqual(cli.exit.exitCode, null);
+      });
+
+      it('does not adopt sessions from a different directory', async () => {
+        mockClaudeSessionsByDir = [makeClaudeSession('aaaaaaaa-0000-0000-0000-000000000001', '/some/other/dir')];
+        await cli.run('adopt', '--all-here');
+        assert.ok(cli.console.logs.some(l => l.includes('No untracked sessions')));
+        assert.strictEqual(cli.session('aaaaaaaa-0000-0000-0000-000000000001'), undefined);
+      });
+
+      it('errors when --all-here and session-id are both provided', async () => {
+        await cli.run('adopt', '--all-here', 'some-session-id');
+        assert.strictEqual(cli.exit.exitCode, 1);
+        assert.ok(cli.console.errors.some(l => l.includes('cannot be combined')));
+      });
+
+      it('errors when --all-here and --name are both provided', async () => {
+        await cli.run('adopt', '--all-here', '--name', 'foo');
+        assert.strictEqual(cli.exit.exitCode, 1);
+        assert.ok(cli.console.errors.some(l => l.includes('cannot be combined')));
+      });
+
+      it('outputs a JSON array when --all-here --json', async () => {
+        mockClaudeSessionsByDir = [makeClaudeSession('aaaaaaaa-0000-0000-0000-000000000001')];
+        await cli.run('adopt', '--all-here', '--json');
+        const output = JSON.parse(cli.stdout.output.join(''));
+        assert.ok(Array.isArray(output));
+        assert.strictEqual(output[0].id, 'aaaaaaaa-0000-0000-0000-000000000001');
+        assert.strictEqual(output[0].state, 'busy');
+      });
     });
   });
 });

@@ -332,12 +332,13 @@ export function createProgram(): Command {
 
   // Adopt
   program
-    .command('adopt <session-id>')
+    .command('adopt [session-id]')
     .description('Promote an ephemeral session to tracked')
     .option('--name <name>', 'Set session name')
     .option('--json', 'Output as JSON')
+    .option('--all-here', 'Adopt all untracked sessions in the current directory')
     .action(async (sessionId, options) => {
-      await adoptCommand(sessionId, { name: options.name, json: options.json });
+      await adoptCommand(sessionId, { name: options.name, json: options.json, allHere: options.allHere });
     });
 
   // Dir
