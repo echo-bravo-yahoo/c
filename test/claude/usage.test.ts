@@ -162,8 +162,8 @@ describe('c', () => {
 
           const result = readTranscriptUsage(tx, 0);
           assert.ok(result);
-          // context_pct based on last entry: 50000/200000 = 25%
-          assert.strictEqual(result.context_pct, 25);
+          // context_pct based on last entry (sonnet, 1M window): 50000/1_000_000 = 5%
+          assert.strictEqual(result.context_pct, 5);
         });
 
         it('handles multi-model sessions', () => {
@@ -180,9 +180,9 @@ describe('c', () => {
 
           const result = readTranscriptUsage(tx, 0);
           assert.ok(result);
-          // Opus: (1000*15 + 1000*75) / 1M = 0.09
-          // Haiku: (1000*0.8 + 1000*4) / 1M = 0.0048
-          assert.ok(result.cost_usd > 0.09, 'cost should include opus pricing');
+          // Opus:  (1000*5 + 1000*25) / 1M = 0.030
+          // Haiku: (1000*1 + 1000*5)  / 1M = 0.006
+          assert.ok(result.cost_usd > 0.03, 'cost should include opus pricing');
           assert.strictEqual(result.last_model, 'claude-haiku-4-5');
         });
 
@@ -197,8 +197,9 @@ describe('c', () => {
         });
 
         it('uses explicit contextWindow for context_pct', () => {
+          // Haiku default window is 200k; overriding to 1M must change the result.
           const tx = writeTx(
-            assistantEntry('claude-opus-4-6', 'end_turn', {
+            assistantEntry('claude-haiku-4-5', 'end_turn', {
               input_tokens: 192000, output_tokens: 1000,
               cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
             }),
@@ -221,9 +222,10 @@ describe('c', () => {
             }),
           );
 
+          // Sonnet default window is 1M: 50000 / 1_000_000 = 5%
           const result = readTranscriptUsage(tx, 0, undefined, undefined, undefined);
           assert.ok(result);
-          assert.strictEqual(result.context_pct, 25);
+          assert.strictEqual(result.context_pct, 5);
         });
 
         it('handles offset beyond file size gracefully', () => {

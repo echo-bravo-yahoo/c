@@ -162,7 +162,7 @@ describe('c', () => {
           const s = getSession('s1');
           assert.ok(s);
           assert.ok(typeof s.context_pct === 'number');
-          assert.strictEqual(s.context_pct, 25); // 50000/200000 = 25%
+          assert.strictEqual(s.context_pct, 5); // 50000/1_000_000 = 5%
         });
 
         it('stores transcript offset in meta for incremental reads', async () => {
