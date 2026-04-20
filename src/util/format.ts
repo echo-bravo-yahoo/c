@@ -192,20 +192,25 @@ export function displayWidth(str: string): number {
 }
 
 /**
- * Truncate or pad a string to exact visual width (for column alignment)
+ * Truncate or pad a string to exact visual width (for column alignment).
+ * If the input is wrapped in an OSC 8 hyperlink, truncation runs on the inner
+ * text and the wrapper is re-applied so the link stays valid.
  */
 export function fixedWidth(str: string, width: number): string {
   const visualWidth = displayWidth(str);
   if (visualWidth >= width) {
-    // Truncate: need to count visual chars, not bytes
+    const osc8 = str.match(/^\x1b\]8;;([^\x1b]*)\x1b\\([\s\S]*)\x1b\]8;;\x1b\\$/);
+    const inner = osc8 ? osc8[2] : str;
     let truncated = '';
     let w = 0;
-    for (const char of str) {
+    for (const char of inner) {
       if (w >= width - 2) break;
       truncated += char;
       w += 1;
     }
-    return truncated + '… ';
+    const content = truncated + '…';
+    const wrapped = osc8 ? `\x1b]8;;${osc8[1]}\x1b\\${content}\x1b]8;;\x1b\\` : content;
+    return wrapped + ' ';
   }
   return str + ' '.repeat(width - visualWidth);
 }
@@ -405,23 +410,22 @@ export function formatSessionLine(session: Session, layout: ColumnLayout, depth 
   // Repo column
   if (layout.visible.has('repo')) {
     const repoName = getRepoName(session.directory);
-    const repoFixed = fixedWidth(repoName, layout.repo);
-    const repoText = repoSlug
-      ? hyperlink(`https://github.com/${repoSlug}`, repoFixed)
-      : repoFixed;
-    parts.push(chalk.blue(repoText));
+    const linked = repoSlug
+      ? hyperlink(`https://github.com/${repoSlug}`, repoName)
+      : repoName;
+    parts.push(chalk.blue(fixedWidth(linked, layout.repo)));
   }
 
   // Worktree/Branch column
   if (layout.visible.has('branch')) {
     const branch = getBranchDisplay(session);
-    const branchFixed = fixedWidth(branch.text, layout.branch);
-    const branchFormatted = (branch.text && repoSlug && session.resources.branch)
-      ? hyperlink(`https://github.com/${repoSlug}/tree/${session.resources.branch}`, branchFixed)
-      : branchFixed;
+    const linked = (branch.text && repoSlug && session.resources.branch)
+      ? hyperlink(`https://github.com/${repoSlug}/tree/${session.resources.branch}`, branch.text)
+      : branch.text;
+    const padded = fixedWidth(linked, layout.branch);
     const branchCol = branch.color === 'dim'
-      ? chalk.dim(branchFormatted)
-      : chalk[branch.color](branchFormatted);
+      ? chalk.dim(padded)
+      : chalk[branch.color](padded);
     parts.push(branchCol);
   }
 

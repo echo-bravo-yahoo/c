@@ -190,6 +190,33 @@ describe('c', () => {
           const fixed = fixedWidth(linked, 10);
           assert.strictEqual(displayWidth(fixed), 10);
         });
+
+        it('padding spaces live outside the OSC 8 link', () => {
+          const linked = hyperlink('https://x.com', 'hi');
+          const fixed = fixedWidth(linked, 10);
+          const closeIdx = fixed.indexOf('\x1b]8;;\x1b\\');
+          assert.ok(closeIdx > -1, 'closing OSC 8 missing');
+          const trailing = fixed.slice(closeIdx + '\x1b]8;;\x1b\\'.length);
+          assert.strictEqual(trailing, '        ', 'padding must be outside the link');
+          const openIdx = fixed.indexOf('\x1b]8;;');
+          const inner = fixed.slice(fixed.indexOf('\x1b\\', openIdx) + 2, closeIdx);
+          assert.strictEqual(inner, 'hi', 'no padding should be inside the link');
+        });
+
+        it('truncation keeps OSC 8 wrapper intact', () => {
+          const linked = hyperlink('https://example.com/long', 'a-very-long-string');
+          const fixed = fixedWidth(linked, 10);
+          assert.match(fixed, /^\x1b\]8;;https:\/\/example\.com\/long\x1b\\/, 'OSC 8 open preserved');
+          assert.match(fixed, /\x1b\]8;;\x1b\\ $/, 'OSC 8 close + trailing space preserved');
+          assert.ok(fixed.includes('…'), 'ellipsis marker present');
+          assert.strictEqual(displayWidth(fixed), 10);
+        });
+
+        it('non-hyperlinked truncation unchanged', () => {
+          const fixed = fixedWidth('a-very-long-string', 10);
+          assert.strictEqual(fixed, 'a-very-l… ');
+          assert.strictEqual(displayWidth(fixed), 10);
+        });
       });
 
       describe('gap marker logic', () => {
