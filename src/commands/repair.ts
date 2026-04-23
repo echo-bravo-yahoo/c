@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import { existsSync } from 'node:fs';
 import { readIndex, resolveSession, updateIndex } from '../store/index.ts';
-import { listStatusCacheIds, deleteStatusCache } from '../store/status-cache.ts';
+import { listSessionStateIds, deleteSessionStateDir } from '../store/session-state.ts';
 import { getCurrentBranch, getRepoSlug } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
 import { listPRs } from '../detection/pr.ts';
@@ -138,15 +138,14 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
     }
   });
 
-  // Stale status cache — only when repairing all sessions
+  // Stale per-session state dir — only when repairing all sessions
   if (!targetSession) {
     const index = readIndex();
     const indexIds = new Set(Object.keys(index.sessions));
-    const cacheIds = listStatusCacheIds();
-    for (const cacheId of cacheIds) {
-      if (!indexIds.has(cacheId)) {
-        deleteStatusCache(cacheId);
-        fixes.push(`Deleted stale status cache for ${shortId(cacheId)}`);
+    for (const stateId of listSessionStateIds()) {
+      if (!indexIds.has(stateId)) {
+        deleteSessionStateDir(stateId);
+        fixes.push(`Deleted stale state dir for ${shortId(stateId)}`);
       }
     }
   }

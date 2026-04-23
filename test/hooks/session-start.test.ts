@@ -262,7 +262,7 @@ describe('c', () => {
           assert.strictEqual(getSession('ephemeral-cache'), undefined);
 
           // Status cache exists with EPHEMERAL field
-          const cachePath = join(store.tmpDir, 'status', 'ephemeral-cache');
+          const cachePath = join(store.tmpDir, 'state', 'ephemeral-cache', 'status');
           assert.ok(existsSync(cachePath), 'status cache file should exist');
 
           const content = readFileSync(cachePath, 'utf-8');

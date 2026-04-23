@@ -369,23 +369,28 @@ export function getCurrentSession(directory: string = process.cwd()): Session | 
 /**
  * Reconcile stale sessions by closing active sessions that no longer exist in Claude's storage.
  * This handles cases where SessionEnd hook didn't fire (Ctrl-C, crash, etc).
- * Also cleans up orphaned status cache files for sessions no longer in the index.
+ * Also cleans up orphaned per-session state directories for sessions no longer in the index.
  */
 export async function reconcileStaleSessions(): Promise<number> {
   // Import here to avoid circular dependency
   const { listClaudeSessions } = await import('../claude/sessions.ts');
-  const { listStatusCacheIds, deleteStatusCache } = await import('./status-cache.ts');
+  const { listSessionStateIds, deleteSessionStateDir, migrateLegacyStateFiles } =
+    await import('./session-state.ts');
+
+  // One-shot migration from the pre-state-dir layout. Idempotent; exits
+  // quickly once the legacy dirs are gone.
+  migrateLegacyStateFiles();
 
   const index = readIndex();
   const activeSessions = Object.values(index.sessions).filter(
     (s) => s.state === 'busy' || s.state === 'idle' || s.state === 'waiting'
   );
 
-  // Clean up orphaned status cache files (from deleted sessions)
+  // Clean up orphaned per-session state dirs (from deleted sessions)
   const indexIds = new Set(Object.keys(index.sessions));
-  for (const cachedId of listStatusCacheIds()) {
-    if (!indexIds.has(cachedId)) {
-      deleteStatusCache(cachedId);
+  for (const stateId of listSessionStateIds()) {
+    if (!indexIds.has(stateId)) {
+      deleteSessionStateDir(stateId);
     }
   }
 

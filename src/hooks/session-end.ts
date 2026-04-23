@@ -5,7 +5,7 @@
 import { updateIndex, getCurrentSession } from '../store/index.ts';
 import { findTranscriptPath } from '../claude/sessions.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
-import { deleteStatusCache } from '../store/status-cache.ts';
+import { deleteSessionStateDir } from '../store/session-state.ts';
 import { debugLog } from '../util/debug.ts';
 import type { HookInput } from './index.ts';
 import type { TokenUsage } from '../claude/pricing.ts';
@@ -61,5 +61,5 @@ export async function handleSessionEnd(
     delete s.meta._total_cache_read;
   });
 
-  deleteStatusCache(targetId);
+  deleteSessionStateDir(targetId);
 }

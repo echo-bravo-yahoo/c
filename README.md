@@ -131,7 +131,7 @@ Worktree directories are not removed — cleanup is left to the user or `git wor
 
 ## Statusline
 
-`c` writes a bash-sourceable status cache for each session to `~/.c/status/<session-id>`. This cache contains variables like `BRANCH`, `PR`, `JIRA`, `REPO`, and `WORKTREE` that can be used in a Claude Code statusline script.
+`c` writes a bash-sourceable status cache for each session to `~/.c/state/<session-id>/status`. This cache contains variables like `BRANCH`, `PR`, `JIRA`, `REPO`, and `WORKTREE` that can be used in a Claude Code statusline script.
 
 To use it, add a statusline command to `~/.claude/settings.json`:
 
@@ -160,8 +160,8 @@ PCT=$(echo "$INPUT" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1
 # Source session cache from c
 BRANCH="" PR="" JIRA="" REPO=""
 C_HOME="${C_HOME:-$HOME/.c}"
-if [[ -n "$SESSION_ID" && -f "$C_HOME/status/$SESSION_ID" ]]; then
-    . "$C_HOME/status/$SESSION_ID"
+if [[ -n "$SESSION_ID" && -f "$C_HOME/state/$SESSION_ID/status" ]]; then
+    . "$C_HOME/state/$SESSION_ID/status"
 fi
 
 # Build status parts
@@ -211,6 +211,37 @@ Config keys match the long flag names for each command. For example, `list.sort`
 
 Session state is persisted in a TOML index file at `~/.c/index.toml`. This file contains every tracked session with its ID, name, state, directory, linked resources (branch, PR, JIRA, worktree), tags, and metadata. All commands read from and write to this single file.
 
-The status cache lives in `~/.c/status/` with one file per session, written by the `post-bash` hook after each command Claude runs. These files are bash-sourceable key-value pairs used by the statusline integration.
+Each tracked session also gets an ephemeral state directory at `~/.c/state/<session-id>/`. `c` itself parks two files there — `status` (the bash-sourceable statusline cache, written by the `post-bash` hook) and `refresh.json` (written by `c refresh`) — and the directory is open to external consumers as well. See [Per-session state directory](#per-session-state-directory) below.
 
-The `C_HOME` environment variable overrides the default `~/.c` location for both the index and the status cache.
+The `C_HOME` environment variable overrides the default `~/.c` location for both the index and the state directory.
+
+## Per-session state directory
+
+Every tracked session has a scratch directory at `${C_HOME:-~/.c}/state/<session-id>/`, created lazily and deleted automatically when the session ends or when `reconcileStaleSessions` notices a crashed session on a later start. External tools can park files here when they need per-session state that survives across Claude Code Bash-tool invocations within a session but must not leak across sessions.
+
+**Get the path:**
+
+```bash
+dir=$(c state-dir)         # current session (resolved via PID ancestry)
+dir=$(c state-dir <id>)    # explicit session id / prefix
+```
+
+`c state-dir` with no argument walks the caller's process tree, finds the ancestor `claude` process, intersects with the active sessions in `~/.c/index.toml`, and returns the deepest match. It exits non-zero when no tracked session resolves — consumers must not guess. (Plain `claude --print`, or anything launched outside `c new` / `c resume`, is not tracked and will not resolve.)
+
+**Lifecycle:** contents are ephemeral. Do not rely on anything in the state directory persisting across sessions. Removal happens on `SessionEnd` and on orphan reconcile.
+
+**Upgrading from pre-state-dir `c`:** on the first session start after upgrade, `reconcileStaleSessions` automatically migrates `~/.c/status/<id>` → `~/.c/state/<id>/status` and `~/.c/refresh/<id>.json` → `~/.c/state/<id>/refresh.json`, then removes the now-empty legacy directories. No user action required.
+
+**Reserved names (owned by `c`):** `status`, `refresh.json`. More may be added in the future. External consumers should put their files under a namespace-style subdirectory — `creds/`, `mytool/`, etc. — to avoid collision.
+
+**Mode convention:** the state directory itself is created with mode `0700`. Consumers storing anything sensitive should write files at `0600` and any nested subdirectories at `0700`.
+
+**Isolation:** same-UID peer sessions can still read these paths at the OS level — filesystem permissions don't isolate processes running as the same user. Consumers storing secrets should add [cc-allow](https://github.com/echo-bravo-yahoo/cc-allow) `read.deny` / `write.deny` / `edit.deny` rules on their subpath to prevent accidental cross-session reads through Claude Code tools. The reference consumer, `cc-cred` (a 1Password wrapper), does exactly this — see its docs for a worked example of the deny rules.
+
+**Minimal shell consumer:**
+
+```bash
+dir=$(c state-dir) || exit 1
+mkdir -p -m 700 "$dir/mytool"
+umask 077 && printf '%s' "$value" > "$dir/mytool/foo"
+```

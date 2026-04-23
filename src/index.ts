@@ -24,6 +24,7 @@ import { repairCommand } from './commands/repair.ts';
 import { refreshCommand } from './commands/refresh.ts';
 import { installRepairSchedule, uninstallRepairSchedule } from './commands/repair-schedule.ts';
 import { dirCommand } from './commands/dir.ts';
+import { stateDirCommand } from './commands/state-dir.ts';
 import { initCommand } from './commands/init.ts';
 import { execCommand } from './commands/exec.ts';
 import { openCommand } from './commands/open.ts';
@@ -347,6 +348,14 @@ export function createProgram(): Command {
     .description('Print session directory path')
     .action((id) => {
       dirCommand(id);
+    });
+
+  // State dir
+  program
+    .command('state-dir [id]')
+    .description('Print per-session state directory path (ephemeral scratch space for consumers)')
+    .action((id) => {
+      stateDirCommand(id);
     });
 
   // Exec

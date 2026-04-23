@@ -86,18 +86,25 @@ describe('c', () => {
         assert.strictEqual(s.pid, 12345);
       });
 
-      it('deletes status cache file', async () => {
+      it('deletes the entire per-session state directory', async () => {
         await updateIndex((idx) => {
           idx.sessions['s1'] = createTestSession({ id: 's1', state: 'busy' });
         });
         writeStatusCache('s1', { branch: 'main' });
 
-        const cacheFile = join(store.tmpDir, 'status', 's1');
-        assert.ok(existsSync(cacheFile), 'cache file should exist before handler');
+        // Seed an external-consumer file (e.g., cc-cred) under the state dir
+        const stateDir = join(store.tmpDir, 'state', 's1');
+        const credFile = join(stateDir, 'creds', 'FOO');
+        const { mkdirSync, writeFileSync } = await import('node:fs');
+        mkdirSync(join(stateDir, 'creds'), { recursive: true, mode: 0o700 });
+        writeFileSync(credFile, 'secret', { mode: 0o600 });
+
+        assert.ok(existsSync(join(stateDir, 'status')), 'status file should exist before handler');
+        assert.ok(existsSync(credFile), 'cred file should exist before handler');
 
         await handleSessionEnd('s1', '/tmp', null);
 
-        assert.ok(!existsSync(cacheFile), 'cache file should be deleted after handler');
+        assert.ok(!existsSync(stateDir), 'entire state dir should be removed');
       });
 
       it('closes session that has no pid', async () => {

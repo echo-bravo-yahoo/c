@@ -5,25 +5,18 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
-import { getStoreDir } from '../store/index.ts';
+import { ensureSessionStateDir, getSessionStateDir } from '../store/session-state.ts';
 import type { RefreshReport, Finding, Severity } from './types.ts';
 
-function getRefreshDir(): string {
-  return path.join(getStoreDir(), 'refresh');
-}
-
-function getReportPath(sessionId: string): string {
-  return path.join(getRefreshDir(), `${sessionId}.json`);
+function getReportPath(sessionId: string, ensure = false): string {
+  const dir = ensure ? ensureSessionStateDir(sessionId) : getSessionStateDir(sessionId);
+  return path.join(dir, 'refresh.json');
 }
 
 // --- Storage ---
 
 export function storeReport(report: RefreshReport): void {
-  const dir = getRefreshDir();
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  fs.writeFileSync(getReportPath(report.sessionId), JSON.stringify(report, null, 2));
+  fs.writeFileSync(getReportPath(report.sessionId, true), JSON.stringify(report, null, 2));
 }
 
 export function loadReport(sessionId: string): RefreshReport | null {

@@ -1,29 +1,18 @@
 /**
  * Per-session status cache for the statusline script
  *
- * Writes a sourceable key=value file per session at ~/.c/status/{sessionId}.
- * The statusline script sources this file instead of parsing TOML.
+ * Writes a sourceable key=value file at ${state-dir}/status. The statusline
+ * script sources this file instead of parsing TOML.
  */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as os from 'node:os';
-
-function getStoreDir(): string {
-  return process.env.C_HOME || path.join(os.homedir(), '.c');
-}
-
-function getStatusDir(): string {
-  return path.join(getStoreDir(), 'status');
-}
+import { ensureSessionStateDir } from './session-state.ts';
 
 function getCachePath(sessionId: string): string {
-  return path.join(getStatusDir(), sessionId);
+  return path.join(ensureSessionStateDir(sessionId), 'status');
 }
 
-/**
- * Shell-escape a value for safe sourcing
- */
 function shellEscape(value: string): string {
   if (/^[A-Za-z0-9_./:@-]+$/.test(value)) {
     return value;
@@ -47,15 +36,7 @@ export interface StatusCacheData {
   ephemeral?: string;
 }
 
-/**
- * Write a sourceable status cache file for a session
- */
 export function writeStatusCache(sessionId: string, data: StatusCacheData): void {
-  const dir = getStatusDir();
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
   const lines: string[] = [];
   const fields: Array<[string, string | undefined]> = [
     ['BRANCH', data.branch],
@@ -80,27 +61,4 @@ export function writeStatusCache(sessionId: string, data: StatusCacheData): void
   }
 
   fs.writeFileSync(getCachePath(sessionId), lines.join('\n') + '\n');
-}
-
-/**
- * List all session IDs that have a status cache file
- */
-export function listStatusCacheIds(): string[] {
-  const dir = getStatusDir();
-  try {
-    return fs.readdirSync(dir).filter((f) => !f.startsWith('.'));
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Delete the status cache file for a session
- */
-export function deleteStatusCache(sessionId: string): void {
-  try {
-    fs.unlinkSync(getCachePath(sessionId));
-  } catch {
-    // Silent on ENOENT or missing directory
-  }
 }

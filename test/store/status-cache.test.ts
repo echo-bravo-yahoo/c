@@ -1,5 +1,5 @@
 /**
- * Tests for status cache read/write/delete
+ * Tests for status cache write
  */
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
@@ -11,6 +11,10 @@ import { execSync } from 'node:child_process';
 
 let testDir: string;
 let origCHome: string | undefined;
+
+function statusPath(sessionId: string): string {
+  return path.join(testDir, 'state', sessionId, 'status');
+}
 
 describe('c', () => {
   describe('store', () => {
@@ -33,30 +37,29 @@ describe('c', () => {
       });
 
       describe('writeStatusCache', () => {
-        it('creates status/ subdirectory if missing', async () => {
+        it('creates the per-session state directory if missing', async () => {
           const { writeStatusCache } = await import('../../src/store/status-cache.ts');
           writeStatusCache('test-session', { branch: 'main' });
-          assert.ok(fs.existsSync(path.join(testDir, 'status')));
+          assert.ok(fs.existsSync(path.join(testDir, 'state', 'test-session')));
         });
 
-        it('writes cache file at {C_HOME}/status/{sessionId}', async () => {
+        it('writes the status file at {C_HOME}/state/{sessionId}/status', async () => {
           const { writeStatusCache } = await import('../../src/store/status-cache.ts');
           writeStatusCache('test-session', { branch: 'main' });
-          const cachePath = path.join(testDir, 'status', 'test-session');
-          assert.ok(fs.existsSync(cachePath));
+          assert.ok(fs.existsSync(statusPath('test-session')));
         });
 
         it('includes BRANCH line when resources.branch is set', async () => {
           const { writeStatusCache } = await import('../../src/store/status-cache.ts');
           writeStatusCache('test-session', { branch: 'feature/auth' });
-          const content = fs.readFileSync(path.join(testDir, 'status', 'test-session'), 'utf-8');
+          const content = fs.readFileSync(statusPath('test-session'), 'utf-8');
           assert.ok(content.includes('BRANCH=feature/auth'));
         });
 
         it('includes REPO line when repo is set', async () => {
           const { writeStatusCache } = await import('../../src/store/status-cache.ts');
           writeStatusCache('test-session', { repo: 'org/repo' });
-          const content = fs.readFileSync(path.join(testDir, 'status', 'test-session'), 'utf-8');
+          const content = fs.readFileSync(statusPath('test-session'), 'utf-8');
           assert.ok(content.includes('REPO=org/repo'));
         });
 
@@ -66,7 +69,7 @@ describe('c', () => {
             jira: 'PROJ-123',
             jira_base: 'https://machinify.atlassian.net',
           });
-          const content = fs.readFileSync(path.join(testDir, 'status', 'test-session'), 'utf-8');
+          const content = fs.readFileSync(statusPath('test-session'), 'utf-8');
           assert.ok(content.includes('JIRA=PROJ-123'));
           assert.ok(content.includes('JIRA_BASE=https://machinify.atlassian.net'));
         });
@@ -74,7 +77,7 @@ describe('c', () => {
         it('includes PR line when resources.pr is set', async () => {
           const { writeStatusCache } = await import('../../src/store/status-cache.ts');
           writeStatusCache('test-session', { pr: 'https://github.com/org/repo/pull/42' });
-          const content = fs.readFileSync(path.join(testDir, 'status', 'test-session'), 'utf-8');
+          const content = fs.readFileSync(statusPath('test-session'), 'utf-8');
           assert.ok(content.includes('PR=https://github.com/org/repo/pull/42'));
         });
 
@@ -84,7 +87,7 @@ describe('c', () => {
             worktree: 'my-worktree',
             worktree_path: '/Users/user/repo/.claude/worktrees/my-worktree',
           });
-          const content = fs.readFileSync(path.join(testDir, 'status', 'test-session'), 'utf-8');
+          const content = fs.readFileSync(statusPath('test-session'), 'utf-8');
           assert.ok(content.includes('WORKTREE=my-worktree'));
           assert.ok(content.includes('WORKTREE_PATH=/Users/user/repo/.claude/worktrees/my-worktree'));
         });
@@ -92,7 +95,7 @@ describe('c', () => {
         it('omits lines for empty/undefined fields', async () => {
           const { writeStatusCache } = await import('../../src/store/status-cache.ts');
           writeStatusCache('test-session', { branch: 'main' });
-          const content = fs.readFileSync(path.join(testDir, 'status', 'test-session'), 'utf-8');
+          const content = fs.readFileSync(statusPath('test-session'), 'utf-8');
           assert.ok(!content.includes('REPO='));
           assert.ok(!content.includes('JIRA='));
           assert.ok(!content.includes('PR='));
@@ -103,7 +106,7 @@ describe('c', () => {
           const { writeStatusCache } = await import('../../src/store/status-cache.ts');
           writeStatusCache('test-session', { branch: 'old-branch' });
           writeStatusCache('test-session', { branch: 'new-branch' });
-          const content = fs.readFileSync(path.join(testDir, 'status', 'test-session'), 'utf-8');
+          const content = fs.readFileSync(statusPath('test-session'), 'utf-8');
           assert.ok(content.includes('BRANCH=new-branch'));
           assert.ok(!content.includes('old-branch'));
         });
@@ -115,9 +118,7 @@ describe('c', () => {
             repo: 'org/repo',
             jira: 'PROJ-123',
           });
-          const cachePath = path.join(testDir, 'status', 'test-session');
-          // Source the file in bash and echo a variable to verify it's valid
-          const result = execSync(`source "${cachePath}" && echo "$BRANCH"`, {
+          const result = execSync(`source "${statusPath('test-session')}" && echo "$BRANCH"`, {
             encoding: 'utf-8',
             shell: '/bin/bash',
           }).trim();
@@ -129,14 +130,14 @@ describe('c', () => {
         it('quotes values with spaces', async () => {
           const { writeStatusCache } = await import('../../src/store/status-cache.ts');
           writeStatusCache('test-session', { name: 'my session' });
-          const content = fs.readFileSync(path.join(testDir, 'status', 'test-session'), 'utf-8');
+          const content = fs.readFileSync(statusPath('test-session'), 'utf-8');
           assert.ok(content.includes("NAME='my session'"), 'should single-quote value with spaces');
         });
 
         it('leaves safe chars unquoted', async () => {
           const { writeStatusCache } = await import('../../src/store/status-cache.ts');
           writeStatusCache('test-session', { branch: 'feature/auth-v2' });
-          const content = fs.readFileSync(path.join(testDir, 'status', 'test-session'), 'utf-8');
+          const content = fs.readFileSync(statusPath('test-session'), 'utf-8');
           assert.ok(content.includes('BRANCH=feature/auth-v2'), 'safe chars should not be quoted');
           assert.ok(!content.includes("'feature/auth-v2'"), 'safe chars should not be wrapped in quotes');
         });
@@ -144,9 +145,7 @@ describe('c', () => {
         it('handles double quotes in value', async () => {
           const { writeStatusCache } = await import('../../src/store/status-cache.ts');
           writeStatusCache('test-session', { name: 'say "hello"' });
-          const cachePath = path.join(testDir, 'status', 'test-session');
-          // Verify it's valid bash by sourcing it
-          const result = execSync(`source "${cachePath}" && echo "$NAME"`, {
+          const result = execSync(`source "${statusPath('test-session')}" && echo "$NAME"`, {
             encoding: 'utf-8',
             shell: '/bin/bash',
           }).trim();
@@ -156,79 +155,11 @@ describe('c', () => {
         it('handles single quotes in value', async () => {
           const { writeStatusCache } = await import('../../src/store/status-cache.ts');
           writeStatusCache('test-session', { name: "it's working" });
-          const cachePath = path.join(testDir, 'status', 'test-session');
-          const result = execSync(`source "${cachePath}" && echo "$NAME"`, {
+          const result = execSync(`source "${statusPath('test-session')}" && echo "$NAME"`, {
             encoding: 'utf-8',
             shell: '/bin/bash',
           }).trim();
           assert.strictEqual(result, "it's working");
-        });
-      });
-
-      describe('listStatusCacheIds', () => {
-        it('lists multiple cache IDs', async () => {
-          const { writeStatusCache, listStatusCacheIds } = await import('../../src/store/status-cache.ts');
-          writeStatusCache('session-a', { branch: 'main' });
-          writeStatusCache('session-b', { branch: 'dev' });
-          writeStatusCache('session-c', { branch: 'feat' });
-
-          const ids = listStatusCacheIds();
-          assert.strictEqual(ids.length, 3);
-          assert.ok(ids.includes('session-a'));
-          assert.ok(ids.includes('session-b'));
-          assert.ok(ids.includes('session-c'));
-        });
-
-        it('returns empty array when status dir exists but is empty', async () => {
-          const { listStatusCacheIds } = await import('../../src/store/status-cache.ts');
-          fs.mkdirSync(path.join(testDir, 'status'), { recursive: true });
-
-          const ids = listStatusCacheIds();
-          assert.deepStrictEqual(ids, []);
-        });
-
-        it('returns empty array when status dir does not exist', async () => {
-          const { listStatusCacheIds } = await import('../../src/store/status-cache.ts');
-          // testDir exists but has no status/ subdir
-          const ids = listStatusCacheIds();
-          assert.deepStrictEqual(ids, []);
-        });
-
-        it('excludes dotfiles', async () => {
-          const { writeStatusCache, listStatusCacheIds } = await import('../../src/store/status-cache.ts');
-          writeStatusCache('real-session', { branch: 'main' });
-          // Manually create a dotfile
-          fs.writeFileSync(path.join(testDir, 'status', '.DS_Store'), '');
-
-          const ids = listStatusCacheIds();
-          assert.strictEqual(ids.length, 1);
-          assert.ok(ids.includes('real-session'));
-          assert.ok(!ids.includes('.DS_Store'));
-        });
-      });
-
-      describe('deleteStatusCache', () => {
-        it('deletes existing cache file', async () => {
-          const { writeStatusCache, deleteStatusCache } = await import('../../src/store/status-cache.ts');
-          writeStatusCache('test-session', { branch: 'main' });
-          const cachePath = path.join(testDir, 'status', 'test-session');
-          assert.ok(fs.existsSync(cachePath));
-
-          deleteStatusCache('test-session');
-          assert.ok(!fs.existsSync(cachePath));
-        });
-
-        it('no-ops silently when file does not exist', async () => {
-          const { writeStatusCache, deleteStatusCache } = await import('../../src/store/status-cache.ts');
-          // Create status dir but not the file
-          writeStatusCache('other-session', { branch: 'main' });
-          assert.doesNotThrow(() => deleteStatusCache('nonexistent-session'));
-        });
-
-        it('no-ops silently when status/ directory does not exist', async () => {
-          const { deleteStatusCache } = await import('../../src/store/status-cache.ts');
-          // testDir exists but has no status/ subdir
-          assert.doesNotThrow(() => deleteStatusCache('nonexistent-session'));
         });
       });
     });
