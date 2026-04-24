@@ -171,6 +171,10 @@ node --experimental-strip-types --experimental-test-module-mocks --test test/com
 ### Commands that spawn external processes
 Commands that exec/spawn (`new`, `resume`, `tmux-pick`) cannot be tested through `parseAsync()`. Test their pre-spawn logic directly as unit tests.
 
+## Multi-agent workflows
+
+This repo has a `lolm` pipeline at `.claude/lolm/pipeline.toml` with tester → coder → reviewer roles sharing an `impl` worktree. `/dispatch <slug> [plan]` launches it: the tester writes failing tests, the coder makes them pass, and the reviewer approves or sends changes back. For the framework overview, pipeline schema, and debugging see `~/.claude/skills/dispatch/` (load via the `/dispatch` skill).
+
 ## Known behaviors
 
 ### `c new "name"` with existing worktree
