@@ -5,6 +5,7 @@
 import { updateIndex, getCurrentSession } from '../store/index.ts';
 import { findTranscriptPath, getCustomTitleFromTranscriptTail, getClaudeSessionTitles, getPlanExecutionInfo } from '../claude/sessions.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
+import { readTranscriptInventory, applyInventoryDelta } from '../claude/context-inventory.ts';
 import { readClaudeModelAlias } from '../claude/settings.ts';
 import { parseContextWindow } from '../claude/pricing.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
@@ -89,6 +90,16 @@ export async function handleStop(
         s.meta._total_output = String(result.total_tokens.output_tokens);
         s.meta._total_cache_write = String(result.total_tokens.cache_creation_input_tokens);
         s.meta._total_cache_read = String(result.total_tokens.cache_read_input_tokens);
+      }
+
+      const invOffset = parseInt(s.meta._inventory_offset ?? '0', 10);
+      const invStartTurn = parseInt(s.meta._inventory_turn ?? '0', 10);
+      const delta = readTranscriptInventory(transcriptPath, invOffset, invStartTurn, s.directory);
+      if (delta) {
+        s.context ??= { reads: {} };
+        applyInventoryDelta(s.context, delta);
+        s.meta._inventory_offset = String(delta.new_offset);
+        s.meta._inventory_turn = String(delta.new_turn);
       }
     }
   });

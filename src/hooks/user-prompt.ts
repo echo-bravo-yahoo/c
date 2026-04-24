@@ -6,6 +6,7 @@ import { updateIndex, getCurrentSession, getSession } from '../store/index.ts';
 import { findTranscriptPath, getCustomTitleFromTranscriptTail, getClaudeSessionTitles } from '../claude/sessions.ts';
 import { registerNewSession } from './session-start.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
+import { readTranscriptInventory, applyInventoryDelta } from '../claude/context-inventory.ts';
 import { readClaudeModelAlias } from '../claude/settings.ts';
 import { parseContextWindow } from '../claude/pricing.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
@@ -16,7 +17,7 @@ import type { TokenUsage } from '../claude/pricing.ts';
 export async function handleUserPrompt(
   sessionId: string | undefined,
   cwd: string,
-  _input: HookInput | null
+  input: HookInput | null
 ): Promise<void> {
   const targetId = sessionId ?? getCurrentSession(cwd)?.id;
 
@@ -48,7 +49,7 @@ export async function handleUserPrompt(
     // Read from Claude's sessions-index.json first (updated immediately by /rename),
     // fall back to transcript tail for sessions not yet in the index
     const { customTitle: indexTitle } = getClaudeSessionTitles(targetId, s.project_key);
-    const transcriptPath = findTranscriptPath(targetId);
+    const transcriptPath = input?.transcript_path ?? findTranscriptPath(targetId);
     const transcriptTitle = !indexTitle && transcriptPath
       ? getCustomTitleFromTranscriptTail(transcriptPath)
       : null;
@@ -81,6 +82,16 @@ export async function handleUserPrompt(
         s.meta._total_output = String(result.total_tokens.output_tokens);
         s.meta._total_cache_write = String(result.total_tokens.cache_creation_input_tokens);
         s.meta._total_cache_read = String(result.total_tokens.cache_read_input_tokens);
+      }
+
+      const invOffset = parseInt(s.meta._inventory_offset ?? '0', 10);
+      const invStartTurn = parseInt(s.meta._inventory_turn ?? '0', 10);
+      const delta = readTranscriptInventory(transcriptPath, invOffset, invStartTurn, s.directory);
+      if (delta) {
+        s.context ??= { reads: {} };
+        applyInventoryDelta(s.context, delta);
+        s.meta._inventory_offset = String(delta.new_offset);
+        s.meta._inventory_turn = String(delta.new_turn);
       }
     }
   });

@@ -9,6 +9,7 @@ import { initCompletion, installCompletion, uninstallCompletion } from './comple
 import { listCommand } from './commands/list.ts';
 import { newCommand } from './commands/new.ts';
 import { showCommand } from './commands/show.ts';
+import { contextCommand } from './commands/context.ts';
 import { resumeCommand } from './commands/resume.ts';
 import { archiveCommand } from './commands/archive.ts';
 import { bankruptcyCommand } from './commands/bankruptcy.ts';
@@ -166,6 +167,17 @@ export function createProgram(): Command {
     .action((idParts, options) => {
       const id = idParts.join(' ');
       showCommand(id, { json: options.json });
+    });
+
+  // Context
+  program
+    .command('context [id...]')
+    .description('Show the persisted context inventory for a session')
+    .option('--json', 'Output raw inventory as JSON')
+    .option('-v, --verbose', 'List every file read (not just a summary)')
+    .action((idParts: string[] | undefined, options) => {
+      const id = idParts?.length ? idParts.join(' ') : undefined;
+      contextCommand(id, { json: options.json, verbose: options.verbose });
     });
 
   // Resume

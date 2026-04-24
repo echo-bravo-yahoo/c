@@ -146,6 +146,10 @@ function parseSession(raw: Record<string, unknown>): Session {
     session.parent_session_id = String(raw.parent_session_id);
   }
 
+  if (raw.context && typeof raw.context === 'object') {
+    session.context = raw.context as Session['context'];
+  }
+
   return session;
 }
 

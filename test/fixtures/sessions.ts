@@ -2,7 +2,13 @@
  * Session test fixtures
  */
 
-import type { Session, SessionResources, SessionMeta, SessionServers } from '../../src/store/schema.ts';
+import type {
+  Session,
+  SessionResources,
+  SessionMeta,
+  SessionServers,
+  SessionContextInventory,
+} from '../../src/store/schema.ts';
 
 export interface SessionOverrides {
   id?: string;
@@ -20,6 +26,7 @@ export interface SessionOverrides {
   context_pct?: number;
   pid?: number;
   parent_session_id?: string;
+  context?: SessionContextInventory;
 }
 
 let sessionCounter = 0;
@@ -53,6 +60,7 @@ export function createTestSession(overrides: SessionOverrides = {}): Session {
     ...(overrides.context_pct != null && { context_pct: overrides.context_pct }),
     ...(overrides.pid != null && { pid: overrides.pid }),
     ...(overrides.parent_session_id && { parent_session_id: overrides.parent_session_id }),
+    ...(overrides.context && { context: overrides.context }),
   };
 }
 

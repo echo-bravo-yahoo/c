@@ -7,6 +7,7 @@ import { createSession } from '../store/schema.ts';
 import { getCurrentBranch, getWorktreeInfo, getRepoSlug, listWorktrees } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
 import { encodeProjectKey, getPlanExecutionInfo, findTranscriptPath, getCustomTitleFromTranscriptTail, readClaudeSessionIndex } from '../claude/sessions.ts';
+import { capturePreloadedContext } from '../claude/preloaded-context.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
 import { writeStatusCache } from '../store/status-cache.ts';
 import type { StatusCacheData } from '../store/status-cache.ts';
@@ -274,6 +275,10 @@ export async function registerNewSession(
   if (worktree) {
     session.resources.worktree = worktree.name;
   }
+
+  // Capture preloaded context (CLAUDE.md hierarchy + @-imports, MEMORY.md, MCP servers)
+  const preloaded = capturePreloadedContext(cwd, projectKey);
+  session.context = { reads: {}, ...preloaded };
 
   // Save to index
   await updateIndex((index) => {
