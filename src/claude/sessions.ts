@@ -79,7 +79,17 @@ export function decodeProjectKey(projectKey: string): string {
       }
     }
 
-    // Neither exists yet, default to path segment
+    // Try appending with a hyphen (hyphens in dir names are preserved verbatim
+    // by encodeProjectKey, so an encoded "-" may be a literal hyphen)
+    if (current !== '/') {
+      const withHyphen = current + '-' + part;
+      if (fs.existsSync(withHyphen)) {
+        current = withHyphen;
+        continue;
+      }
+    }
+
+    // Nothing exists yet, default to path segment
     current = asSegment;
   }
 

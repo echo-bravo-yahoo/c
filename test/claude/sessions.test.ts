@@ -94,6 +94,21 @@ describe('c', () => {
             fs.rmSync(base, { recursive: true, force: true });
           }
         });
+
+        it('resolves hyphen-bearing segment when directory with hyphen exists on filesystem', () => {
+          // encodeProjectKey preserves hyphens verbatim, so /tmp/ctesthyphen/latitude-ubuntu
+          // encodes to -tmp-ctesthyphen-latitude-ubuntu — indistinguishable from
+          // /tmp/ctesthyphen/latitude/ubuntu without filesystem probing.
+          const base = '/tmp/ctesthyphen';
+          const withHyphen = path.join(base, 'latitude-ubuntu');
+          fs.mkdirSync(withHyphen, { recursive: true });
+          try {
+            const result = decodeProjectKey('-tmp-ctesthyphen-latitude-ubuntu');
+            assert.strictEqual(result, withHyphen);
+          } finally {
+            fs.rmSync(base, { recursive: true, force: true });
+          }
+        });
       });
 
       describe('project key round-trip', () => {
