@@ -190,6 +190,20 @@ async function processExistingSession(sessionId: string, cwd: string): Promise<v
       }
     }
 
+    // Self-heal a mis-decoded directory using the hook's authoritative cwd.
+    // Claude's project-key encoding is lossy — `/`, `.`, space and hyphen all
+    // collapse to `-` — so a session adopted from Claude's storage (where the
+    // only signal is the project key) can carry a wrong `directory` that
+    // decodeProjectKey reconstructed incorrectly. The session-start hook knows
+    // the real cwd, so trust it. Guard on the encoded cwd matching the stored
+    // project_key: that confirms it's the same session location (just a bad
+    // directory string), and excludes a legitimate resume from a different
+    // directory. Worktree sessions are handled above and skipped here.
+    // e.g. stored "/…/2023/2024/archive/q1/notes" → real "/…/2023-2024 archive/q1 notes".
+    if (!s.resources.worktree && s.directory !== cwd && encodeProjectKey(cwd) === s.project_key) {
+      s.directory = cwd;
+    }
+
     // Store tmux pane if not already set
     if (process.env.TMUX_PANE && !s.resources.tmux_pane) {
       s.resources.tmux_pane = process.env.TMUX_PANE;
