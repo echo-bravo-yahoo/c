@@ -23,6 +23,18 @@ export function setupTempStore(): TempStore {
   const tmpDir = mkdtempSync(join(tmpdir(), 'c-test-'));
   const savedCHome = process.env.C_HOME;
   process.env.C_HOME = tmpDir;
+
+  // Neutralize ambient session-suppression vars so the test environment is
+  // hermetic. Claude Code sessions export C_EPHEMERAL=1 (and may set C_SKIP),
+  // which make registerNewSession a no-op and short-circuit hooks — that would
+  // break any test that creates a session and asserts it was registered.
+  // Tests that exercise these vars set them explicitly after setup and restore
+  // them in their own afterEach, so clearing the ambient baseline here is safe.
+  const savedEphemeral = process.env.C_EPHEMERAL;
+  const savedSkip = process.env.C_SKIP;
+  delete process.env.C_EPHEMERAL;
+  delete process.env.C_SKIP;
+
   resetIndexCache();
 
   return {
@@ -32,6 +44,16 @@ export function setupTempStore(): TempStore {
         process.env.C_HOME = savedCHome;
       } else {
         delete process.env.C_HOME;
+      }
+      if (savedEphemeral !== undefined) {
+        process.env.C_EPHEMERAL = savedEphemeral;
+      } else {
+        delete process.env.C_EPHEMERAL;
+      }
+      if (savedSkip !== undefined) {
+        process.env.C_SKIP = savedSkip;
+      } else {
+        delete process.env.C_SKIP;
       }
       rmSync(tmpDir, { recursive: true, force: true });
       resetIndexCache();
