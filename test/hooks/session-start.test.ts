@@ -123,6 +123,44 @@ describe('c', () => {
         });
       });
 
+      describe('directory self-heal', () => {
+        // Claude's project-key encoding is lossy (/, ., space, hyphen all → -),
+        // so an adopted session can carry a directory that decodeProjectKey
+        // reconstructed wrong. The session-start hook's cwd is authoritative
+        // and is trusted when it encodes to the already-stored project_key.
+        it('corrects a mis-decoded directory using the hook cwd', async () => {
+          const realCwd = '/repo/80-89 rope/86 erpg';
+          await updateIndex((idx) => {
+            idx.sessions['mangled'] = createTestSession({
+              id: 'mangled',
+              state: 'idle',
+              directory: '/repo/80/89/rope/86/erpg', // bad decode
+              project_key: encodeProjectKey(realCwd),
+            });
+          });
+
+          await handleSessionStart('mangled', realCwd, null);
+
+          assert.strictEqual(getSession('mangled')?.directory, realCwd);
+        });
+
+        it('leaves directory untouched when resumed from a different dir', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['moved'] = createTestSession({
+              id: 'moved',
+              state: 'idle',
+              directory: '/repo/a',
+              project_key: encodeProjectKey('/repo/a'),
+            });
+          });
+
+          // cwd /repo/b encodes to a different project_key — not a re-decode.
+          await handleSessionStart('moved', '/repo/b', null);
+
+          assert.strictEqual(getSession('moved')?.directory, '/repo/a');
+        });
+      });
+
       describe('concurrent session support', () => {
         it('preserves existing sessions when starting a new one', async () => {
           await updateIndex((idx) => {
