@@ -82,6 +82,7 @@ graph TD
   - Files using `mock.module()` also need `--experimental-test-module-mocks`
 - **Test style**: Behavioral, end-to-end through the CLI. Seed state via `cli.seed()`, run the real command via `cli.run()`, assert outcomes on store and output. Do not reimplement command logic in tests.
 - **Placement**: Group tests by command (`test/commands/`) or module (`test/claude/`, `test/hooks/`). Add cases to an existing file when the behavior fits its scope.
+- **Paths**: Use generic placeholder paths (`/home/user/...`, `/tmp/...`), never real filesystem paths — see [.claude/docs/path-conventions.md](.claude/docs/path-conventions.md).
 
 ### Command tests
 Command tests use `test/helpers/cli.ts` to run commands through `createProgram().parseAsync()`. This exercises argument parsing, store persistence, output formatting, and error handling end-to-end.
