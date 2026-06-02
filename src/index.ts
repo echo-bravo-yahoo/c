@@ -358,8 +358,9 @@ export function createProgram(): Command {
   program
     .command('dir [id]')
     .description('Print session directory path')
-    .action((id) => {
-      dirCommand(id);
+    .option('--state', 'Print the session state dir (<C_HOME>/state/<id>) instead of the working dir')
+    .action((id, options) => {
+      dirCommand(id, { state: options.state });
     });
 
   // State dir

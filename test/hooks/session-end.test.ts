@@ -6,7 +6,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleSessionEnd } from '../../src/hooks/session-end.ts';
 import { updateIndex, getSession } from '../../src/store/index.ts';
@@ -105,6 +105,22 @@ describe('c', () => {
         await handleSessionEnd('s1', '/tmp', null);
 
         assert.ok(!existsSync(stateDir), 'entire state dir should be removed');
+      });
+
+      it('removes the session state dir (cc-cred creds)', async () => {
+        await updateIndex((idx) => {
+          idx.sessions['s1'] = createTestSession({ id: 's1', state: 'busy' });
+        });
+        const credsDir = join(store.tmpDir, 'state', 's1', 'creds');
+        mkdirSync(credsDir, { recursive: true });
+        writeFileSync(join(credsDir, 'TOKEN'), 'secret');
+
+        const stateDir = join(store.tmpDir, 'state', 's1');
+        assert.ok(existsSync(stateDir), 'state dir should exist before handler');
+
+        await handleSessionEnd('s1', '/tmp', null);
+
+        assert.ok(!existsSync(stateDir), 'state dir should be removed after handler');
       });
 
       it('closes session that has no pid', async () => {
