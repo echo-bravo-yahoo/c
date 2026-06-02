@@ -55,8 +55,8 @@ describe('c', () => {
         });
 
         it('replaces spaces with hyphens', () => {
-          const result = encodeProjectKey('/mnt/d/Human Documents/notes');
-          assert.strictEqual(result, '-mnt-d-Human-Documents-notes');
+          const result = encodeProjectKey('/home/user/my docs/notes');
+          assert.strictEqual(result, '-home-user-my-docs-notes');
         });
 
         it('replaces slashes, dots, and spaces together', () => {
@@ -85,10 +85,10 @@ describe('c', () => {
         it('resolves space-encoded segment when directory with spaces exists on filesystem', () => {
           // Use a fixed base path with no ambiguous dashes so decode resolves cleanly
           const base = '/tmp/ctestspaces';
-          const withSpaces = path.join(base, 'Human Documents');
+          const withSpaces = path.join(base, 'my docs');
           fs.mkdirSync(withSpaces, { recursive: true });
           try {
-            const result = decodeProjectKey('-tmp-ctestspaces-Human-Documents');
+            const result = decodeProjectKey('-tmp-ctestspaces-my-docs');
             assert.strictEqual(result, withSpaces);
           } finally {
             fs.rmSync(base, { recursive: true, force: true });
@@ -122,7 +122,7 @@ describe('c', () => {
 
         it('round-trips paths with spaces when directory exists on filesystem', () => {
           const base = '/tmp/ctestspaces';
-          const withSpaces = path.join(base, 'Human Documents', 'notes');
+          const withSpaces = path.join(base, 'my docs', 'notes');
           fs.mkdirSync(withSpaces, { recursive: true });
           try {
             const encoded = encodeProjectKey(withSpaces);
