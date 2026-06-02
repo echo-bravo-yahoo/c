@@ -140,6 +140,24 @@ export function recreateWorktree(repoRoot: string, worktreePath: string, branch:
   return existsSync(worktreePath);
 }
 
+/**
+ * Decide whether a session's stored directory should be healed to Claude's
+ * authoritative directory (derived from the transcript's recorded cwd).
+ *
+ * Older index entries can carry a directory that an earlier, lossy project-key
+ * decode reconstructed incorrectly — e.g. ".../2023/2024/archive/q1/notes" for a
+ * real ".../2023-2024 archive/q1 notes". Returns the directory to heal to, or
+ * null when nothing should change: the stored path is still valid, there's no
+ * better candidate, or the candidate is also missing (e.g. a deleted worktree,
+ * which the worktree-recovery path handles instead).
+ */
+export function reconcileDirectory(storedDir: string, claudeDir: string | undefined): string | null {
+  if (existsSync(storedDir)) return null;
+  if (!claudeDir || claudeDir === storedDir) return null;
+  if (!existsSync(claudeDir)) return null;
+  return claudeDir;
+}
+
 export async function resumeCommand(idOrPrefix: string, options: ResumeOptions = {}): Promise<void> {
   const session = await resolveSessionForResume(idOrPrefix);
   if (!session) return; // resolveSessionForResume exits on failure
@@ -159,6 +177,22 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
     console.error(chalk.red(`Session ${displayName} no longer exists in Claude's storage.`));
     console.error(chalk.dim(`Archived stale session. Run ${chalk.cyan('c new')} to start fresh.`));
     process.exit(1);
+  }
+
+  // Self-heal a stale/mis-decoded directory from Claude's authoritative record
+  // (getClaudeSession derives its directory from the transcript's cwd). Must run
+  // before the existsSync validation below — otherwise a directory that an old,
+  // lossy project-key decode got wrong would archive the session as gone.
+  const healedDir = reconcileDirectory(session.directory, claudeSession.directory);
+  if (healedDir) {
+    await updateIndex((index) => {
+      const s = index.sessions[session!.id];
+      if (s) {
+        s.directory = healedDir;
+        s.project_key = encodeProjectKey(healedDir);
+      }
+    });
+    session.directory = healedDir;
   }
 
   // Validate session directory still exists

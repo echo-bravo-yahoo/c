@@ -10,6 +10,7 @@ import { resolve } from 'node:path';
 // Mutable mock state
 let mockClaudeSessions: Array<{ id: string }> = [];
 let mockTranscriptPath: string | null = null;
+let mockTranscriptCwd: string | null = null;
 let mockCustomTitle: string | null = null;
 let mockTranscriptUsage: { cost_usd: number } | null = null;
 
@@ -28,6 +29,7 @@ mock.module(resolve('src/claude/sessions.ts'), {
     findClaudeSessionIdsByTitle: () => [],
     getPlanExecutionInfo: () => null,
     getCustomTitleFromTranscriptTail: () => mockCustomTitle,
+    getCwdFromTranscriptHead: () => mockTranscriptCwd,
     CLAUDE_DIR: '/tmp/mock-claude',
     PROJECTS_DIR: '/tmp/mock-claude/projects',
     PLANS_DIR: '/tmp/mock-claude/plans',
@@ -50,6 +52,7 @@ beforeEach(() => {
   cli = setupCLI();
   mockClaudeSessions = [];
   mockTranscriptPath = null;
+  mockTranscriptCwd = null;
   mockCustomTitle = null;
   mockTranscriptUsage = null;
 });
@@ -64,6 +67,30 @@ describe('c repair', () => {
     mockClaudeSessions = [{ id: 's1' }];
     await cli.run('repair');
     assert.ok(cli.console.logs.some((l) => l.includes('No issues found')));
+  });
+
+  it('heals a mis-decoded directory from the transcript cwd', async () => {
+    const realDir = process.cwd(); // a directory that exists
+    await cli.seed({ id: 's1', state: 'closed', directory: '/nonexistent/2023/2024/archive/q1/notes' });
+    mockClaudeSessions = [{ id: 's1' }];
+    mockTranscriptPath = '/tmp/fake/s1.jsonl';
+    mockTranscriptCwd = realDir;
+    await cli.run('repair');
+    const s = cli.session('s1');
+    assert.strictEqual(s?.directory, realDir);
+    assert.strictEqual(s?.project_key, realDir.replace(/\//g, '-'));
+    assert.ok(cli.console.logs.some((l) => l.includes('Healed directory')));
+  });
+
+  it('does not heal when the stored directory still exists', async () => {
+    const realDir = process.cwd();
+    await cli.seed({ id: 's1', state: 'closed', directory: realDir });
+    mockClaudeSessions = [{ id: 's1' }];
+    mockTranscriptPath = '/tmp/fake/s1.jsonl';
+    mockTranscriptCwd = '/some/other/place';
+    await cli.run('repair');
+    assert.strictEqual(cli.session('s1')?.directory, realDir);
+    assert.ok(!cli.console.logs.some((l) => l.includes('Healed directory')));
   });
 
   it('clears stale PID and closes session when process is dead', async () => {

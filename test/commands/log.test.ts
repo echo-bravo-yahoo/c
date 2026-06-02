@@ -20,6 +20,7 @@ mock.module(resolve('src/claude/sessions.ts'), {
     getPlanExecutionInfo: () => null,
     findTranscriptPath: () => mockTranscriptPath,
     getCustomTitleFromTranscriptTail: () => null,
+    getCwdFromTranscriptHead: () => null,
     findClaudeSessionIdsByTitle: () => [],
     decodeProjectKey: (k: string) => k,
     encodeProjectKey: (d: string) => d,

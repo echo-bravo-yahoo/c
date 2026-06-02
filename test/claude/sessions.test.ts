@@ -7,7 +7,7 @@ import assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { encodeProjectKey, decodeProjectKey } from '../../src/claude/sessions.ts';
+import { encodeProjectKey, decodeProjectKey, getCwdFromTranscriptHead } from '../../src/claude/sessions.ts';
 
 // Test with real temp directory for integration tests
 let testDir: string;
@@ -281,6 +281,56 @@ describe('c', () => {
           }
 
           assert.strictEqual(planInfo, null);
+        });
+      });
+
+      describe('getCwdFromTranscriptHead', () => {
+        function writeTranscript(name: string, lines: string[]): string {
+          const file = path.join(projectsDir, name);
+          fs.writeFileSync(file, lines.join('\n') + '\n');
+          return file;
+        }
+
+        it('returns the cwd from the first entry', () => {
+          const file = writeTranscript('a.jsonl', [
+            '{"type":"user","cwd":"/home/user/projects/2023-2024 archive/q1 notes","message":"hi"}',
+            '{"type":"assistant","cwd":"/home/user/projects/2023-2024 archive/q1 notes"}',
+          ]);
+          assert.strictEqual(
+            getCwdFromTranscriptHead(file),
+            '/home/user/projects/2023-2024 archive/q1 notes',
+          );
+        });
+
+        it('falls through to a later line when the first has no cwd', () => {
+          const file = writeTranscript('b.jsonl', [
+            '{"type":"summary","summary":"no cwd here"}',
+            '{"type":"user","cwd":"/home/user/proj"}',
+          ]);
+          assert.strictEqual(getCwdFromTranscriptHead(file), '/home/user/proj');
+        });
+
+        it('skips malformed lines', () => {
+          const file = writeTranscript('c.jsonl', [
+            'not json but mentions "cwd"',
+            '{"type":"user","cwd":"/home/user/proj"}',
+          ]);
+          assert.strictEqual(getCwdFromTranscriptHead(file), '/home/user/proj');
+        });
+
+        it('returns null when no entry carries a cwd', () => {
+          const file = writeTranscript('d.jsonl', [
+            '{"type":"user","message":"hi"}',
+            '{"type":"assistant","message":"yo"}',
+          ]);
+          assert.strictEqual(getCwdFromTranscriptHead(file), null);
+        });
+
+        it('returns null for a missing file', () => {
+          assert.strictEqual(
+            getCwdFromTranscriptHead(path.join(projectsDir, 'does-not-exist.jsonl')),
+            null,
+          );
         });
       });
 

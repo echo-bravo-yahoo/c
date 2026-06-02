@@ -135,10 +135,21 @@ export function listClaudeSessions(): ClaudeSession[] {
 
       const fileStat = fs.statSync(transcriptPath);
 
+      // decodeProjectKey is lossy — `/`, `.`, space and literal hyphen all
+      // collapse to `-`, so its reconstruction is wrong for a segment that
+      // mixes a hyphen and a space (e.g. "2023-2024 archive"). When the decoded path
+      // doesn't exist, trust the authoritative cwd Claude records in the
+      // transcript itself. The existsSync gate keeps the common case (correct
+      // decode) free of any extra I/O.
+      const decoded = decodeProjectKey(projectKey);
+      const directory = fs.existsSync(decoded)
+        ? decoded
+        : getCwdFromTranscriptHead(transcriptPath) ?? decoded;
+
       sessions.push({
         id: sessionId,
         projectKey,
-        directory: decodeProjectKey(projectKey),
+        directory,
         transcriptPath,
         historyPath: fs.existsSync(historyPath) ? historyPath : '',
         modifiedAt: fileStat.mtime,
@@ -380,6 +391,65 @@ export function findTranscriptPath(sessionId: string): string | null {
   for (const projectDir of fs.readdirSync(PROJECTS_DIR)) {
     const candidate = path.join(PROJECTS_DIR, projectDir, `${sessionId}.jsonl`);
     if (fs.existsSync(candidate)) return candidate;
+  }
+
+  return null;
+}
+
+/**
+ * Read the authoritative working directory from a transcript's head.
+ *
+ * Claude records the real `cwd` on (nearly) every transcript entry, so the
+ * first complete line is the cheapest authoritative source. Used to correct a
+ * directory that the lossy project-key decode reconstructed wrong. Reads 64KB
+ * chunks from the start (capped at 1MB to bound a pathologically large first
+ * line) and returns the first parseable `cwd` string, or null.
+ */
+export function getCwdFromTranscriptHead(transcriptPath: string): string | null {
+  const CHUNK_SIZE = 65536;
+  const MAX_SCAN = 1024 * 1024;
+
+  let fd: number;
+  try {
+    fd = fs.openSync(transcriptPath, 'r');
+  } catch {
+    return null;
+  }
+
+  try {
+    const size = fs.fstatSync(fd).size;
+    if (size === 0) return null;
+
+    let pos = 0;
+    let buffered = '';
+
+    while (pos < size && pos < MAX_SCAN) {
+      const readSize = Math.min(CHUNK_SIZE, size - pos);
+      const buf = Buffer.alloc(readSize);
+      fs.readSync(fd, buf, 0, readSize, pos);
+      pos += readSize;
+      buffered += buf.toString('utf-8');
+
+      // Consume every complete line accumulated so far.
+      let nl: number;
+      while ((nl = buffered.indexOf('\n')) !== -1) {
+        const line = buffered.slice(0, nl).trim();
+        buffered = buffered.slice(nl + 1);
+        if (!line) continue;
+        // Fast check before JSON.parse
+        if (!line.includes('"cwd"')) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (typeof entry.cwd === 'string' && entry.cwd) return entry.cwd;
+        } catch {
+          // Skip malformed lines
+        }
+      }
+    }
+  } catch {
+    // Read error
+  } finally {
+    fs.closeSync(fd);
   }
 
   return null;

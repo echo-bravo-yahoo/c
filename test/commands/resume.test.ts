@@ -30,6 +30,7 @@ mock.module(resolve(__dirname, '../../src/claude/sessions.ts'), {
     resetSessionCaches: () => {},
     findTranscriptPath: () => null,
     getCustomTitleFromTranscriptTail: () => null,
+    getCwdFromTranscriptHead: () => null,
     getPlanExecutionInfo: () => null,
     PLANS_DIR: join(tmpdir(), 'c-resume-test-plans'),
     extractPlanTitle: () => null,
@@ -39,6 +40,7 @@ mock.module(resolve(__dirname, '../../src/claude/sessions.ts'), {
 // Dynamic import inside before() so describe/it blocks register synchronously.
 let buildResumeArgs: typeof import('../../src/commands/resume.ts').buildResumeArgs;
 let relocateTranscript: typeof import('../../src/commands/resume.ts').relocateTranscript;
+let reconcileDirectory: typeof import('../../src/commands/resume.ts').reconcileDirectory;
 let resolveSessionForResume: typeof import('../../src/commands/resume.ts').resolveSessionForResume;
 let updateIndex: typeof import('../../src/store/index.ts').updateIndex;
 let getSession: typeof import('../../src/store/index.ts').getSession;
@@ -53,7 +55,7 @@ type CLIHarness = import('../helpers/cli.ts').CLIHarness;
 
 describe('c', () => {
   before(async () => {
-    ({ buildResumeArgs, relocateTranscript, resolveSessionForResume } = await import('../../src/commands/resume.ts'));
+    ({ buildResumeArgs, relocateTranscript, reconcileDirectory, resolveSessionForResume } = await import('../../src/commands/resume.ts'));
     ({ updateIndex, getSession, findSessionsByName, findSessionsByTitle, resetIndexCache } = await import('../../src/store/index.ts'));
     ({ createTestSession, resetSessionCounter } = await import('../fixtures/sessions.ts'));
     ({ shortId } = await import('../../src/util/format.ts'));
@@ -119,6 +121,31 @@ describe('c', () => {
           assert.ok(args.includes('--effort'));
           assert.ok(args.includes('--fork-session'));
           assert.ok(args.includes('--verbose'));
+        });
+      });
+
+      describe('reconcileDirectory', () => {
+        const existing = process.cwd();          // a directory that exists
+        const missing = '/nonexistent/2023/2024/archive/q1/notes';
+
+        it('returns null when the stored directory still exists', () => {
+          assert.strictEqual(reconcileDirectory(existing, '/some/other'), null);
+        });
+
+        it('heals to the claude directory when stored is gone and claude exists', () => {
+          assert.strictEqual(reconcileDirectory(missing, existing), existing);
+        });
+
+        it('returns null when the claude directory is also missing', () => {
+          assert.strictEqual(reconcileDirectory(missing, '/also/gone'), null);
+        });
+
+        it('returns null when claude directory equals the stored one', () => {
+          assert.strictEqual(reconcileDirectory(missing, missing), null);
+        });
+
+        it('returns null when there is no claude directory', () => {
+          assert.strictEqual(reconcileDirectory(missing, undefined), null);
         });
       });
 

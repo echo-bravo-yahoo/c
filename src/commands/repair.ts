@@ -10,8 +10,9 @@ import { getCurrentBranch, getRepoSlug } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
 import { listPRs } from '../detection/pr.ts';
 import { ambiguityError, getDisplayName, shortId } from '../util/format.ts';
-import { findTranscriptPath, getCustomTitleFromTranscriptTail, getPlanExecutionInfo } from '../claude/sessions.ts';
+import { findTranscriptPath, getCwdFromTranscriptHead, getCustomTitleFromTranscriptTail, getPlanExecutionInfo, encodeProjectKey } from '../claude/sessions.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
+import { reconcileDirectory } from './resume.ts';
 import type { Session } from '../store/schema.ts';
 
 /**
@@ -57,6 +58,21 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
     for (const [id, session] of Object.entries(sessions)) {
       if (!session) continue;
       const label = `${shortId(id)} ${getDisplayName(session) || '(unnamed)'}`;
+
+      // 0. Stale/mis-decoded directory — heal from the transcript's recorded cwd.
+      // Runs first so the enrichment steps below act on the corrected path. The
+      // findTranscriptPath scan is gated on the directory actually being missing,
+      // so clean sessions pay no extra I/O.
+      if (!existsSync(session.directory)) {
+        const transcriptPath = findTranscriptPath(id);
+        const claudeDir = transcriptPath ? getCwdFromTranscriptHead(transcriptPath) ?? undefined : undefined;
+        const healedDir = reconcileDirectory(session.directory, claudeDir);
+        if (healedDir) {
+          session.directory = healedDir;
+          session.project_key = encodeProjectKey(healedDir);
+          fixes.push(`Healed directory for ${label} → ${healedDir}`);
+        }
+      }
 
       // 1. Stale PIDs — process no longer exists
       if (session.pid != null && !isProcessAlive(session.pid)) {
