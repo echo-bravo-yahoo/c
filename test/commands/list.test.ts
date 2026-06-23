@@ -473,6 +473,46 @@ describe('c', () => {
         });
       });
 
+      describe('--untitled filter', () => {
+        it('shows only sessions with no name', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy' },
+            { id: 's2', state: 'busy', name: 'Auth Bug' },
+          );
+          await cli.run('list', '--untitled');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('s1'));
+          assert.ok(!output.includes('s2'));
+        });
+
+        it('excludes sessions named via meta._custom_title', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', meta: { _custom_title: 'Cached Title' } },
+            { id: 's2', state: 'busy' },
+          );
+          await cli.run('list', '--untitled');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(!output.includes('s1'));
+          assert.ok(output.includes('s2'));
+        });
+
+        it('composes with --state', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy' },
+            { id: 's2', state: 'closed' },
+            { id: 's3', state: 'busy', name: 'Named' },
+          );
+          await cli.run('list', '--untitled', '--state', 'busy');
+
+          const output = cli.console.logs.join('\n');
+          assert.ok(output.includes('s1'));
+          assert.ok(!output.includes('s2'));
+          assert.ok(!output.includes('s3'));
+        });
+      });
+
       describe('filters compose with AND', () => {
         it('--state and --branch compose', async () => {
           await cli.seed(
@@ -1049,6 +1089,18 @@ describe('c', () => {
             { id: 's2', state: 'busy', directory: '/home/u/web' },
           );
           await cli.run('list', '--dir', '/home/u/api', '--json');
+
+          const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
+          assert.strictEqual(arr.length, 1);
+          assert.strictEqual(arr[0].id, 's1');
+        });
+
+        it('respects --untitled filter', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy' },
+            { id: 's2', state: 'busy', name: 'Dashboard' },
+          );
+          await cli.run('list', '--untitled', '--json');
 
           const arr = JSON.parse(cli.stdout.output.join('')) as { id: string }[];
           assert.strictEqual(arr.length, 1);

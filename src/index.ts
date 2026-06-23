@@ -90,6 +90,7 @@ export function createProgram(): Command {
     .option('--tag <tag>', 'Filter by tag (exact)')
     .option('--name <name>', 'Filter by session name (substring)')
     .option('--worktree <name>', 'Filter by worktree name (substring)')
+    .option('--untitled', 'Show only sessions with no name or title')
     .option('--prs', 'Show sessions with linked PRs')
     .option('--jira', 'Show sessions with linked JIRA tickets')
     .option('--repos', 'Show sessions grouped by repository')
@@ -108,6 +109,7 @@ export function createProgram(): Command {
         tag: options.tag,
         name: options.name,
         worktree: options.worktree,
+        untitled: options.untitled,
         prs: options.prs,
         jira: options.jira,
         repos: options.repos,

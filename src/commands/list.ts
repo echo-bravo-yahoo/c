@@ -22,6 +22,7 @@ export interface ListOptions {
   tag?: string;
   name?: string;
   worktree?: string;
+  untitled?: boolean;
   sort?: string;
   flat?: boolean;
   bottomUp?: boolean;
@@ -105,6 +106,9 @@ export async function listCommand(rawOptions: ListOptions): Promise<void> {
   if (options.worktree) {
     const q = options.worktree.toLowerCase();
     sessions = sessions.filter(s => s.resources.worktree?.toLowerCase().includes(q));
+  }
+  if (options.untitled) {
+    sessions = sessions.filter(s => !getDisplayName(s));
   }
 
   // Parse sort specs
