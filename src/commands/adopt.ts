@@ -3,17 +3,21 @@
  */
 
 import chalk from 'chalk';
-import { getSession, updateIndex } from '../store/index.ts';
+import { getSession, readIndex, updateIndex } from '../store/index.ts';
 import { createSession } from '../store/schema.ts';
-import { getClaudeSession, getClaudeSessionTitles, getClaudeSessionsForDirectory } from '../claude/sessions.ts';
+import { getClaudeSession, getClaudeSessionTitles, getClaudeSessionsForDirectory, getPlanExecutionInfo, getPlanContinuationInfo, extractPlanTitle } from '../claude/sessions.ts';
 import { getCurrentBranch, getWorktreeInfo, getRepoSlug } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
+import { listPRs } from '../detection/pr.ts';
+import { collectLiveSessions } from '../util/process.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
 import { writeStatusCache } from '../store/status-cache.ts';
 import type { StatusCacheData } from '../store/status-cache.ts';
 import type { Session } from '../store/schema.ts';
 import type { ClaudeSession } from '../claude/sessions.ts';
 import { shortId } from '../util/format.ts';
+import { capturePreloadedContext } from '../claude/preloaded-context.ts';
+import { readTranscriptUsage } from '../claude/usage.ts';
 
 export interface AdoptOptions {
   name?: string;
@@ -26,9 +30,24 @@ async function adoptOne(claudeSession: ClaudeSession, options: AdoptOptions): Pr
   const { id, projectKey } = claudeSession;
 
   const session = createSession(id, cwd, projectKey, claudeSession.modifiedAt);
-  session.state = 'busy';
+  const liveEntry = collectLiveSessions().get(id);
+  if (liveEntry) {
+    session.state = liveEntry.status === 'busy' ? 'busy' : 'idle';
+  } else {
+    session.state = 'closed';
+  }
 
   if (options.name) session.name = options.name;
+
+  // Fix 2: Preloaded context (CLAUDE.md hierarchy, MCP servers, memory index)
+  const preloaded = capturePreloadedContext(cwd, projectKey);
+  session.context = { reads: {}, ...preloaded };
+
+  // Fix 3: Cost for closed sessions (no future hook will compute it)
+  if (session.state === 'closed') {
+    const usage = readTranscriptUsage(claudeSession.transcriptPath, 0);
+    if (usage && usage.cost_usd > 0) session.cost_usd = usage.cost_usd;
+  }
 
   // Git detection
   const branch = getCurrentBranch(cwd);
@@ -36,6 +55,12 @@ async function adoptOne(claudeSession: ClaudeSession, options: AdoptOptions): Pr
     session.resources.branch = branch;
     const jira = extractJiraFromBranch(branch);
     if (jira) session.resources.jira = jira;
+
+    try {
+      const prs = listPRs(cwd, 'all');
+      const pr = prs.find((p) => p.branch === branch);
+      if (pr) session.resources.pr = pr.url;
+    } catch { /* gh CLI unavailable or network error */ }
   }
 
   const worktree = getWorktreeInfo(cwd);
@@ -46,8 +71,52 @@ async function adoptOne(claudeSession: ClaudeSession, options: AdoptOptions): Pr
   const { customTitle } = getClaudeSessionTitles(id, projectKey);
   if (customTitle) session.meta._custom_title = customTitle;
 
+  // Check if this session is a plan-execution child.
+  // The child's transcript carries origin.kind === "auto-continuation" and the exact slug,
+  // so match by slug rather than a bare temporal scan.
+  const continuationInfo = getPlanContinuationInfo(id);
+  if (continuationInfo) {
+    const indexedCandidates = Object.entries(readIndex().sessions)
+      .filter(([sid, s]) => sid !== id && s.directory === cwd)
+      .map(([sid, s]) => ({ id: sid, lastActive: new Date(s.last_active_at) }));
+    const untrackedCandidates = getClaudeSessionsForDirectory(cwd)
+      .filter((cs) => cs.id !== id && !getSession(cs.id))
+      .map((cs) => ({ id: cs.id, lastActive: cs.modifiedAt }));
+    const candidates = [...indexedCandidates, ...untrackedCandidates]
+      .filter((c) => c.lastActive <= claudeSession.modifiedAt)
+      .sort((a, b) => b.lastActive.getTime() - a.lastActive.getTime());
+
+    for (const candidate of candidates) {
+      const planInfo = getPlanExecutionInfo(candidate.id);
+      if (planInfo && planInfo.slug === continuationInfo.slug) {
+        session.parent_session_id = candidate.id;
+        session.resources.plan = planInfo.slug;
+        if (!session.name) session.name = planInfo.title ?? planInfo.slug;
+        break;
+      }
+    }
+    // Even if no parent was found, record the plan slug from the child transcript.
+    if (!session.resources.plan) {
+      session.resources.plan = continuationInfo.slug;
+      if (!session.name) {
+        session.name = extractPlanTitle(continuationInfo.slug) ?? continuationInfo.slug;
+      }
+    }
+  }
+
+  // Self-check: is this session itself a plan-execution parent?
+  if (!session.resources.plan) {
+    const ownPlanInfo = getPlanExecutionInfo(id);
+    if (ownPlanInfo) session.resources.plan = ownPlanInfo.slug;
+  }
+
   await updateIndex((index) => {
     index.sessions[session.id] = session;
+    // Backfill parent's resources.plan if we linked to it
+    if (session.parent_session_id && session.resources.plan) {
+      const parent = index.sessions[session.parent_session_id];
+      if (parent && !parent.resources.plan) parent.resources.plan = session.resources.plan;
+    }
   });
 
   const displayTitle = customTitle || options.name || shortId(id);
