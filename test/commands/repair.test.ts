@@ -13,6 +13,20 @@ let mockTranscriptPath: string | null = null;
 let mockTranscriptCwd: string | null = null;
 let mockCustomTitle: string | null = null;
 let mockTranscriptUsage: { cost_usd: number } | null = null;
+let mockLiveSessionIds: Set<string> = new Set();
+let mockPlanExecutionInfoById: Map<string, { slug: string; title: string | null }> = new Map();
+let mockPlanContinuationInfoById: Map<string, { slug: string }> = new Map();
+let mockInventoryDelta: { reads: Array<{ path: string; turn: number; via: 'Read' | 'Bash' }>; skills: Array<{ name: string; turn: number }>; new_offset: number; new_turn: number } | null = null;
+
+mock.module(resolve('src/util/process.ts'), {
+  namedExports: {
+    collectLiveSessions: () => new Map([...mockLiveSessionIds].map(id => [id, { status: null }])),
+    collectLiveSessionIds: () => mockLiveSessionIds,
+    isProcessAlive: (pid: number) => pid === 999,
+    isTranscriptOpen: (id: string) => mockLiveSessionIds.has(id),
+    signalSession: async () => {},
+  },
+});
 
 // Mock claude/sessions before any imports that pull it in
 mock.module(resolve('src/claude/sessions.ts'), {
@@ -27,7 +41,8 @@ mock.module(resolve('src/claude/sessions.ts'), {
     readClaudeSessionIndex: () => null,
     getClaudeSessionTitles: () => ({}),
     findClaudeSessionIdsByTitle: () => [],
-    getPlanExecutionInfo: () => null,
+    getPlanExecutionInfo: (id: string) => mockPlanExecutionInfoById.get(id) ?? null,
+    getPlanContinuationInfo: (id: string) => mockPlanContinuationInfoById.get(id) ?? null,
     getCustomTitleFromTranscriptTail: () => mockCustomTitle,
     getCwdFromTranscriptHead: () => mockTranscriptCwd,
     CLAUDE_DIR: '/tmp/mock-claude',
@@ -43,6 +58,20 @@ mock.module(resolve('src/claude/usage.ts'), {
   },
 });
 
+mock.module(resolve('src/claude/context-inventory.ts'), {
+  namedExports: {
+    canonicalizePath: (raw: string) => raw,
+    extractBashReadPaths: () => [],
+    readTranscriptInventory: () => mockInventoryDelta,
+    applyInventoryDelta: (inv: { reads: Record<string, number[]>; skills?: Record<string, number[]> }, delta: typeof mockInventoryDelta) => {
+      if (!delta) return;
+      for (const r of delta.reads) {
+        (inv.reads[r.path] ??= []).push(r.turn);
+      }
+    },
+  },
+});
+
 const { setupCLI } = await import('../helpers/cli.ts');
 import type { CLIHarness } from '../helpers/cli.ts';
 
@@ -55,6 +84,10 @@ beforeEach(() => {
   mockTranscriptCwd = null;
   mockCustomTitle = null;
   mockTranscriptUsage = null;
+  mockLiveSessionIds = new Set();
+  mockPlanExecutionInfoById = new Map();
+  mockPlanContinuationInfoById = new Map();
+  mockInventoryDelta = null;
 });
 
 afterEach(() => {
@@ -104,12 +137,21 @@ describe('c repair', () => {
     assert.ok(cli.console.logs.some((l) => l.includes('stale PID')));
   });
 
-  it('closes stuck sessions with no PID', async () => {
+  it('closes stuck sessions with no PID when transcript is not open', async () => {
     await cli.seed({ id: 's1', state: 'busy' });
     await cli.run('repair');
     const s = cli.session('s1');
     assert.strictEqual(s?.state, 'closed');
     assert.ok(cli.console.logs.some((l) => l.includes('stuck')));
+  });
+
+  it('leaves active session with no PID alone when transcript is open', async () => {
+    mockTranscriptPath = '/tmp/s1.jsonl';
+    mockLiveSessionIds = new Set(['s1']);
+    await cli.seed({ id: 's1', state: 'idle' });
+    await cli.run('repair');
+    const s = cli.session('s1');
+    assert.strictEqual(s?.state, 'idle');
   });
 
   it('closes active sessions with no PID even when Claude data exists', async () => {
@@ -265,5 +307,201 @@ describe('c repair', () => {
     await cli.run('repair', '--quiet');
 
     assert.ok(!cli.console.logs.some((l) => l.includes('No issues found')));
+  });
+
+  describe('step 10: backfill parent_session_id (thorough)', () => {
+    it('links child to the most recent plan-equipped parent in same directory', async () => {
+      const dir = '/home/user/proj';
+      await cli.seed({
+        id: 'parent1',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T10:00:00Z'),
+        last_active_at: new Date('2025-06-01T11:00:00Z'),
+      });
+      await cli.seed({
+        id: 'child1',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T11:30:00Z'),
+        last_active_at: new Date('2025-06-01T12:00:00Z'),
+      });
+      mockClaudeSessions = [{ id: 'parent1' }, { id: 'child1' }];
+      mockPlanContinuationInfoById.set('child1', { slug: 'impl' });
+      mockPlanExecutionInfoById.set('parent1', { slug: 'impl', title: null });
+
+      await cli.run('repair', '--thorough');
+
+      const child = cli.session('child1');
+      assert.strictEqual(child?.parent_session_id, 'parent1');
+      assert.strictEqual(child?.resources.plan, 'impl');
+      assert.ok(cli.console.logs.some((l) => l.includes('Linked')));
+    });
+
+    it('does not overwrite existing parent_session_id', async () => {
+      const dir = '/home/user/proj';
+      await cli.seed({
+        id: 'existing-parent',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T09:00:00Z'),
+        last_active_at: new Date('2025-06-01T10:00:00Z'),
+      });
+      await cli.seed({
+        id: 'already-linked',
+        state: 'closed',
+        directory: dir,
+        parent_session_id: 'existing-parent',
+        created_at: new Date('2025-06-01T10:30:00Z'),
+        last_active_at: new Date('2025-06-01T11:00:00Z'),
+      });
+      mockClaudeSessions = [{ id: 'existing-parent' }, { id: 'already-linked' }];
+      mockPlanContinuationInfoById.set('already-linked', { slug: 'plan-a' });
+      mockPlanExecutionInfoById.set('existing-parent', { slug: 'plan-a', title: null });
+
+      await cli.run('repair', '--thorough');
+
+      const linked = cli.session('already-linked');
+      assert.strictEqual(linked?.parent_session_id, 'existing-parent');
+      assert.ok(!cli.console.logs.some((l) => l.includes('Linked') && l.includes('already-linked')));
+    });
+
+    it('does not link when getPlanContinuationInfo returns null', async () => {
+      const dir = '/home/user/proj';
+      await cli.seed({
+        id: 'plan-parent',
+        state: 'closed',
+        directory: dir,
+        resources: { plan: 'impl' },
+        created_at: new Date('2025-06-01T10:00:00Z'),
+        last_active_at: new Date('2025-06-01T11:00:00Z'),
+      });
+      await cli.seed({
+        id: 'unrelated-child',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T11:30:00Z'),
+        last_active_at: new Date('2025-06-01T12:00:00Z'),
+      });
+      mockClaudeSessions = [{ id: 'plan-parent' }, { id: 'unrelated-child' }];
+      mockPlanExecutionInfoById.set('plan-parent', { slug: 'impl', title: null });
+      // No continuation info for unrelated-child — it was not spawned from a plan
+
+      await cli.run('repair', '--thorough');
+
+      const child = cli.session('unrelated-child');
+      assert.strictEqual(child?.parent_session_id, undefined);
+    });
+
+    it('does not link when slug mismatches', async () => {
+      const dir = '/home/user/proj';
+      await cli.seed({
+        id: 'wrong-parent',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T10:00:00Z'),
+        last_active_at: new Date('2025-06-01T11:00:00Z'),
+      });
+      await cli.seed({
+        id: 'slug-child',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T11:30:00Z'),
+        last_active_at: new Date('2025-06-01T12:00:00Z'),
+      });
+      mockClaudeSessions = [{ id: 'wrong-parent' }, { id: 'slug-child' }];
+      mockPlanContinuationInfoById.set('slug-child', { slug: 'plan-a' });
+      mockPlanExecutionInfoById.set('wrong-parent', { slug: 'plan-b', title: null });
+
+      await cli.run('repair', '--thorough');
+
+      const child = cli.session('slug-child');
+      assert.strictEqual(child?.parent_session_id, undefined);
+      // Plan slug is still set from continuation info
+      assert.strictEqual(child?.resources.plan, 'plan-a');
+      assert.ok(cli.console.logs.some((l) => l.includes('plan-a') && l.includes('parent not indexed')));
+    });
+
+    it('does not link sessions from different directories', async () => {
+      await cli.seed({
+        id: 'dir-a-parent',
+        state: 'closed',
+        directory: '/home/user/dir-a',
+        created_at: new Date('2025-06-01T10:00:00Z'),
+        last_active_at: new Date('2025-06-01T11:00:00Z'),
+      });
+      await cli.seed({
+        id: 'dir-b-child',
+        state: 'closed',
+        directory: '/home/user/dir-b',
+        created_at: new Date('2025-06-01T11:30:00Z'),
+        last_active_at: new Date('2025-06-01T12:00:00Z'),
+      });
+      mockClaudeSessions = [{ id: 'dir-a-parent' }, { id: 'dir-b-child' }];
+      mockPlanContinuationInfoById.set('dir-b-child', { slug: 'impl' });
+      mockPlanExecutionInfoById.set('dir-a-parent', { slug: 'impl', title: null });
+
+      await cli.run('repair', '--thorough');
+
+      const child = cli.session('dir-b-child');
+      assert.strictEqual(child?.parent_session_id, undefined);
+    });
+  });
+
+  describe('step 11: rebuild context inventory (thorough)', () => {
+    it('populates context.reads for sessions with empty reads', async () => {
+      await cli.seed({ id: 's-empty', state: 'closed', directory: '/home/user/proj' });
+      mockClaudeSessions = [{ id: 's-empty' }];
+      mockTranscriptPath = '/tmp/fake/s-empty.jsonl';
+      mockInventoryDelta = {
+        reads: [{ path: '/home/user/proj/src/foo.ts', turn: 1, via: 'Read' }],
+        skills: [],
+        new_offset: 500,
+        new_turn: 1,
+      };
+
+      await cli.run('repair', '--thorough');
+
+      const s = cli.session('s-empty');
+      assert.ok(s?.context?.reads['/home/user/proj/src/foo.ts']);
+      assert.strictEqual(s?.meta._inventory_offset, '500');
+      assert.strictEqual(s?.meta._inventory_turn, '1');
+      assert.ok(cli.console.logs.some((l) => l.includes('Rebuilt context inventory')));
+    });
+
+    it('skips sessions that already have context reads', async () => {
+      await cli.seed({
+        id: 's-has-reads',
+        state: 'closed',
+        directory: '/home/user/proj',
+        context: { reads: { '/home/user/proj/existing.ts': [1] } },
+      });
+      mockClaudeSessions = [{ id: 's-has-reads' }];
+      mockTranscriptPath = '/tmp/fake/s-has-reads.jsonl';
+      mockInventoryDelta = {
+        reads: [{ path: '/home/user/proj/src/new.ts', turn: 2, via: 'Read' }],
+        skills: [],
+        new_offset: 200,
+        new_turn: 2,
+      };
+
+      await cli.run('repair', '--thorough');
+
+      const s = cli.session('s-has-reads');
+      assert.ok(s?.context?.reads['/home/user/proj/existing.ts']);
+      assert.strictEqual(s?.context?.reads['/home/user/proj/src/new.ts'], undefined);
+      assert.ok(!cli.console.logs.some((l) => l.includes('Rebuilt context inventory')));
+    });
+
+    it('skips sessions when inventory delta is empty', async () => {
+      await cli.seed({ id: 's-no-delta', state: 'closed' });
+      mockClaudeSessions = [{ id: 's-no-delta' }];
+      mockTranscriptPath = '/tmp/fake/s-no-delta.jsonl';
+      mockInventoryDelta = { reads: [], skills: [], new_offset: 0, new_turn: 0 };
+
+      await cli.run('repair', '--thorough');
+
+      assert.ok(!cli.console.logs.some((l) => l.includes('Rebuilt context inventory')));
+    });
   });
 });

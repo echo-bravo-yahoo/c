@@ -10,29 +10,33 @@ import { getCurrentBranch, getRepoSlug } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
 import { listPRs } from '../detection/pr.ts';
 import { ambiguityError, getDisplayName, shortId } from '../util/format.ts';
-import { findTranscriptPath, getCwdFromTranscriptHead, getCustomTitleFromTranscriptTail, getPlanExecutionInfo, encodeProjectKey } from '../claude/sessions.ts';
+import { collectLiveSessionIds, isProcessAlive } from '../util/process.ts';
+import { findTranscriptPath, getCwdFromTranscriptHead, getCustomTitleFromTranscriptTail, getPlanExecutionInfo, getPlanContinuationInfo, encodeProjectKey } from '../claude/sessions.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
+import { readTranscriptInventory, applyInventoryDelta } from '../claude/context-inventory.ts';
 import { reconcileDirectory } from './resume.ts';
-import type { Session } from '../store/schema.ts';
+import type { Session, SessionContextInventory } from '../store/schema.ts';
 
-/**
- * Check if a process is alive via kill(pid, 0).
- * Returns true if alive (or EPERM), false if dead (ESRCH).
- */
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true; // alive (or EPERM — not ours but exists)
-  } catch (err: unknown) {
-    return (err as NodeJS.ErrnoException).code !== 'ESRCH';
-  }
-}
 
 export interface RepairOptions {
   thorough?: boolean;
   quiet?: boolean;
 }
 
+/**
+ * Repair session index inconsistencies.
+ *
+ * Fast mode (default): < 1s, no network, no transcript reads. Fixes structural
+ * invariants only — stale PIDs, stuck active states, branches detectable from
+ * live git. Safe to run automatically (e.g. on a schedule).
+ *
+ * Thorough mode (--thorough): slow, reads every reachable transcript, hits the
+ * GitHub API. Rebuilds ALL derived fields from primary sources. The goal is that
+ * `repair --thorough` should restore a session index to a fully-correct state
+ * given only the raw Claude transcript files. When adding a new derived field to
+ * the session schema, add its backfill here so --thorough remains the canonical
+ * "restore from scratch" command.
+ */
 export async function repairCommand(idOrPrefix?: string, options: RepairOptions = {}): Promise<void> {
   const { thorough = false, quiet = false } = options;
   const fixes: string[] = [];
@@ -48,6 +52,8 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
     targetSession = result.session;
   }
 
+
+  const liveSessionIds = collectLiveSessionIds();
 
   // Fix index issues in a single updateIndex call
   await updateIndex((index) => {
@@ -85,12 +91,11 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
       }
 
       // 2. Stuck active states — no PID
-      if (
-        ['busy', 'idle', 'waiting'].includes(session.state) &&
-        session.pid == null
-      ) {
-        session.state = 'closed';
-        fixes.push(`Closed stuck ${label} (no PID)`);
+      if (['busy', 'idle', 'waiting'].includes(session.state) && session.pid == null) {
+        if (!liveSessionIds.has(id)) {
+          session.state = 'closed';
+          fixes.push(`Closed stuck ${label} (no PID, no running process)`);
+        }
       }
 
       // 3. Missing branches — re-detect for active sessions
@@ -213,8 +218,58 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
       }
     }
 
+    // 10. Backfill parent_session_id for plan-execution children.
+    // A session is a child iff its own transcript says origin.kind === "auto-continuation".
+    // Match parent by slug (same slug the parent's ExitPlanMode call recorded).
+    const parentLinkFixes: Array<{ id: string; parentId: string; slug: string }> = [];
+    const slugOnlyFixes: Array<{ id: string; slug: string }> = [];
+
+    for (const [id, session] of Object.entries(sessions)) {
+      if (!session || session.parent_session_id) continue;
+
+      const continuationInfo = getPlanContinuationInfo(id);
+      if (!continuationInfo) continue;
+
+      const targetSlug = session.resources.plan ?? continuationInfo.slug;
+
+      const potentialParents = Object.entries(sessions)
+        .filter(([pid, ps]) => pid !== id && ps?.directory === session.directory)
+        .filter(([, ps]) => new Date(ps!.last_active_at) <= new Date(session.created_at))
+        .sort(([, a], [, b]) => new Date(b!.last_active_at).getTime() - new Date(a!.last_active_at).getTime());
+
+      let found = false;
+      for (const [parentId] of potentialParents) {
+        const planInfo = getPlanExecutionInfo(parentId);
+        if (planInfo && planInfo.slug === targetSlug) {
+          parentLinkFixes.push({ id, parentId, slug: targetSlug });
+          found = true;
+          break;
+        }
+      }
+      if (!found && !session.resources.plan) {
+        slugOnlyFixes.push({ id, slug: continuationInfo.slug });
+      }
+    }
+
+    // 11. Rebuild context reads/skills inventory from transcript for sessions
+    // where it was never accumulated (e.g. adopted sessions).
+    const inventoryFixes: Array<{ id: string; context: SessionContextInventory; offset: string; turn: string }> = [];
+    for (const [id, session] of Object.entries(sessions)) {
+      if (!session) continue;
+      if (session.context?.reads && Object.keys(session.context.reads).length > 0) continue;
+      if (session.meta?._inventory_offset) continue; // already processed (may have 0 reads)
+      const transcriptPath = findTranscriptPath(id);
+      if (!transcriptPath) continue;
+      const delta = readTranscriptInventory(transcriptPath, 0, 0, session.directory);
+      if (!delta || (delta.reads.length === 0 && delta.skills.length === 0)) continue;
+      const { claude_md, claude_md_imports, memory_index, mcp_servers } = session.context ?? {};
+      const freshContext: SessionContextInventory = { reads: {}, claude_md, claude_md_imports, memory_index, mcp_servers };
+      applyInventoryDelta(freshContext, delta);
+      inventoryFixes.push({ id, context: freshContext, offset: String(delta.new_offset), turn: String(delta.new_turn) });
+    }
+
     // Apply phase 2 fixes in a single updateIndex call
-    if (prFixes.length > 0 || costFixes.length > 0) {
+    if (prFixes.length > 0 || costFixes.length > 0 || parentLinkFixes.length > 0 || slugOnlyFixes.length > 0 || inventoryFixes.length > 0) {
       await updateIndex((idx) => {
         for (const { id, pr } of prFixes) {
           const session = idx.sessions[id];
@@ -229,6 +284,30 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
           session.cost_usd = cost_usd;
           const label = `${shortId(id)} ${getDisplayName(session) || '(unnamed)'}`;
           fixes.push(`Computed cost $${cost_usd.toFixed(2)} for ${label}`);
+        }
+        for (const { id, parentId, slug } of parentLinkFixes) {
+          const s = idx.sessions[id];
+          if (!s) continue;
+          s.parent_session_id = parentId;
+          if (!s.resources.plan) s.resources.plan = slug;
+          const label = `${shortId(id)} ${getDisplayName(s) || '(unnamed)'}`;
+          fixes.push(`Linked ${label} → parent ${shortId(parentId)}`);
+        }
+        for (const { id, slug } of slugOnlyFixes) {
+          const s = idx.sessions[id];
+          if (!s) continue;
+          s.resources.plan = slug;
+          const label = `${shortId(id)} ${getDisplayName(s) || '(unnamed)'}`;
+          fixes.push(`Set plan slug ${slug} for ${label} (parent not indexed)`);
+        }
+        for (const { id, context, offset, turn } of inventoryFixes) {
+          const s = idx.sessions[id];
+          if (!s) continue;
+          s.context = context;
+          s.meta._inventory_offset = offset;
+          s.meta._inventory_turn = turn;
+          const label = `${shortId(id)} ${getDisplayName(s) || '(unnamed)'}`;
+          fixes.push(`Rebuilt context inventory for ${label} (${Object.keys(context.reads).length} reads)`);
         }
       });
     }
