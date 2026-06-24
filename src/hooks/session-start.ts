@@ -6,7 +6,7 @@ import { updateIndex, getSession, getSessions, getCurrentSession } from '../stor
 import { createSession } from '../store/schema.ts';
 import { getCurrentBranch, getWorktreeInfo, getRepoSlug, listWorktrees } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
-import { encodeProjectKey, getPlanExecutionInfo, findTranscriptPath, getCustomTitleFromTranscriptTail, readClaudeSessionIndex } from '../claude/sessions.ts';
+import { encodeProjectKey, getPlanExecutionInfo, getPlanContinuationInfo, extractPlanTitle, findTranscriptPath, getCustomTitleFromTranscriptTail, readClaudeSessionIndex } from '../claude/sessions.ts';
 import { capturePreloadedContext } from '../claude/preloaded-context.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
 import { writeStatusCache } from '../store/status-cache.ts';
@@ -77,20 +77,27 @@ export async function handleSessionStart(
   let planSlug: string | undefined;
   let planTitle: string | undefined;
 
-  // Check recently closed sessions for plan execution (ExitPlanMode)
-  const recentThreshold = 30 * 1000; // 30 seconds
-  const recentSessions = getSessions({ state: ['closed'], directory: cwd }).filter(
-    (s) =>
-      s.id !== sessionId && Date.now() - new Date(s.last_active_at).getTime() < recentThreshold
-  );
-
-  for (const session of recentSessions) {
-    const planInfo = getPlanExecutionInfo(session.id);
-    if (planInfo) {
-      parentSessionId = session.id;
-      planSlug = planInfo.slug;
-      planTitle = planInfo.title ?? undefined;
-      break;
+  // Check if this session was spawned via "Clear context and execute plan".
+  // The child's own transcript carries origin.kind === "auto-continuation" and
+  // the exact plan slug — use that for an exact join instead of a bare temporal scan.
+  const continuationInfo = sessionId ? getPlanContinuationInfo(sessionId) : null;
+  if (continuationInfo) {
+    planSlug = continuationInfo.slug;
+    // Find the specific parent by slug match (30 s window as a performance prefilter).
+    const recentThreshold = 30 * 1000;
+    const recentSessions = getSessions({ state: ['closed'], directory: cwd }).filter(
+      (s) => s.id !== sessionId && Date.now() - new Date(s.last_active_at).getTime() < recentThreshold
+    );
+    for (const s of recentSessions) {
+      const planInfo = getPlanExecutionInfo(s.id);
+      if (planInfo && planInfo.slug === continuationInfo.slug) {
+        parentSessionId = s.id;
+        planTitle = planInfo.title ?? undefined;
+        break;
+      }
+    }
+    if (!planTitle) {
+      planTitle = extractPlanTitle(continuationInfo.slug) ?? undefined;
     }
   }
 

@@ -526,4 +526,66 @@ export function getCustomTitleFromTranscriptTail(transcriptPath: string): string
   return null;
 }
 
+/**
+ * Check if a session was spawned via "Clear context and execute plan".
+ * Reads the first user entry from the transcript head and checks for
+ * origin.kind === "auto-continuation". Returns the plan slug if found.
+ */
+export function getPlanContinuationInfo(sessionId: string): { slug: string } | null {
+  const session = getClaudeSession(sessionId);
+  if (!session) return null;
+
+  const CHUNK_SIZE = 65536;
+  const MAX_SCAN = 512 * 1024;
+
+  let fd: number;
+  try {
+    fd = fs.openSync(session.transcriptPath, 'r');
+  } catch {
+    return null;
+  }
+
+  try {
+    const size = fs.fstatSync(fd).size;
+    if (size === 0) return null;
+
+    let pos = 0;
+    let buffered = '';
+
+    while (pos < size && pos < MAX_SCAN) {
+      const readSize = Math.min(CHUNK_SIZE, size - pos);
+      const buf = Buffer.alloc(readSize);
+      fs.readSync(fd, buf, 0, readSize, pos);
+      pos += readSize;
+      buffered += buf.toString('utf-8');
+
+      let nl: number;
+      while ((nl = buffered.indexOf('\n')) !== -1) {
+        const line = buffered.slice(0, nl).trim();
+        buffered = buffered.slice(nl + 1);
+        if (!line) continue;
+        if (!line.includes('"auto-continuation"')) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (
+            entry.type === 'user' &&
+            entry.origin?.kind === 'auto-continuation' &&
+            typeof entry.slug === 'string'
+          ) {
+            return { slug: entry.slug };
+          }
+        } catch {
+          // Skip malformed lines
+        }
+      }
+    }
+  } catch {
+    // Read error
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  return null;
+}
+
 export { CLAUDE_DIR, PROJECTS_DIR };

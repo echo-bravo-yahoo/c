@@ -18,6 +18,7 @@ mock.module(resolve('src/claude/sessions.ts'), {
     getClaudeSessionsForDirectory: () => [],
     readClaudeSessionIndex: () => null,
     getPlanExecutionInfo: () => null,
+    getPlanContinuationInfo: () => null,
     findTranscriptPath: () => mockTranscriptPath,
     getCustomTitleFromTranscriptTail: () => null,
     getCwdFromTranscriptHead: () => null,
