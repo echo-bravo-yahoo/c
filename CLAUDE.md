@@ -191,7 +191,7 @@ Sends SIGINT to the session process (5s timeout), marks the session archived, bu
 `c new "name" --no-worktree` creates a named session without passing `--worktree` to Claude, even inside a git repo. Useful for sessions that don't need branch isolation.
 
 ### `c repair --thorough`
-Runs expensive enrichment steps in addition to fast local fixes: title backfill from transcripts, JIRA from branch names, branch for closed sessions, PR from GitHub API (grouped by repo), cost from full transcript. Use `--quiet` to suppress "No issues found" output. `--install-schedule` / `--uninstall-schedule` manage a launchd agent that runs thorough repair every 5 minutes.
+Two modes: **fast** (default, &lt;1s, no network/transcript reads) fixes structural invariants only — stale PIDs, stuck states, missing branches from live git. **Thorough** (`--thorough`) reads every reachable transcript and hits the GitHub API to rebuild all derived fields: title, JIRA, branch, PR, cost, parent/child plan lineage, context reads/skills inventory. The goal of `--thorough` is to fully restore a session index from raw transcripts alone. When adding a new derived field to the session schema, add its backfill to `--thorough`. Use `--quiet` to suppress "No issues found" output. `--install-schedule` / `--uninstall-schedule` manage a launchd agent that runs thorough repair every 5 minutes.
 
 ## Notes
 - `/rename` titles are read directly from Claude's transcript files
