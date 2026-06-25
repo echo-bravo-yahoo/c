@@ -39,6 +39,15 @@ mock.module(resolve('src/claude/sessions.ts'), {
   },
 });
 
+// reconcileLiveState() (called by list) reads real live session files; mirror
+// the index so seeded sessions keep their state instead of being closed.
+const { makeProcessMock } = await import('../helpers/live-mock.ts');
+mock.module(resolve('src/util/process.ts'), {
+  namedExports: makeProcessMock(
+    () => readIndexFn!() as { sessions: Record<string, { state: string }> }
+  ),
+});
+
 type CLIHarness = import('../helpers/cli.ts').CLIHarness;
 const { setupCLI, stripAnsi } = await import('../helpers/cli.ts');
 const { readIndex } = await import('../../src/store/index.ts');

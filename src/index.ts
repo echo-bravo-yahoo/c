@@ -37,6 +37,8 @@ import { planCommand } from './commands/plan.ts';
 import { statsCommand } from './commands/stats.ts';
 import { tmuxStatusCommand } from './commands/tmux/status.ts';
 import { tmuxPickCommand } from './commands/tmux/pick.ts';
+import { tmuxJumpCommand } from './commands/tmux/jump.ts';
+import { tmuxMenuCommand } from './commands/tmux/menu.ts';
 import { handleHook } from './hooks/index.ts';
 import { realpathSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -485,9 +487,9 @@ export function createProgram(): Command {
   // tmux integration
   program
     .command('tmux-status')
-    .description('Output for tmux status bar')
-    .action(() => {
-      tmuxStatusCommand();
+    .description('Refresh blocked-session indicators and print the status-bar roll-up')
+    .action(async () => {
+      await tmuxStatusCommand();
     });
 
   program
@@ -495,6 +497,20 @@ export function createProgram(): Command {
     .description('Interactive session picker (fzf)')
     .action(() => {
       tmuxPickCommand();
+    });
+
+  program
+    .command('tmux-jump')
+    .description('Hop pane-precise to the next blocked session')
+    .action(async () => {
+      await tmuxJumpCommand();
+    });
+
+  program
+    .command('tmux-menu')
+    .description('Native menu of blocked sessions (pick by reason)')
+    .action(async () => {
+      await tmuxMenuCommand();
     });
 
   // Hook handler

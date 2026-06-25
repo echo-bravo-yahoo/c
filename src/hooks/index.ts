@@ -4,7 +4,6 @@
 
 import { handleSessionStart } from './session-start.ts';
 import { handleSessionEnd } from './session-end.ts';
-import { handleNotificationWaiting } from './notification.ts';
 import { handleUserPrompt } from './user-prompt.ts';
 import { handlePostBash } from './post-bash.ts';
 import { handleStop } from './stop.ts';
@@ -93,10 +92,6 @@ export async function handleHook(event: string): Promise<void> {
 
     case 'session-end':
       await handleSessionEnd(sessionId, cwd, input);
-      break;
-
-    case 'notification-waiting':
-      await handleNotificationWaiting(sessionId, cwd, input);
       break;
 
     case 'user-prompt':

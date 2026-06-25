@@ -3,7 +3,7 @@
  */
 
 import chalk from 'chalk';
-import { getSessions, getAllSessions, reconcileStaleSessions } from '../store/index.ts';
+import { getSessions, getAllSessions, reconcileStaleSessions, reconcileLiveState } from '../store/index.ts';
 import { printSessionTable, getDisplayName, shortId, highlightId, buildPrefixMap, getRepoName, relativeTime, sortSessions } from '../util/format.ts';
 import { hyperlink } from '../util/hyperlink.ts';
 import { buildJiraUrl } from '../detection/jira.ts';
@@ -56,7 +56,10 @@ export async function listCommand(rawOptions: ListOptions): Promise<void> {
   const config = loadConfig();
   const options = mergeOptions(config.list, rawOptions);
 
-  // Reconcile stale sessions before listing
+  // Reconcile against ground truth before listing: project live state from
+  // Claude Code's session files, then close any active session whose process
+  // is gone (SessionEnd may not have fired on crash/Ctrl-C).
+  await reconcileLiveState();
   await reconcileStaleSessions();
 
   // Special views: --prs and --jira

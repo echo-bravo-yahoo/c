@@ -38,6 +38,35 @@ export function isProcessAlive(pid: number): boolean {
   }
 }
 
+/**
+ * Guard against PID reuse: confirm the live process is the *same* one that
+ * wrote the session file. Claude Code records `procStart` — on Linux this is
+ * field 22 (starttime, in clock ticks since boot) of /proc/<pid>/stat, which
+ * is unique per process even when a pid is later recycled.
+ *
+ * Defensive by design: when there's nothing to compare against (no recorded
+ * procStart, no /proc, or an unparseable stat line), degrade to "no signal"
+ * and return true — never falsely reject a genuinely-live session. Callers
+ * pair this with isProcessAlive(), so a recycled pid is caught only when both
+ * the pid is alive *and* the start time mismatches.
+ */
+export function processStartMatches(pid: number, procStart: string | null | undefined): boolean {
+  if (!procStart) return true; // nothing to validate against
+  let stat: string;
+  try {
+    stat = readFileSync(`/proc/${pid}/stat`, 'utf-8');
+  } catch {
+    return true; // /proc unavailable (e.g. macOS) — can't validate
+  }
+  // The comm field (2nd) is wrapped in parens and may itself contain spaces or
+  // parens, so split on the part after the last ')'. Field 3 (state) is then
+  // index 0; starttime is field 22 → index 19.
+  const afterComm = stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/);
+  const starttime = afterComm[19];
+  if (!starttime) return true; // unexpected format — don't falsely reject
+  return starttime === procStart;
+}
+
 /** Returns a Map<sessionId, ClaudeSessionFile> for all live Claude Code sessions. */
 export function collectLiveSessions(): Map<string, ClaudeSessionFile> {
   const sessions = new Map<string, ClaudeSessionFile>();
@@ -47,7 +76,9 @@ export function collectLiveSessions(): Map<string, ClaudeSessionFile> {
       if (!file.endsWith('.json')) continue;
       try {
         const entry = JSON.parse(readFileSync(join(sessionsDir, file), 'utf-8')) as ClaudeSessionFile;
-        if (entry.sessionId && isProcessAlive(entry.pid)) sessions.set(entry.sessionId, entry);
+        if (entry.sessionId && isProcessAlive(entry.pid) && processStartMatches(entry.pid, entry.procStart)) {
+          sessions.set(entry.sessionId, entry);
+        }
       } catch { /* malformed file or process check failed */ }
     }
   } catch { /* directory missing or unreadable */ }

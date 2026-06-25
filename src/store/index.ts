@@ -8,6 +8,7 @@ import * as os from 'node:os';
 import TOML from '@iarna/toml';
 import { createDefaultIndex } from './schema.ts';
 import type { IndexFile, Session, SessionState } from './schema.ts';
+import { collectLiveSessions } from '../util/process.ts';
 
 // --- Process-level cache for readIndex ---
 
@@ -417,5 +418,86 @@ export async function reconcileStaleSessions(): Promise<number> {
   }
 
   return staleIds.length;
+}
+
+/**
+ * Project Claude Code's live session status onto a `c` SessionState.
+ *
+ * Returns null when the live file carries no usable signal — `status` is null
+ * or an unrecognized value — so callers can leave the existing state unchanged
+ * rather than downgrade a state they already know. The file format is an
+ * undocumented Claude Code internal, so unknown values must never corrupt state.
+ *
+ * `waitingFor` is authoritative for the blocked case: when Claude records a
+ * reason, the session is waiting on the user regardless of the coarse status.
+ * `shell` (a foreground shell command) is occupied, not blocked — treated as busy.
+ */
+export function mapLiveStatusToState(
+  live: { status: string | null; waitingFor?: string | null }
+): SessionState | null {
+  if (live.waitingFor || live.status === 'waiting') return 'waiting';
+  if (live.status === 'busy') return 'busy';
+  if (live.status === 'idle') return 'idle';
+  if (live.status === 'shell') return 'busy';
+  return null;
+}
+
+/**
+ * Reconcile index state against Claude Code's live session files
+ * (~/.claude/sessions/<pid>.json) — the single source of truth.
+ *
+ * For each tracked session that could be active, project its state from the
+ * live file (liveness- and PID-reuse-gated by collectLiveSessions), and advance
+ * last_active_at to max(stored, liveFile.updatedAt). Sessions with no live file
+ * or a dead pid drop to `closed`. `archived` is never touched.
+ *
+ * Writes only when something actually changed, so it is cheap to call on every
+ * read (one kill(pid,0) + small JSON read per live session; no network).
+ */
+export async function reconcileLiveState(): Promise<void> {
+  const live = collectLiveSessions();
+  const index = readIndex();
+
+  const isActive = (s: SessionState) => s === 'busy' || s === 'idle' || s === 'waiting';
+
+  // Cheap pre-pass: decide whether any write is needed before taking the lock.
+  let needsWrite = false;
+  for (const [id, s] of Object.entries(index.sessions)) {
+    if (s.state === 'archived') continue;
+    const entry = live.get(id);
+    if (entry) {
+      const projected = mapLiveStatusToState(entry);
+      if (projected && projected !== s.state) { needsWrite = true; break; }
+      if (entry.updatedAt && entry.updatedAt > s.last_active_at.getTime()) { needsWrite = true; break; }
+    } else if (isActive(s.state)) {
+      needsWrite = true;
+      break;
+    }
+  }
+  if (!needsWrite) return;
+
+  await updateIndex((idx) => {
+    for (const [id, s] of Object.entries(idx.sessions)) {
+      if (s.state === 'archived') continue;
+      const entry = live.get(id);
+      if (entry) {
+        const projected = mapLiveStatusToState(entry);
+        if (projected) s.state = projected;
+        if (entry.updatedAt && entry.updatedAt > s.last_active_at.getTime()) {
+          s.last_active_at = new Date(entry.updatedAt);
+        }
+        // Stash the wait reason for display (c waiting / c tmux-menu); clear when not waiting.
+        if (projected === 'waiting') {
+          s.meta._waiting_for = entry.waitingFor || 'input';
+        } else if (projected) {
+          delete s.meta._waiting_for;
+        }
+      } else if (isActive(s.state)) {
+        // No live file or dead/recycled pid → the session is gone.
+        s.state = 'closed';
+        delete s.meta._waiting_for;
+      }
+    }
+  });
 }
 

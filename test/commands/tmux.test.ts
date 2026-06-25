@@ -2,32 +2,44 @@
  * Tests for tmux command behaviors
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
-import { setupCLI, type CLIHarness } from '../helpers/cli.ts';
-import { createTestSession, resetSessionCounter } from '../fixtures/sessions.ts';
+import { resolve } from 'node:path';
+
+// reconcileLiveState() (called by tmux-status) reads real live session files;
+// mirror the index so seeded sessions keep their state instead of being closed.
+let readIndexFn: (() => { sessions: Record<string, unknown> }) | null = null;
+const { makeProcessMock } = await import('../helpers/live-mock.ts');
+mock.module(resolve('src/util/process.ts'), {
+  namedExports: makeProcessMock(
+    () => readIndexFn!() as { sessions: Record<string, { state: string }> }
+  ),
+});
+
+type CLIHarness = import('../helpers/cli.ts').CLIHarness;
+const { setupCLI } = await import('../helpers/cli.ts');
+const { createTestSession, resetSessionCounter } = await import('../fixtures/sessions.ts');
+const { readIndex } = await import('../../src/store/index.ts');
+readIndexFn = readIndex;
 
 describe('c', () => {
   describe('commands', () => {
     describe('tmux-status', () => {
       let cli: CLIHarness;
-      beforeEach(() => { cli = setupCLI(); });
-      afterEach(() => { cli.cleanup(); });
+      let savedTmux: string | undefined;
+      beforeEach(() => {
+        cli = setupCLI();
+        // Skip the tmux pane/window stamping side-effects in tests.
+        savedTmux = process.env.TMUX;
+        delete process.env.TMUX;
+      });
+      afterEach(() => {
+        cli.cleanup();
+        if (savedTmux !== undefined) process.env.TMUX = savedTmux;
+      });
 
-      describe('session counting', () => {
-        it('shows active session count', async () => {
-          await cli.seed(
-            { id: 's1', state: 'busy' },
-            { id: 's2', state: 'idle' },
-            { id: 's3', state: 'closed' },
-          );
-          await cli.run('tmux-status');
-
-          // 2 active (busy + idle), closed excluded from active count
-          assert.ok(cli.stdout.output.some(o => o.includes('2')));
-        });
-
-        it('counts waiting sessions', async () => {
+      describe('roll-up output', () => {
+        it('prints wait:N (red) for waiting sessions', async () => {
           await cli.seed(
             { id: 's1', state: 'waiting' },
             { id: 's2', state: 'busy' },
@@ -36,40 +48,51 @@ describe('c', () => {
           await cli.run('tmux-status');
 
           const output = cli.stdout.output.join('');
-          // Should show waiting count (2) and total active count (3)
-          assert.ok(output.includes('2'));
-          assert.ok(output.includes('3'));
+          assert.ok(output.includes('wait:2'));
+          assert.ok(output.includes('red'));
         });
-      });
 
-      describe('output formatting', () => {
-        it('highlights waiting sessions with yellow', async () => {
+        it('prints idle:N (yellow) for idle sessions', async () => {
           await cli.seed(
-            { id: 's1', state: 'waiting' },
+            { id: 's1', state: 'idle' },
             { id: 's2', state: 'busy' },
+            { id: 's3', state: 'idle' },
           );
           await cli.run('tmux-status');
 
           const output = cli.stdout.output.join('');
+          assert.ok(output.includes('idle:2'));
           assert.ok(output.includes('yellow'));
         });
 
+        it('shows both segments when waiting and idle coexist', async () => {
+          await cli.seed(
+            { id: 's1', state: 'waiting' },
+            { id: 's2', state: 'idle' },
+          );
+          await cli.run('tmux-status');
+
+          const output = cli.stdout.output.join('');
+          assert.ok(output.includes('wait:1'));
+          assert.ok(output.includes('idle:1'));
+        });
+      });
+
+      describe('quiet when nothing needs you', () => {
         it('outputs nothing without sessions', async () => {
           await cli.run('tmux-status');
 
           assert.strictEqual(cli.stdout.output.length, 0);
         });
 
-        it('omits waiting indicator when none waiting', async () => {
+        it('outputs nothing when only busy', async () => {
           await cli.seed(
             { id: 's1', state: 'busy' },
-            { id: 's2', state: 'idle' },
+            { id: 's2', state: 'busy' },
           );
           await cli.run('tmux-status');
 
-          const output = cli.stdout.output.join('');
-          assert.ok(!output.includes('yellow'));
-          assert.ok(output.includes('2'));
+          assert.strictEqual(cli.stdout.output.join(''), '');
         });
       });
     });

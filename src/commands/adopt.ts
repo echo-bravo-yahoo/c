@@ -3,7 +3,7 @@
  */
 
 import chalk from 'chalk';
-import { getSession, readIndex, updateIndex } from '../store/index.ts';
+import { getSession, readIndex, updateIndex, mapLiveStatusToState } from '../store/index.ts';
 import { createSession } from '../store/schema.ts';
 import { getClaudeSession, getClaudeSessionTitles, getClaudeSessionsForDirectory, getPlanExecutionInfo, getPlanContinuationInfo, extractPlanTitle } from '../claude/sessions.ts';
 import { getCurrentBranch, getWorktreeInfo, getRepoSlug } from '../detection/git.ts';
@@ -32,7 +32,9 @@ async function adoptOne(claudeSession: ClaudeSession, options: AdoptOptions): Pr
   const session = createSession(id, cwd, projectKey, claudeSession.modifiedAt);
   const liveEntry = collectLiveSessions().get(id);
   if (liveEntry) {
-    session.state = liveEntry.status === 'busy' ? 'busy' : 'idle';
+    // Project from live status; idle is the conservative default when the live
+    // file carries no usable signal (a tracked live session awaiting input).
+    session.state = mapLiveStatusToState(liveEntry) ?? 'idle';
   } else {
     session.state = 'closed';
   }
