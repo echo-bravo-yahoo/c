@@ -221,16 +221,25 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
     // 10. Backfill parent_session_id for plan-execution children.
     // A session is a child iff its own transcript says origin.kind === "auto-continuation".
     // Match parent by slug (same slug the parent's ExitPlanMode call recorded).
+    // Re-verifies existing links so wrong links are replaced or cleared.
     const parentLinkFixes: Array<{ id: string; parentId: string; slug: string }> = [];
+    const parentClearFixes: string[] = [];
     const slugOnlyFixes: Array<{ id: string; slug: string }> = [];
 
     for (const [id, session] of Object.entries(sessions)) {
-      if (!session || session.parent_session_id) continue;
+      if (!session) continue;
 
       const continuationInfo = getPlanContinuationInfo(id);
-      if (!continuationInfo) continue;
+      if (!continuationInfo) continue;  // not a continuation — leave any parent link alone
 
       const targetSlug = session.resources.plan ?? continuationInfo.slug;
+
+      // Verify any existing link before re-searching.
+      if (session.parent_session_id) {
+        const existingExec = getPlanExecutionInfo(session.parent_session_id);
+        if (existingExec?.slug === targetSlug) continue;  // correct link, nothing to do
+        // Wrong link — fall through to find the correct parent.
+      }
 
       const potentialParents = Object.entries(sessions)
         .filter(([pid, ps]) => pid !== id && ps?.directory === session.directory)
@@ -246,8 +255,14 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
           break;
         }
       }
-      if (!found && !session.resources.plan) {
-        slugOnlyFixes.push({ id, slug: continuationInfo.slug });
+      if (!found) {
+        if (session.parent_session_id) {
+          // Had a wrong link and no correct replacement in the index — clear it.
+          parentClearFixes.push(id);
+        }
+        if (!session.resources.plan) {
+          slugOnlyFixes.push({ id, slug: continuationInfo.slug });
+        }
       }
     }
 
@@ -269,7 +284,7 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
     }
 
     // Apply phase 2 fixes in a single updateIndex call
-    if (prFixes.length > 0 || costFixes.length > 0 || parentLinkFixes.length > 0 || slugOnlyFixes.length > 0 || inventoryFixes.length > 0) {
+    if (prFixes.length > 0 || costFixes.length > 0 || parentLinkFixes.length > 0 || parentClearFixes.length > 0 || slugOnlyFixes.length > 0 || inventoryFixes.length > 0) {
       await updateIndex((idx) => {
         for (const { id, pr } of prFixes) {
           const session = idx.sessions[id];
@@ -292,6 +307,13 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
           if (!s.resources.plan) s.resources.plan = slug;
           const label = `${shortId(id)} ${getDisplayName(s) || '(unnamed)'}`;
           fixes.push(`Linked ${label} → parent ${shortId(parentId)}`);
+        }
+        for (const id of parentClearFixes) {
+          const s = idx.sessions[id];
+          if (!s) continue;
+          delete s.parent_session_id;
+          const label = `${shortId(id)} ${getDisplayName(s) || '(unnamed)'}`;
+          fixes.push(`Cleared wrong parent link for ${label}`);
         }
         for (const { id, slug } of slugOnlyFixes) {
           const s = idx.sessions[id];

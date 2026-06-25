@@ -346,16 +346,36 @@ export function getPlanExecutionInfo(sessionId: string): { slug: string; title: 
   const session = getClaudeSession(sessionId);
   if (!session) return null;
 
-  try {
-    const content = fs.readFileSync(session.transcriptPath, 'utf-8');
-    const lines = content.trim().split('\n');
+  // Read only the last TAIL_SIZE bytes rather than the whole file.
+  // ExitPlanMode entries are short; 16 KB comfortably covers the last 10 lines
+  // even when preceding entries are large.
+  const TAIL_SIZE = 16384;
 
-    // Check the last ~10 lines for ExitPlanMode
+  let fd: number;
+  try {
+    fd = fs.openSync(session.transcriptPath, 'r');
+  } catch {
+    return null;
+  }
+
+  try {
+    const size = fs.fstatSync(fd).size;
+    if (size === 0) return null;
+
+    const readSize = Math.min(TAIL_SIZE, size);
+    const buf = Buffer.alloc(readSize);
+    fs.readSync(fd, buf, 0, readSize, size - readSize);
+
+    const lines = buf.toString('utf-8').split('\n');
+    // First element may be a partial line (cut at the read boundary) — JSON.parse
+    // on it will throw and the catch block skips it, so no special handling needed.
     const tailLines = lines.slice(-10);
+
     for (const line of tailLines.reverse()) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.includes('ExitPlanMode')) continue;
       try {
-        const entry = JSON.parse(line);
-        // Look for assistant message with ExitPlanMode tool use
+        const entry = JSON.parse(trimmed);
         if (
           entry.type === 'assistant' &&
           entry.message?.content &&
@@ -363,7 +383,6 @@ export function getPlanExecutionInfo(sessionId: string): { slug: string; title: 
         ) {
           for (const block of entry.message.content) {
             if (block.type === 'tool_use' && block.name === 'ExitPlanMode') {
-              // Found it - return the slug and title from the plan file
               if (entry.slug) {
                 const title = extractPlanTitle(entry.slug);
                 return { slug: entry.slug, title };
@@ -376,7 +395,9 @@ export function getPlanExecutionInfo(sessionId: string): { slug: string; title: 
       }
     }
   } catch {
-    // File read error
+    // Read error
+  } finally {
+    fs.closeSync(fd);
   }
 
   return null;

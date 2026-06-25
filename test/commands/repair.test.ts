@@ -366,6 +366,70 @@ describe('c repair', () => {
       assert.ok(!cli.console.logs.some((l) => l.includes('Linked') && l.includes('already-linked')));
     });
 
+    it('replaces wrong parent_session_id when a correct parent exists', async () => {
+      const dir = '/home/user/proj';
+      await cli.seed({
+        id: 'session-a',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T09:00:00Z'),
+        last_active_at: new Date('2025-06-01T10:00:00Z'),
+      });
+      await cli.seed({
+        id: 'session-b',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T10:00:00Z'),
+        last_active_at: new Date('2025-06-01T11:00:00Z'),
+      });
+      await cli.seed({
+        id: 'wrong-linked',
+        state: 'closed',
+        directory: dir,
+        parent_session_id: 'session-a',
+        created_at: new Date('2025-06-01T11:30:00Z'),
+        last_active_at: new Date('2025-06-01T12:00:00Z'),
+      });
+      mockClaudeSessions = [{ id: 'session-a' }, { id: 'session-b' }, { id: 'wrong-linked' }];
+      mockPlanContinuationInfoById.set('wrong-linked', { slug: 'plan-x' });
+      mockPlanExecutionInfoById.set('session-a', { slug: 'plan-y', title: null }); // mismatch
+      mockPlanExecutionInfoById.set('session-b', { slug: 'plan-x', title: null }); // correct
+
+      await cli.run('repair', '--thorough');
+
+      const linked = cli.session('wrong-linked');
+      assert.strictEqual(linked?.parent_session_id, 'session-b');
+      assert.ok(cli.console.logs.some((l) => l.includes('Linked') && l.includes('wrong-li')));
+    });
+
+    it('clears wrong parent_session_id when no correct parent exists', async () => {
+      const dir = '/home/user/proj';
+      await cli.seed({
+        id: 'only-parent',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T09:00:00Z'),
+        last_active_at: new Date('2025-06-01T10:00:00Z'),
+      });
+      await cli.seed({
+        id: 'stale-linked',
+        state: 'closed',
+        directory: dir,
+        parent_session_id: 'only-parent',
+        created_at: new Date('2025-06-01T10:30:00Z'),
+        last_active_at: new Date('2025-06-01T11:00:00Z'),
+      });
+      mockClaudeSessions = [{ id: 'only-parent' }, { id: 'stale-linked' }];
+      mockPlanContinuationInfoById.set('stale-linked', { slug: 'plan-x' });
+      mockPlanExecutionInfoById.set('only-parent', { slug: 'plan-y', title: null }); // mismatch, no plan-x in index
+
+      await cli.run('repair', '--thorough');
+
+      const linked = cli.session('stale-linked');
+      assert.strictEqual(linked?.parent_session_id, undefined);
+      assert.ok(cli.console.logs.some((l) => l.includes('Cleared wrong parent link')));
+    });
+
     it('does not link when getPlanContinuationInfo returns null', async () => {
       const dir = '/home/user/proj';
       await cli.seed({
