@@ -30,10 +30,8 @@ import { initCommand } from './commands/init.ts';
 import { execCommand } from './commands/exec.ts';
 import { openCommand } from './commands/open.ts';
 import { logCommand } from './commands/log.ts';
-import { memoryCommand } from './commands/memory.ts';
 import { adoptCommand } from './commands/adopt.ts';
 import { forkCommand } from './commands/fork.ts';
-import { planCommand } from './commands/plan.ts';
 import { statsCommand } from './commands/stats.ts';
 import { tmuxStatusCommand } from './commands/tmux/status.ts';
 import { tmuxPickCommand } from './commands/tmux/pick.ts';
@@ -426,7 +424,8 @@ export function createProgram(): Command {
     .command('memory [id]')
     .description("Show session project's CLAUDE.md")
     .option('--raw', 'Output without syntax highlighting')
-    .action((id, options) => {
+    .action(async (id, options) => {
+      const { memoryCommand } = await import('./commands/memory.ts');
       memoryCommand(id, { raw: options.raw });
     });
 
@@ -439,7 +438,8 @@ export function createProgram(): Command {
     .option('--edit', 'Open plan in $EDITOR')
     .option('--copy', 'Copy plan content to clipboard')
     .option('--path', 'Print plan file path')
-    .action((id, options) => {
+    .action(async (id, options) => {
+      const { planCommand } = await import('./commands/plan.ts');
       planCommand(id, { raw: options.raw, open: options.open, edit: options.edit, copy: options.copy, path: options.path });
     });
 
