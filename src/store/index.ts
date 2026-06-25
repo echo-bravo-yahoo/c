@@ -388,7 +388,7 @@ export function getSessionByPane(paneId: string): Session | undefined {
  */
 export async function reconcileStaleSessions(): Promise<number> {
   // Import here to avoid circular dependency
-  const { listClaudeSessions } = await import('../claude/sessions.ts');
+  const { listClaudeSessionSizes } = await import('../claude/sessions.ts');
   const { listSessionStateIds, deleteSessionStateDir, migrateLegacyStateFiles } =
     await import('./session-state.ts');
 
@@ -412,7 +412,7 @@ export async function reconcileStaleSessions(): Promise<number> {
   if (activeSessions.length === 0) return 0;
 
   // Single scan → Set lookup instead of N individual scans
-  const claudeIds = new Set(listClaudeSessions().map(cs => cs.id));
+  const claudeIds = new Set(listClaudeSessionSizes().keys());
   const staleIds = activeSessions
     .filter(s => !claudeIds.has(s.id))
     .map(s => s.id);

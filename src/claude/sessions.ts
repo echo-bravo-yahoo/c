@@ -12,6 +12,7 @@ const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');
 // --- Process-level caches (short-lived CLI process, safe to cache for lifetime) ---
 
 let _claudeSessionsCache: ClaudeSession[] | null = null;
+let _sessionSizeCache: Map<string, number> | null = null;
 const _sessionIndexCache = new Map<string, ClaudeSessionIndex | null>();
 let _titleLookup: Map<string, { customTitle: string | null; summary: string | null }> | null = null;
 const _titleCache = new Map<string, { customTitle: string | null; summary: string | null }>();
@@ -21,6 +22,7 @@ const _titleCache = new Map<string, { customTitle: string | null; summary: strin
  */
 export function resetSessionCaches(): void {
   _claudeSessionsCache = null;
+  _sessionSizeCache = null;
   _sessionIndexCache.clear();
   _titleLookup = null;
   _titleCache.clear();
@@ -161,8 +163,43 @@ export function listClaudeSessions(): ClaudeSession[] {
 
   // Sort by modified time descending
   sessions.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime());
+
+  // Populate size cache as a side effect so listClaudeSessionSizes() is a cache hit.
+  if (!_sessionSizeCache) {
+    _sessionSizeCache = new Map(sessions.map(s => [s.id, s.fileSize]));
+  }
+
   _claudeSessionsCache = sessions;
   return sessions;
+}
+
+/**
+ * Return a map of sessionId → file size in bytes, without decoding project keys
+ * or reading transcript heads. Significantly cheaper than listClaudeSessions()
+ * for callers that only need the size.
+ */
+export function listClaudeSessionSizes(): Map<string, number> {
+  if (_sessionSizeCache) return _sessionSizeCache;
+
+  const result = new Map<string, number>();
+  if (!fs.existsSync(PROJECTS_DIR)) {
+    _sessionSizeCache = result;
+    return result;
+  }
+
+  for (const entry of fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const projectDir = path.join(PROJECTS_DIR, entry.name);
+    for (const file of fs.readdirSync(projectDir)) {
+      if (!file.endsWith('.jsonl')) continue;
+      const sessionId = file.slice(0, -6);
+      if (!/^[0-9a-f-]{36}$/.test(sessionId)) continue;
+      result.set(sessionId, fs.statSync(path.join(projectDir, file)).size);
+    }
+  }
+
+  _sessionSizeCache = result;
+  return result;
 }
 
 /**

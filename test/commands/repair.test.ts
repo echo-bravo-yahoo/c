@@ -33,6 +33,7 @@ mock.module(resolve('src/claude/sessions.ts'), {
   namedExports: {
     resetSessionCaches: () => {},
     listClaudeSessions: () => mockClaudeSessions,
+    listClaudeSessionSizes: () => new Map(),
     getClaudeSession: () => null,
     getClaudeSessionsForDirectory: () => [],
     findTranscriptPath: () => mockTranscriptPath,

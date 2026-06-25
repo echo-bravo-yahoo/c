@@ -4,7 +4,7 @@
 
 import chalk from 'chalk';
 import type { Session, SessionState } from '../store/schema.ts';
-import { getClaudeSessionTitles, getClaudeSession, listClaudeSessions, readClaudeSessionIndex, PLANS_DIR } from '../claude/sessions.ts';
+import { getClaudeSessionTitles, getClaudeSession, listClaudeSessions, listClaudeSessionSizes, readClaudeSessionIndex, PLANS_DIR } from '../claude/sessions.ts';
 import { join } from 'node:path';
 import { getAllSessions } from '../store/index.ts';
 import type { SessionMatch } from '../store/index.ts';
@@ -553,11 +553,7 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
   const prefixMap = buildPrefixMap(sessions, allSessions);
 
   // Build size map from Claude's session files
-  const sizeMap = new Map<string, number>();
-  const claudeSessions = listClaudeSessions();
-  for (const cs of claudeSessions) {
-    sizeMap.set(cs.id, cs.fileSize);
-  }
+  const sizeMap = listClaudeSessionSizes();
 
   // Apply sorting before ordering
   let sortedSessions = sessions;
