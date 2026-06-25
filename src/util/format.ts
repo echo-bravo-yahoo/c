@@ -12,7 +12,12 @@ import { getGitHubUsername, matchesUsernamePrefix } from '../detection/github.ts
 import { getRepoSlug } from '../detection/git.ts';
 import { buildJiraUrl } from '../detection/jira.ts';
 import { hyperlink } from './hyperlink.ts';
-import { computeColumnLayout, ID_FIXED_WIDTH, type ColumnKey, type ColumnLayout } from './layout.ts';
+import { renderTable, type Row } from '@echobravoyahoo/tables';
+import { SESSION_COLUMNS, type SessionRow } from './columns.ts';
+
+// Width/fitting primitives now live in the table library; re-export the ones
+// the show view and custom list views import from here.
+export { displayWidth, fixedWidth } from '@echobravoyahoo/tables';
 
 const USER_ICON = '󰇘';
 
@@ -180,42 +185,6 @@ export function buildPrefixMap(sessions: Session[], allSessions?: Session[]): Ma
 }
 
 /**
- * Calculate visual display width of a string
- * Accounts for surrogate pairs (like 󰇘) that have length 2 but width 1
- * Strips ANSI escape sequences and OSC 8 hyperlink sequences before counting
- */
-export function displayWidth(str: string): number {
-  // Strip OSC 8 hyperlink sequences: \x1b]8;;URL\x1b\\ ... \x1b]8;;\x1b\\
-  const stripped = str.replace(/\x1b\]8;;[^\x1b]*\x1b\\/g, '');
-  // Spread handles surrogate pairs correctly (1 visual char = 1 array element)
-  return [...stripped].length;
-}
-
-/**
- * Truncate or pad a string to exact visual width (for column alignment).
- * If the input is wrapped in an OSC 8 hyperlink, truncation runs on the inner
- * text and the wrapper is re-applied so the link stays valid.
- */
-export function fixedWidth(str: string, width: number): string {
-  const visualWidth = displayWidth(str);
-  if (visualWidth >= width) {
-    const osc8 = str.match(/^\x1b\]8;;([^\x1b]*)\x1b\\([\s\S]*)\x1b\]8;;\x1b\\$/);
-    const inner = osc8 ? osc8[2] : str;
-    let truncated = '';
-    let w = 0;
-    for (const char of inner) {
-      if (w >= width - 2) break;
-      truncated += char;
-      w += 1;
-    }
-    const content = truncated + '…';
-    const wrapped = osc8 ? `\x1b]8;;${osc8[1]}\x1b\\${content}\x1b]8;;\x1b\\` : content;
-    return wrapped + ' ';
-  }
-  return str + ' '.repeat(width - visualWidth);
-}
-
-/**
  * Format a cost in USD
  */
 export function formatCost(usd: number): string {
@@ -266,65 +235,6 @@ export function buildResourceText(session: Session): string {
 }
 
 /**
- * Measure max content width per column across all sessions
- */
-export function measureColumns(sessions: Session[], sizeMap?: Map<string, number>, skipTranscript = false): Map<ColumnKey, number> {
-  const widths = new Map<ColumnKey, number>();
-
-  for (const session of sessions) {
-    // +1 on each measurement accounts for minimum inter-column spacing
-
-    // idName = ID (12) + name + trailing space
-    const nameWidth = displayWidth(getDisplayName(session, skipTranscript));
-    const idNameWidth = 12 + nameWidth + 1;
-    widths.set('idName', Math.max(widths.get('idName') ?? 0, idNameWidth));
-
-    // status
-    const statusWidth = session.state.length + 1;
-    widths.set('status', Math.max(widths.get('status') ?? 0, statusWidth));
-
-    // usage (context %)
-    if (session.context_pct != null && ['busy', 'idle', 'waiting'].includes(session.state)) {
-      const usageWidth = `${session.context_pct}%`.length + 1;
-      widths.set('usage', Math.max(widths.get('usage') ?? 0, usageWidth));
-    }
-
-    // cost
-    if (session.cost_usd != null && session.cost_usd >= 0.005) {
-      const costWidth = formatCost(session.cost_usd).length + 1;
-      widths.set('cost', Math.max(widths.get('cost') ?? 0, costWidth));
-    }
-
-    // repo
-    const repoWidth = displayWidth(getRepoName(session.directory)) + 1;
-    widths.set('repo', Math.max(widths.get('repo') ?? 0, repoWidth));
-
-    // branch
-    const branchWidth = displayWidth(getBranchDisplay(session).text) + 1;
-    widths.set('branch', Math.max(widths.get('branch') ?? 0, branchWidth));
-
-    // time
-    const timeWidth = relativeTime(session.last_active_at).length + 1;
-    widths.set('time', Math.max(widths.get('time') ?? 0, timeWidth));
-
-    // size
-    if (sizeMap) {
-      const fileSize = sizeMap.get(session.id);
-      if (fileSize != null) {
-        const sizeWidth = formatFileSize(fileSize).length + 1;
-        widths.set('size', Math.max(widths.get('size') ?? 0, sizeWidth));
-      }
-    }
-
-    // resources
-    const resourceWidth = displayWidth(buildResourceText(session)) + 1;
-    widths.set('resources', Math.max(widths.get('resources') ?? 0, resourceWidth));
-  }
-
-  return widths;
-}
-
-/**
  * Get repo name from session directory
  * - If in a worktree (path contains .worktrees/), use the original repo's directory name
  * - Otherwise, use the directory's basename
@@ -356,131 +266,6 @@ export function getBranchDisplay(session: Session): { text: string; color: 'cyan
     return { text: abbreviateBranch(session.resources.branch), color: 'magenta' };
   }
   return { text: '', color: 'dim' };
-}
-
-/**
- * Format a session as a single line for list views
- */
-export function formatSessionLine(session: Session, layout: ColumnLayout, depth = 0, prefixMap?: Map<string, number>, repoSlug?: string, sizeMap?: Map<string, number>, bottomUp?: boolean, skipTranscript?: boolean): string {
-  const parts: string[] = [];
-
-  // ID column (always visible when idName is visible)
-  if (layout.visible.has('idName')) {
-    const id = shortId(session.id);
-    const prefixLen = prefixMap?.get(session.id) ?? id.length;
-    const styledId = highlightId(id, prefixLen);
-    const indent = '  '.repeat(depth);
-    const connector = bottomUp ? '┌' : '└';
-    const idCol = depth > 0
-      ? indent + chalk.dim(connector + ' ') + styledId + '  '
-      : '  ' + styledId + '  ';
-    parts.push(idCol);
-
-    // Name column (shrink by indent to maintain alignment)
-    const name = getDisplayName(session, skipTranscript);
-    const nameWidth = layout.name - (depth * 2);
-    const nameCol = name
-      ? chalk.whiteBright(fixedWidth(name, nameWidth))
-      : chalk.dim(fixedWidth(name, nameWidth));
-    parts.push(nameCol);
-  }
-
-  // Status column
-  if (layout.visible.has('status')) {
-    const statusText = session.state;
-    const statusPad = ' '.repeat(Math.max(1, layout.status - statusText.length));
-    parts.push(formatStatus(session) + statusPad);
-  }
-
-  // Usage column (context %)
-  if (layout.visible.has('usage')) {
-    if (session.context_pct != null && ['busy', 'idle', 'waiting'].includes(session.state)) {
-      const pct = session.context_pct;
-      const pctText = `${pct}%`;
-      let colorFn: (s: string) => string;
-      if (pct >= 60) colorFn = chalk.red;
-      else if (pct >= 33) colorFn = chalk.yellow;
-      else colorFn = chalk.green;
-      parts.push(colorFn(fixedWidth(pctText, layout.usage)));
-    } else {
-      parts.push(fixedWidth('', layout.usage));
-    }
-  }
-
-  // Repo column
-  if (layout.visible.has('repo')) {
-    const repoName = getRepoName(session.directory);
-    const linked = repoSlug
-      ? hyperlink(`https://github.com/${repoSlug}`, repoName)
-      : repoName;
-    parts.push(chalk.blue(fixedWidth(linked, layout.repo)));
-  }
-
-  // Worktree/Branch column
-  if (layout.visible.has('branch')) {
-    const branch = getBranchDisplay(session);
-    const linked = (branch.text && repoSlug && session.resources.branch)
-      ? hyperlink(`https://github.com/${repoSlug}/tree/${session.resources.branch}`, branch.text)
-      : branch.text;
-    const padded = fixedWidth(linked, layout.branch);
-    const branchCol = branch.color === 'dim'
-      ? chalk.dim(padded)
-      : chalk[branch.color](padded);
-    parts.push(branchCol);
-  }
-
-  // Cost column
-  if (layout.visible.has('cost')) {
-    if (session.cost_usd != null && session.cost_usd >= 0.005) {
-      const costText = formatCost(session.cost_usd);
-      parts.push(chalk.dim(fixedWidth(costText, layout.cost)));
-    } else {
-      parts.push(fixedWidth('', layout.cost));
-    }
-  }
-
-  // Resources column
-  if (layout.visible.has('resources')) {
-    const resourceText = buildResourceText(session);
-    const resourceParts = resourceText === '-' ? [] : resourceText.split(' ');
-
-    let resourceCol: string;
-    if (resourceParts.length === 0) {
-      resourceCol = chalk.dim(fixedWidth('-', layout.resources));
-    } else {
-      const truncated = fixedWidth(resourceText, layout.resources);
-      if (truncated.includes('…')) {
-        resourceCol = chalk.dim(truncated);
-      } else {
-        const prNum = session.resources.pr?.match(/\/pull\/(\d+)/)?.[1];
-        const coloredParts = [
-          prNum ? chalk.green(hyperlink(session.resources.pr!, `#${prNum}`)) : '',
-          session.resources.jira ? chalk.yellow(hyperlink(buildJiraUrl(session.resources.jira), session.resources.jira)) : '',
-          session.tags.values.length > 0 ? chalk.cyan(session.tags.values[0]) : '',
-        ].filter(Boolean).join(' ');
-        resourceCol = coloredParts + ' '.repeat(Math.max(0, layout.resources - displayWidth(resourceText)));
-      }
-    }
-    parts.push(resourceCol);
-  }
-
-  // Size column
-  if (layout.visible.has('size') && sizeMap) {
-    const fileSize = sizeMap.get(session.id);
-    if (fileSize != null) {
-      const sizeText = formatFileSize(fileSize);
-      parts.push(chalk.dim(fixedWidth(sizeText, layout.size)));
-    } else {
-      parts.push(fixedWidth('', layout.size));
-    }
-  }
-
-  // Time column
-  if (layout.visible.has('time')) {
-    parts.push(chalk.dim(relativeTime(session.last_active_at)));
-  }
-
-  return parts.join('');
 }
 
 /**
@@ -785,49 +570,8 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
     ? sortedSessions.map(s => ({ type: 'session' as const, session: s, depth: 0 }))
     : orderSessionsWithChildren(sortedSessions, { ...options, sizeMap });
 
-  // Measure content and compute layout, accounting for nesting depth
   const skip = options?.skipTranscript ?? false;
-  const contentWidths = measureColumns(sessions, sizeMap, skip);
-  for (const row of ordered) {
-    if (row.type !== 'session') continue;
-    const nameLen = displayWidth(getDisplayName(row.session, skip));
-    const idNameWidth = ID_FIXED_WIDTH + nameLen + 1 + row.depth * 2;
-    contentWidths.set('idName', Math.max(contentWidths.get('idName') ?? 0, idNameWidth));
-  }
-  const layout = computeColumnLayout(contentWidths, width);
-
-  // Build header from visible columns
-  const headerParts: string[] = [];
-  if (layout.visible.has('idName')) {
-    headerParts.push('  ' + fixedWidth('ID', layout.id - 2) + fixedWidth('Name', layout.name));
-  }
-  if (layout.visible.has('status')) {
-    headerParts.push(fixedWidth('State', layout.status));
-  }
-  if (layout.visible.has('usage')) {
-    headerParts.push(fixedWidth('Usage', layout.usage));
-  }
-  if (layout.visible.has('repo')) {
-    headerParts.push(fixedWidth('Repo', layout.repo));
-  }
-  if (layout.visible.has('branch')) {
-    headerParts.push(fixedWidth('Worktree/Branch', layout.branch));
-  }
-  if (layout.visible.has('cost')) {
-    headerParts.push(fixedWidth('Cost', layout.cost));
-  }
-  if (layout.visible.has('resources')) {
-    headerParts.push(fixedWidth('Resources', layout.resources));
-  }
-  if (layout.visible.has('size')) {
-    headerParts.push(fixedWidth('Size', layout.size));
-  }
-  if (layout.visible.has('time')) {
-    headerParts.push('Last Active');
-  }
-
-  console.log(chalk.dim(headerParts.join('')));
-  console.log(chalk.dim('─'.repeat(layout.totalWidth)));
+  const bottomUp = options?.bottomUp ?? false;
 
   // Cache repo slugs by directory to avoid repeated git calls
   const slugCache = new Map<string, string | undefined>();
@@ -836,14 +580,37 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
     return slugCache.get(dir);
   }
 
-  const bottomUp = options?.bottomUp ?? false;
-  for (const row of ordered) {
+  // Map ordered sessions/gaps to library rows. A session becomes a data row with
+  // a tree-indent prefix; a gap becomes a literal row (the gap marker is not a
+  // tabular cell). The indent's leading spaces plus the renderer's margin
+  // reproduce the old per-depth indentation; the connector is dimmed.
+  const rows: Row<SessionRow>[] = ordered.map((row) => {
     if (row.type === 'gap') {
-      console.log(formatGapLine(row.count, row.depth));
-    } else if (row.type === 'session') {
-      console.log(formatSessionLine(row.session, layout, row.depth, prefixMap, getSlug(row.session.directory), sizeMap, bottomUp, skip));
+      return { type: 'literal', render: () => formatGapLine(row.count, row.depth) };
     }
-  }
+    const session = row.session;
+    const connector = bottomUp ? '┌' : '└';
+    const indent = row.depth > 0 ? '  '.repeat(row.depth - 1) + chalk.dim(connector + ' ') : '';
+    const sessionRow: SessionRow = {
+      session,
+      prefixLen: prefixMap.get(session.id) ?? shortId(session.id).length,
+      repoSlug: getSlug(session.directory),
+      size: sizeMap.get(session.id),
+      bottomUp,
+      skipTranscript: skip,
+    };
+    return { type: 'data', row: sessionRow, indent };
+  });
+
+  const { lines } = renderTable(SESSION_COLUMNS, rows, {
+    width,
+    margin: 2,
+    headerStyle: chalk.dim,
+    separatorStyle: chalk.dim,
+    trimLastColumn: true,
+  });
+
+  for (const line of lines) console.log(line);
 }
 
 /**

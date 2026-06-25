@@ -1,8 +1,12 @@
 /**
- * OSC 8 terminal hyperlink support
+ * OSC 8 terminal hyperlink support.
+ *
+ * Thin wrapper over the library's `hyperlink`, injecting the TTY check so call
+ * sites keep the two-argument form. Escapes are emitted only when stdout is a TTY.
  */
 
+import { hyperlink as libHyperlink } from '@echobravoyahoo/tables';
+
 export function hyperlink(url: string, text: string): string {
-  if (!process.stdout.isTTY) return text;
-  return `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
+  return libHyperlink(url, text, { force: !!process.stdout.isTTY });
 }

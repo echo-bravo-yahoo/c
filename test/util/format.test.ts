@@ -6,11 +6,11 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { useFakeTime } from '../setup.ts';
 
-// These are pure functions we can test directly
-import { relativeTime, shortId, displayWidth, fixedWidth, getRepoName, getBranchDisplay, formatSessionLine, formatFileSize, formatCost, computeUniquePrefixLength, highlightId, buildPrefixMap } from '../../src/util/format.ts';
-import { hyperlink } from '../../src/util/hyperlink.ts';
+// These are pure functions we can test directly. Width primitives (displayWidth,
+// fixedWidth) and the full table render path moved to @echobravoyahoo/tables and
+// are covered by the lib suite + test/util/golden-table.test.ts.
+import { relativeTime, shortId, getRepoName, getBranchDisplay, formatFileSize, formatCost, computeUniquePrefixLength, highlightId, buildPrefixMap } from '../../src/util/format.ts';
 import type { Session } from '../../src/store/schema.ts';
-import type { ColumnLayout } from '../../src/util/layout.ts';
 import chalk from 'chalk';
 
 describe('c', () => {
@@ -117,31 +117,6 @@ describe('c', () => {
         });
       });
 
-      describe('displayWidth', () => {
-        it('counts ASCII characters correctly', () => {
-          assert.strictEqual(displayWidth('hello'), 5);
-        });
-
-        it('counts surrogate pairs as single visual character', () => {
-          // 󰇘 is U+F0298, a surrogate pair with .length === 2 but visual width 1
-          const icon = '󰇘';
-          assert.strictEqual(icon.length, 2, 'surrogate pair has .length of 2');
-          assert.strictEqual(displayWidth(icon), 1, 'displayWidth should count as 1');
-        });
-
-        it('handles abbreviated branch with surrogate pair icon', () => {
-          const abbreviated = '󰇘/billing-error-discovery';
-          // .length returns 26 (2 for icon + 24 for rest)
-          // displayWidth should return 25 (1 for icon + 24 for rest)
-          assert.strictEqual(abbreviated.length, 26);
-          assert.strictEqual(displayWidth(abbreviated), 25);
-        });
-
-        it('handles empty string', () => {
-          assert.strictEqual(displayWidth(''), 0);
-        });
-      });
-
       describe('formatFileSize', () => {
         it('formats bytes', () => {
           assert.strictEqual(formatFileSize(500), '500 B');
@@ -157,65 +132,6 @@ describe('c', () => {
 
         it('formats zero', () => {
           assert.strictEqual(formatFileSize(0), '0 B');
-        });
-      });
-
-      describe('hyperlink column alignment', () => {
-        let savedTTY: boolean | undefined;
-
-        beforeEach(() => {
-          savedTTY = process.stdout.isTTY;
-          // Force TTY mode so hyperlink() emits escape sequences
-          Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
-        });
-
-        afterEach(() => {
-          Object.defineProperty(process.stdout, 'isTTY', { value: savedTTY, configurable: true });
-        });
-
-        it('hyperlink text has same displayWidth as plain text', () => {
-          const plain = 'hello';
-          const linked = hyperlink('https://example.com', plain);
-          assert.strictEqual(displayWidth(linked), displayWidth(plain));
-        });
-
-        it('fixedWidth with hyperlinked text produces correct visual width', () => {
-          const linked = hyperlink('https://x.com', 'hi');
-          const fixed = fixedWidth(linked, 10);
-          assert.strictEqual(displayWidth(fixed), 10);
-        });
-
-        it('fixedWidth truncates hyperlinked text correctly', () => {
-          const linked = hyperlink('https://x.com', 'a-very-long-string');
-          const fixed = fixedWidth(linked, 10);
-          assert.strictEqual(displayWidth(fixed), 10);
-        });
-
-        it('padding spaces live outside the OSC 8 link', () => {
-          const linked = hyperlink('https://x.com', 'hi');
-          const fixed = fixedWidth(linked, 10);
-          const closeIdx = fixed.indexOf('\x1b]8;;\x1b\\');
-          assert.ok(closeIdx > -1, 'closing OSC 8 missing');
-          const trailing = fixed.slice(closeIdx + '\x1b]8;;\x1b\\'.length);
-          assert.strictEqual(trailing, '        ', 'padding must be outside the link');
-          const openIdx = fixed.indexOf('\x1b]8;;');
-          const inner = fixed.slice(fixed.indexOf('\x1b\\', openIdx) + 2, closeIdx);
-          assert.strictEqual(inner, 'hi', 'no padding should be inside the link');
-        });
-
-        it('truncation keeps OSC 8 wrapper intact', () => {
-          const linked = hyperlink('https://example.com/long', 'a-very-long-string');
-          const fixed = fixedWidth(linked, 10);
-          assert.match(fixed, /^\x1b\]8;;https:\/\/example\.com\/long\x1b\\/, 'OSC 8 open preserved');
-          assert.match(fixed, /\x1b\]8;;\x1b\\ $/, 'OSC 8 close + trailing space preserved');
-          assert.ok(fixed.includes('…'), 'ellipsis marker present');
-          assert.strictEqual(displayWidth(fixed), 10);
-        });
-
-        it('non-hyperlinked truncation unchanged', () => {
-          const fixed = fixedWidth('a-very-long-string', 10);
-          assert.strictEqual(fixed, 'a-very-l… ');
-          assert.strictEqual(displayWidth(fixed), 10);
         });
       });
 
@@ -525,65 +441,6 @@ describe('c', () => {
           const result = getBranchDisplay(session);
           assert.strictEqual(result.text, 'wt-name');
           assert.strictEqual(result.color, 'cyan');
-        });
-      });
-
-      describe('formatSessionLine', () => {
-        let savedLevel: typeof chalk.level;
-
-        beforeEach(() => {
-          savedLevel = chalk.level;
-          chalk.level = 1 as typeof chalk.level; // force ANSI output in non-TTY test runner
-        });
-
-        afterEach(() => {
-          chalk.level = savedLevel;
-        });
-
-        function makeSession(overrides: Partial<Session> = {}): Session {
-          return {
-            id: 'test-id-00-0000-0000-000000000000',
-            name: '',
-            directory: '/tmp/test',
-            project_key: 'key',
-            created_at: new Date(),
-            last_active_at: new Date(),
-            state: 'idle',
-            resources: {},
-            servers: {},
-            tags: { values: [] },
-            meta: {},
-            ...overrides,
-          };
-        }
-
-        const layout: ColumnLayout = {
-          id: 12,
-          name: 30,
-          status: 8,
-          repo: 0,
-          branch: 0,
-          cost: 0,
-          resources: 0,
-          size: 0,
-          time: 0,
-          visible: new Set(['idName', 'status']),
-          totalWidth: 50,
-        };
-
-        it('renders empty name as dim', () => {
-          const session = makeSession();
-          const line = formatSessionLine(session, layout);
-          // dim = \x1b[2m, bold = \x1b[1m
-          assert.ok(line.includes('\x1b[2m'), 'empty name should use dim escape code');
-          assert.ok(!line.includes('\x1b[1m'), 'empty name should not use bold escape code');
-        });
-
-        it('renders explicit name as whiteBright', () => {
-          const session = makeSession({ name: 'my cool session' });
-          const line = formatSessionLine(session, layout);
-          assert.ok(!line.includes('\x1b[1m'), 'explicit name should not use bold escape code');
-          assert.ok(line.includes('\x1b[97m'), 'explicit name should use whiteBright escape code');
         });
       });
 

@@ -1,0 +1,180 @@
+=== width 29 (top-down) ===
+[2m  ID        Name    State  [22m
+[2m─────────────────────────────[22m
+  [36md[39m[2mddd0000[22m  [97micon-b… [39m[32mbusy[39m   
+  [36maaaa1[39m[2m111[22m  [97mauth-r… [39m[32mbusy[39m   
+  [36mb[39m[2mbbb0000[22m  [2m        [22m[34midle[39m   
+  [36me1[39m[2m110000[22m  [97mparent… [39m[32mbusy[39m   
+  [2m└ [22m[36me2[39m[2m220000[22m  [97mchil… [39m[32mbusy[39m   
+    [2m└ [22m[36me3[39m[2m330000[22m  [97mgr… [39m[32mbusy[39m   
+  [36mc[39m[2mccc0000[22m  [97ma-very… [39m[33mwaiting[39m 
+[2m  ⋮ (2 hidden)[22m
+  [2m└ [22m[36mf3[39m[2m330000[22m  [97mdeep… [39m[32mbusy[39m   
+  [36maaaa2[39m[2m222[22m  [97mbillin… [39m[90mclosed[39m 
+
+=== width 35 (top-down) ===
+[2m  ID        Name    State  Repo  [22m
+[2m───────────────────────────────────[22m
+  [36md[39m[2mddd0000[22m  [97micon-b… [39m[32mbusy[39m   [34mrepo  [39m
+  [36maaaa1[39m[2m111[22m  [97mauth-r… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m
+  [36mb[39m[2mbbb0000[22m  [2m        [22m[34midle[39m   [34mweb   [39m
+  [36me1[39m[2m110000[22m  [97mparent… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m
+  [2m└ [22m[36me2[39m[2m220000[22m  [97mchil… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m
+    [2m└ [22m[36me3[39m[2m330000[22m  [97mgr… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m
+  [36mc[39m[2mccc0000[22m  [97ma-very… [39m[33mwaiting[39m [34minfra [39m
+[2m  ⋮ (2 hidden)[22m
+  [2m└ [22m[36mf3[39m[2m330000[22m  [97mdeep… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m
+  [36maaaa2[39m[2m222[22m  [97mbillin… [39m[90mclosed[39m [34m]8;;https://github.com/test/payments\paym…]8;;\ [39m
+
+=== width 41 (top-down) ===
+[2m  ID        Name    State  Repo  Work… [22m
+[2m─────────────────────────────────────────[22m
+  [36md[39m[2mddd0000[22m  [97micon-b… [39m[32mbusy[39m   [34mrepo  [39m[35m󰇘/co… [39m
+  [36maaaa1[39m[2m111[22m  [97mauth-r… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/auth\feat…]8;;\ [39m
+  [36mb[39m[2mbbb0000[22m  [2m        [22m[34midle[39m   [34mweb   [39m[36mwt-f… [39m
+  [36me1[39m[2m110000[22m  [97mparent… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/main\main]8;;\  [39m
+  [2m└ [22m[36me2[39m[2m220000[22m  [97mchil… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/child\feat…]8;;\ [39m
+    [2m└ [22m[36me3[39m[2m330000[22m  [97mgr… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/grand\feat…]8;;\ [39m
+  [36mc[39m[2mccc0000[22m  [97ma-very… [39m[33mwaiting[39m [34minfra [39m[2m      [22m
+[2m  ⋮ (2 hidden)[22m
+  [2m└ [22m[36mf3[39m[2m330000[22m  [97mdeep… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/deep\feat…]8;;\ [39m
+  [36maaaa2[39m[2m222[22m  [97mbillin… [39m[90mclosed[39m [34m]8;;https://github.com/test/payments\paym…]8;;\ [39m[35m]8;;https://github.com/test/payments/tree/fix/billing\fix/…]8;;\ [39m
+
+=== width 47 (top-down) ===
+[2m  ID        Name    State  Repo  Work… Last Active[22m
+[2m───────────────────────────────────────────────[22m
+  [36md[39m[2mddd0000[22m  [97micon-b… [39m[32mbusy[39m   [34mrepo  [39m[35m󰇘/co… [39m[2mjust now[22m
+  [36maaaa1[39m[2m111[22m  [97mauth-r… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/auth\feat…]8;;\ [39m[2m5m ago[22m
+  [36mb[39m[2mbbb0000[22m  [2m        [22m[34midle[39m   [34mweb   [39m[36mwt-f… [39m[2m1h ago[22m
+  [36me1[39m[2m110000[22m  [97mparent… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/main\main]8;;\  [39m[2m2h ago[22m
+  [2m└ [22m[36me2[39m[2m220000[22m  [97mchil… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/child\feat…]8;;\ [39m[2m1h ago[22m
+    [2m└ [22m[36me3[39m[2m330000[22m  [97mgr… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/grand\feat…]8;;\ [39m[2m1h ago[22m
+  [36mc[39m[2mccc0000[22m  [97ma-very… [39m[33mwaiting[39m [34minfra [39m[2m      [22m[2m3h ago[22m
+[2m  ⋮ (2 hidden)[22m
+  [2m└ [22m[36mf3[39m[2m330000[22m  [97mdeep… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/deep\feat…]8;;\ [39m[2m4h ago[22m
+  [36maaaa2[39m[2m222[22m  [97mbillin… [39m[90mclosed[39m [34m]8;;https://github.com/test/payments\paym…]8;;\ [39m[35m]8;;https://github.com/test/payments/tree/fix/billing\fix/…]8;;\ [39m[2m1d ago[22m
+
+=== width 52 (top-down) ===
+[2m  ID        Name    State  Repo  Work… Cost Last Active[22m
+[2m────────────────────────────────────────────────────[22m
+  [36md[39m[2mddd0000[22m  [97micon-b… [39m[32mbusy[39m   [34mrepo  [39m[35m󰇘/co… [39m     [2mjust now[22m
+  [36maaaa1[39m[2m111[22m  [97mauth-r… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/auth\feat…]8;;\ [39m[2m$1.… [22m[2m5m ago[22m
+  [36mb[39m[2mbbb0000[22m  [2m        [22m[34midle[39m   [34mweb   [39m[36mwt-f… [39m     [2m1h ago[22m
+  [36me1[39m[2m110000[22m  [97mparent… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/main\main]8;;\  [39m     [2m2h ago[22m
+  [2m└ [22m[36me2[39m[2m220000[22m  [97mchil… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/child\feat…]8;;\ [39m     [2m1h ago[22m
+    [2m└ [22m[36me3[39m[2m330000[22m  [97mgr… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/grand\feat…]8;;\ [39m     [2m1h ago[22m
+  [36mc[39m[2mccc0000[22m  [97ma-very… [39m[33mwaiting[39m [34minfra [39m[2m      [22m     [2m3h ago[22m
+[2m  ⋮ (2 hidden)[22m
+  [2m└ [22m[36mf3[39m[2m330000[22m  [97mdeep… [39m[32mbusy[39m   [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/deep\feat…]8;;\ [39m     [2m4h ago[22m
+  [36maaaa2[39m[2m222[22m  [97mbillin… [39m[90mclosed[39m [34m]8;;https://github.com/test/payments\paym…]8;;\ [39m[35m]8;;https://github.com/test/payments/tree/fix/billing\fix/…]8;;\ [39m     [2m1d ago[22m
+
+=== width 60 (top-down) ===
+[2m  ID        Name       State   Us… Repo  Work… Cost Last Active[22m
+[2m────────────────────────────────────────────────────────────[22m
+  [36md[39m[2mddd0000[22m  [97micon-bran… [39m[32mbusy[39m        [34mrepo  [39m[35m󰇘/co… [39m     [2mjust now[22m
+  [36maaaa1[39m[2m111[22m  [97mauth-refa… [39m[32mbusy[39m    [33m42% [39m[34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/auth\feat…]8;;\ [39m[2m$1.… [22m[2m5m ago[22m
+  [36mb[39m[2mbbb0000[22m  [2m           [22m[34midle[39m    [32m5%  [39m[34mweb   [39m[36mwt-f… [39m     [2m1h ago[22m
+  [36me1[39m[2m110000[22m  [97mparent-ro… [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/main\main]8;;\  [39m     [2m2h ago[22m
+  [2m└ [22m[36me2[39m[2m220000[22m  [97mchild-o… [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/child\feat…]8;;\ [39m     [2m1h ago[22m
+    [2m└ [22m[36me3[39m[2m330000[22m  [97mgrand… [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/grand\feat…]8;;\ [39m     [2m1h ago[22m
+  [36mc[39m[2mccc0000[22m  [97ma-very-lo… [39m[33mwaiting[39m [31m75% [39m[34minfra [39m[2m      [22m     [2m3h ago[22m
+[2m  ⋮ (2 hidden)[22m
+  [2m└ [22m[36mf3[39m[2m330000[22m  [97mdeep-vi… [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/deep\feat…]8;;\ [39m     [2m4h ago[22m
+  [36maaaa2[39m[2m222[22m  [97mbilling-f… [39m[90mclosed[39m      [34m]8;;https://github.com/test/payments\paym…]8;;\ [39m[35m]8;;https://github.com/test/payments/tree/fix/billing\fix/…]8;;\ [39m     [2m1d ago[22m
+
+=== width 80 (top-down) ===
+[2m  ID        Name                State   Us… Repo  Work… Cost Re… Size   Last Active[22m
+[2m────────────────────────────────────────────────────────────────────────────────[22m
+  [36md[39m[2mddd0000[22m  [97micon-branch         [39m[32mbusy[39m        [34mrepo  [39m[35m󰇘/co… [39m     [2m-   [22m       [2mjust now[22m
+  [36maaaa1[39m[2m111[22m  [97mauth-refactor       [39m[32mbusy[39m    [33m42% [39m[34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/auth\feat…]8;;\ [39m[2m$1.… [22m[2m-   [22m[2m1.5 KB [22m[2m5m ago[22m
+  [36mb[39m[2mbbb0000[22m  [2m                    [22m[34midle[39m    [32m5%  [39m[34mweb   [39m[36mwt-f… [39m     [2m-   [22m       [2m1h ago[22m
+  [36me1[39m[2m110000[22m  [97mparent-root         [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/main\main]8;;\  [39m     [2m-   [22m       [2m2h ago[22m
+  [2m└ [22m[36me2[39m[2m220000[22m  [97mchild-one         [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/child\feat…]8;;\ [39m     [2m-   [22m       [2m1h ago[22m
+    [2m└ [22m[36me3[39m[2m330000[22m  [97mgrandchild      [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/grand\feat…]8;;\ [39m     [2m-   [22m       [2m1h ago[22m
+  [36mc[39m[2mccc0000[22m  [97ma-very-long-sessio… [39m[33mwaiting[39m [31m75% [39m[34minfra [39m[2m      [22m     [2mIN… [22m       [2m3h ago[22m
+[2m  ⋮ (2 hidden)[22m
+  [2m└ [22m[36mf3[39m[2m330000[22m  [97mdeep-visible      [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/deep\feat…]8;;\ [39m     [2m-   [22m       [2m4h ago[22m
+  [36maaaa2[39m[2m222[22m  [97mbilling-fix         [39m[90mclosed[39m      [34m]8;;https://github.com/test/payments\paym…]8;;\ [39m[35m]8;;https://github.com/test/payments/tree/fix/billing\fix/…]8;;\ [39m     [2m#4… [22m[2m2.5 MB [22m[2m1d ago[22m
+
+=== width 100 (top-down) ===
+[2m  ID        Name                                    State   Us… Repo  Work… Cost Re… Size   Last Active[22m
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────[22m
+  [36md[39m[2mddd0000[22m  [97micon-branch                             [39m[32mbusy[39m        [34mrepo  [39m[35m󰇘/co… [39m     [2m-   [22m       [2mjust now[22m
+  [36maaaa1[39m[2m111[22m  [97mauth-refactor                           [39m[32mbusy[39m    [33m42% [39m[34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/auth\feat…]8;;\ [39m[2m$1.… [22m[2m-   [22m[2m1.5 KB [22m[2m5m ago[22m
+  [36mb[39m[2mbbb0000[22m  [2m                                        [22m[34midle[39m    [32m5%  [39m[34mweb   [39m[36mwt-f… [39m     [2m-   [22m       [2m1h ago[22m
+  [36me1[39m[2m110000[22m  [97mparent-root                             [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/main\main]8;;\  [39m     [2m-   [22m       [2m2h ago[22m
+  [2m└ [22m[36me2[39m[2m220000[22m  [97mchild-one                             [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/child\feat…]8;;\ [39m     [2m-   [22m       [2m1h ago[22m
+    [2m└ [22m[36me3[39m[2m330000[22m  [97mgrandchild                          [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/grand\feat…]8;;\ [39m     [2m-   [22m       [2m1h ago[22m
+  [36mc[39m[2mccc0000[22m  [97ma-very-long-session-name-that-exceeds-… [39m[33mwaiting[39m [31m75% [39m[34minfra [39m[2m      [22m     [2mIN… [22m       [2m3h ago[22m
+[2m  ⋮ (2 hidden)[22m
+  [2m└ [22m[36mf3[39m[2m330000[22m  [97mdeep-visible                          [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/deep\feat…]8;;\ [39m     [2m-   [22m       [2m4h ago[22m
+  [36maaaa2[39m[2m222[22m  [97mbilling-fix                             [39m[90mclosed[39m      [34m]8;;https://github.com/test/payments\paym…]8;;\ [39m[35m]8;;https://github.com/test/payments/tree/fix/billing\fix/…]8;;\ [39m     [2m#4… [22m[2m2.5 MB [22m[2m1d ago[22m
+
+=== width 120 (top-down) ===
+[2m  ID        Name                                                        State   Us… Repo  Work… Cost Re… Size   Last Active[22m
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[22m
+  [36md[39m[2mddd0000[22m  [97micon-branch                                                 [39m[32mbusy[39m        [34mrepo  [39m[35m󰇘/co… [39m     [2m-   [22m       [2mjust now[22m
+  [36maaaa1[39m[2m111[22m  [97mauth-refactor                                               [39m[32mbusy[39m    [33m42% [39m[34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/auth\feat…]8;;\ [39m[2m$1.… [22m[2m-   [22m[2m1.5 KB [22m[2m5m ago[22m
+  [36mb[39m[2mbbb0000[22m  [2m                                                            [22m[34midle[39m    [32m5%  [39m[34mweb   [39m[36mwt-f… [39m     [2m-   [22m       [2m1h ago[22m
+  [36me1[39m[2m110000[22m  [97mparent-root                                                 [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/main\main]8;;\  [39m     [2m-   [22m       [2m2h ago[22m
+  [2m└ [22m[36me2[39m[2m220000[22m  [97mchild-one                                                 [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/child\feat…]8;;\ [39m     [2m-   [22m       [2m1h ago[22m
+    [2m└ [22m[36me3[39m[2m330000[22m  [97mgrandchild                                              [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/grand\feat…]8;;\ [39m     [2m-   [22m       [2m1h ago[22m
+  [36mc[39m[2mccc0000[22m  [97ma-very-long-session-name-that-exceeds-the-column-width-by-… [39m[33mwaiting[39m [31m75% [39m[34minfra [39m[2m      [22m     [2mIN… [22m       [2m3h ago[22m
+[2m  ⋮ (2 hidden)[22m
+  [2m└ [22m[36mf3[39m[2m330000[22m  [97mdeep-visible                                              [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/deep\feat…]8;;\ [39m     [2m-   [22m       [2m4h ago[22m
+  [36maaaa2[39m[2m222[22m  [97mbilling-fix                                                 [39m[90mclosed[39m      [34m]8;;https://github.com/test/payments\paym…]8;;\ [39m[35m]8;;https://github.com/test/payments/tree/fix/billing\fix/…]8;;\ [39m     [2m#4… [22m[2m2.5 MB [22m[2m1d ago[22m
+
+=== width 150 (top-down) ===
+[2m  ID        Name                                                                     State   Us… Repo     Worktree/Bran… Cost  Res… Size   Last Active[22m
+[2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[22m
+  [36md[39m[2mddd0000[22m  [97micon-branch                                                              [39m[32mbusy[39m        [34mrepo     [39m[35m󰇘/cool-feature [39m      [2m-    [22m       [2mjust now[22m
+  [36maaaa1[39m[2m111[22m  [97mauth-refactor                                                            [39m[32mbusy[39m    [33m42% [39m[34m]8;;https://github.com/test/myapp\myapp]8;;\    [39m[35m]8;;https://github.com/test/myapp/tree/feat/auth\feat/auth]8;;\      [39m[2m$1.23 [22m[2m-    [22m[2m1.5 KB [22m[2m5m ago[22m
+  [36mb[39m[2mbbb0000[22m  [2m                                                                         [22m[34midle[39m    [32m5%  [39m[34mweb      [39m[36mwt-feature     [39m      [2m-    [22m       [2m1h ago[22m
+  [36me1[39m[2m110000[22m  [97mparent-root                                                              [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\    [39m[35m]8;;https://github.com/test/myapp/tree/main\main]8;;\           [39m      [2m-    [22m       [2m2h ago[22m
+  [2m└ [22m[36me2[39m[2m220000[22m  [97mchild-one                                                              [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\    [39m[35m]8;;https://github.com/test/myapp/tree/feat/child\feat/child]8;;\     [39m      [2m-    [22m       [2m1h ago[22m
+    [2m└ [22m[36me3[39m[2m330000[22m  [97mgrandchild                                                           [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\    [39m[35m]8;;https://github.com/test/myapp/tree/feat/grand\feat/grand]8;;\     [39m      [2m-    [22m       [2m1h ago[22m
+  [36mc[39m[2mccc0000[22m  [97ma-very-long-session-name-that-exceeds-the-column-width-by-a-large-margin [39m[33mwaiting[39m [31m75% [39m[34minfra    [39m[2m               [22m      [2mINF… [22m       [2m3h ago[22m
+[2m  ⋮ (2 hidden)[22m
+  [2m└ [22m[36mf3[39m[2m330000[22m  [97mdeep-visible                                                           [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\    [39m[35m]8;;https://github.com/test/myapp/tree/feat/deep\feat/deep]8;;\      [39m      [2m-    [22m       [2m4h ago[22m
+  [36maaaa2[39m[2m222[22m  [97mbilling-fix                                                              [39m[90mclosed[39m      [34m]8;;https://github.com/test/payments\payments]8;;\ [39m[35m]8;;https://github.com/test/payments/tree/fix/billing\fix/billing]8;;\    [39m      [2m#42… [22m[2m2.5 MB [22m[2m1d ago[22m
+
+=== width 200 (top-down) ===
+[2m  ID        Name                                                                     State   Usage Repo     Worktree/Branch Cost  Resources         Size   Last Active[22m
+[2m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[22m
+  [36md[39m[2mddd0000[22m  [97micon-branch                                                              [39m[32mbusy[39m          [34mrepo     [39m[35m󰇘/cool-feature  [39m      [2m-                 [22m       [2mjust now[22m
+  [36maaaa1[39m[2m111[22m  [97mauth-refactor                                                            [39m[32mbusy[39m    [33m42%   [39m[34m]8;;https://github.com/test/myapp\myapp]8;;\    [39m[35m]8;;https://github.com/test/myapp/tree/feat/auth\feat/auth]8;;\       [39m[2m$1.23 [22m[2m-                 [22m[2m1.5 KB [22m[2m5m ago[22m
+  [36mb[39m[2mbbb0000[22m  [2m                                                                         [22m[34midle[39m    [32m5%    [39m[34mweb      [39m[36mwt-feature      [39m      [2m-                 [22m       [2m1h ago[22m
+  [36me1[39m[2m110000[22m  [97mparent-root                                                              [39m[32mbusy[39m          [34m]8;;https://github.com/test/myapp\myapp]8;;\    [39m[35m]8;;https://github.com/test/myapp/tree/main\main]8;;\            [39m      [2m-                 [22m       [2m2h ago[22m
+  [2m└ [22m[36me2[39m[2m220000[22m  [97mchild-one                                                              [39m[32mbusy[39m          [34m]8;;https://github.com/test/myapp\myapp]8;;\    [39m[35m]8;;https://github.com/test/myapp/tree/feat/child\feat/child]8;;\      [39m      [2m-                 [22m       [2m1h ago[22m
+    [2m└ [22m[36me3[39m[2m330000[22m  [97mgrandchild                                                           [39m[32mbusy[39m          [34m]8;;https://github.com/test/myapp\myapp]8;;\    [39m[35m]8;;https://github.com/test/myapp/tree/feat/grand\feat/grand]8;;\      [39m      [2m-                 [22m       [2m1h ago[22m
+  [36mc[39m[2mccc0000[22m  [97ma-very-long-session-name-that-exceeds-the-column-width-by-a-large-margin [39m[33mwaiting[39m [31m75%   [39m[34minfra    [39m[2m                [22m      [33m]8;;https://machinify.atlassian.net/browse/INF-100\INF-100]8;;\[39m                  [2m3h ago[22m
+[2m  ⋮ (2 hidden)[22m
+  [2m└ [22m[36mf3[39m[2m330000[22m  [97mdeep-visible                                                           [39m[32mbusy[39m          [34m]8;;https://github.com/test/myapp\myapp]8;;\    [39m[35m]8;;https://github.com/test/myapp/tree/feat/deep\feat/deep]8;;\       [39m      [2m-                 [22m       [2m4h ago[22m
+  [36maaaa2[39m[2m222[22m  [97mbilling-fix                                                              [39m[90mclosed[39m        [34m]8;;https://github.com/test/payments\payments]8;;\ [39m[35m]8;;https://github.com/test/payments/tree/fix/billing\fix/billing]8;;\     [39m      [32m]8;;https://github.com/o/r/pull/42\#42]8;;\[39m [33m]8;;https://machinify.atlassian.net/browse/PROJ-7\PROJ-7]8;;\[39m [36murgent[39m [2m2.5 MB [22m[2m1d ago[22m
+
+=== width 120 (bottom-up) ===
+[2m  ID        Name                                                        State   Us… Repo  Work… Cost Re… Size   Last Active[22m
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[22m
+  [36md[39m[2mddd0000[22m  [97micon-branch                                                 [39m[32mbusy[39m        [34mrepo  [39m[35m󰇘/co… [39m     [2m-   [22m       [2mjust now[22m
+  [36maaaa1[39m[2m111[22m  [97mauth-refactor                                               [39m[32mbusy[39m    [33m42% [39m[34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/auth\feat…]8;;\ [39m[2m$1.… [22m[2m-   [22m[2m1.5 KB [22m[2m5m ago[22m
+  [36mb[39m[2mbbb0000[22m  [2m                                                            [22m[34midle[39m    [32m5%  [39m[34mweb   [39m[36mwt-f… [39m     [2m-   [22m       [2m1h ago[22m
+    [2m┌ [22m[36me3[39m[2m330000[22m  [97mgrandchild                                              [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/grand\feat…]8;;\ [39m     [2m-   [22m       [2m1h ago[22m
+  [2m┌ [22m[36me2[39m[2m220000[22m  [97mchild-one                                                 [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/child\feat…]8;;\ [39m     [2m-   [22m       [2m1h ago[22m
+  [36me1[39m[2m110000[22m  [97mparent-root                                                 [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/main\main]8;;\  [39m     [2m-   [22m       [2m2h ago[22m
+  [36mc[39m[2mccc0000[22m  [97ma-very-long-session-name-that-exceeds-the-column-width-by-… [39m[33mwaiting[39m [31m75% [39m[34minfra [39m[2m      [22m     [2mIN… [22m       [2m3h ago[22m
+[2m  ⋮ (2 hidden)[22m
+  [2m┌ [22m[36mf3[39m[2m330000[22m  [97mdeep-visible                                              [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/deep\feat…]8;;\ [39m     [2m-   [22m       [2m4h ago[22m
+  [36maaaa2[39m[2m222[22m  [97mbilling-fix                                                 [39m[90mclosed[39m      [34m]8;;https://github.com/test/payments\paym…]8;;\ [39m[35m]8;;https://github.com/test/payments/tree/fix/billing\fix/…]8;;\ [39m     [2m#4… [22m[2m2.5 MB [22m[2m1d ago[22m
+
+=== width 120 (flat) ===
+[2m  ID        Name                                                        State   Us… Repo  Work… Cost Re… Size   Last Active[22m
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[22m
+  [36maaaa1[39m[2m111[22m  [97mauth-refactor                                               [39m[32mbusy[39m    [33m42% [39m[34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/auth\feat…]8;;\ [39m[2m$1.… [22m[2m-   [22m[2m1.5 KB [22m[2m5m ago[22m
+  [36maaaa2[39m[2m222[22m  [97mbilling-fix                                                 [39m[90mclosed[39m      [34m]8;;https://github.com/test/payments\paym…]8;;\ [39m[35m]8;;https://github.com/test/payments/tree/fix/billing\fix/…]8;;\ [39m     [2m#4… [22m[2m2.5 MB [22m[2m1d ago[22m
+  [36mb[39m[2mbbb0000[22m  [2m                                                            [22m[34midle[39m    [32m5%  [39m[34mweb   [39m[36mwt-f… [39m     [2m-   [22m       [2m1h ago[22m
+  [36mc[39m[2mccc0000[22m  [97ma-very-long-session-name-that-exceeds-the-column-width-by-… [39m[33mwaiting[39m [31m75% [39m[34minfra [39m[2m      [22m     [2mIN… [22m       [2m3h ago[22m
+  [36md[39m[2mddd0000[22m  [97micon-branch                                                 [39m[32mbusy[39m        [34mrepo  [39m[35m󰇘/co… [39m     [2m-   [22m       [2mjust now[22m
+  [36me1[39m[2m110000[22m  [97mparent-root                                                 [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/main\main]8;;\  [39m     [2m-   [22m       [2m2h ago[22m
+  [36me2[39m[2m220000[22m  [97mchild-one                                                   [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/child\feat…]8;;\ [39m     [2m-   [22m       [2m1h ago[22m
+  [36me3[39m[2m330000[22m  [97mgrandchild                                                  [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/grand\feat…]8;;\ [39m     [2m-   [22m       [2m1h ago[22m
+  [36mf3[39m[2m330000[22m  [97mdeep-visible                                                [39m[32mbusy[39m        [34m]8;;https://github.com/test/myapp\myapp]8;;\ [39m[35m]8;;https://github.com/test/myapp/tree/feat/deep\feat…]8;;\ [39m     [2m-   [22m       [2m4h ago[22m
