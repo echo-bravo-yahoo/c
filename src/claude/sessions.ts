@@ -122,6 +122,14 @@ export function listClaudeSessions(): ClaudeSession[] {
 
     if (!stat.isDirectory()) continue;
 
+    // Resolve the directory once per project key, not once per session file.
+    // decodeProjectKey is lossy — `/`, `.`, space and literal hyphen all collapse
+    // to `-`, so its reconstruction is wrong for a segment that mixes a hyphen
+    // and a space (e.g. "2023-2024 archive"). When the decoded path doesn't
+    // exist, trust the authoritative cwd Claude records in the transcript itself.
+    const decoded = decodeProjectKey(projectKey);
+    const decodedExists = fs.existsSync(decoded);
+
     // Look for session files (UUIDs ending in .jsonl)
     for (const file of fs.readdirSync(projectDir)) {
       if (!file.endsWith('.jsonl')) continue;
@@ -135,14 +143,7 @@ export function listClaudeSessions(): ClaudeSession[] {
 
       const fileStat = fs.statSync(transcriptPath);
 
-      // decodeProjectKey is lossy — `/`, `.`, space and literal hyphen all
-      // collapse to `-`, so its reconstruction is wrong for a segment that
-      // mixes a hyphen and a space (e.g. "2023-2024 archive"). When the decoded path
-      // doesn't exist, trust the authoritative cwd Claude records in the
-      // transcript itself. The existsSync gate keeps the common case (correct
-      // decode) free of any extra I/O.
-      const decoded = decodeProjectKey(projectKey);
-      const directory = fs.existsSync(decoded)
+      const directory = decodedExists
         ? decoded
         : getCwdFromTranscriptHead(transcriptPath) ?? decoded;
 
