@@ -52,6 +52,7 @@ export function createTestSession(overrides: SessionOverrides = {}): Session {
       pr: overrides.resources?.pr,
       jira: overrides.resources?.jira,
       plan: overrides.resources?.plan,
+      tmux_pane: overrides.resources?.tmux_pane,
     },
     servers: overrides.servers ?? {},
     tags: { values: overrides.tags ?? [] },

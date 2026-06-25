@@ -19,7 +19,7 @@ mock.module(resolve('src/util/process.ts'), {
 type CLIHarness = import('../helpers/cli.ts').CLIHarness;
 const { setupCLI } = await import('../helpers/cli.ts');
 const { createTestSession, resetSessionCounter } = await import('../fixtures/sessions.ts');
-const { readIndex } = await import('../../src/store/index.ts');
+const { readIndex, getSessionByPane } = await import('../../src/store/index.ts');
 readIndexFn = readIndex;
 
 describe('c', () => {
@@ -202,6 +202,39 @@ describe('c', () => {
 
           assert.strictEqual(sessions.length, 0);
         });
+      });
+    });
+
+    describe('tmux-shell (getSessionByPane)', () => {
+      let cli: CLIHarness;
+      beforeEach(() => { cli = setupCLI(); });
+      afterEach(() => { cli.cleanup(); });
+
+      it('resolves a reused pane id to the active session, skipping the closed one', async () => {
+        await cli.seed(
+          { id: 's1', state: 'closed', resources: { tmux_pane: '%5' } },
+          { id: 's2', state: 'idle', resources: { tmux_pane: '%5' } },
+          { id: 's3', state: 'idle', resources: { tmux_pane: '%7' } },
+        );
+
+        assert.strictEqual(getSessionByPane('%5')?.id, 's2');
+      });
+
+      it('returns the most-recently-active session when two are live on one pane', async () => {
+        const older = new Date('2024-01-01T00:00:00Z');
+        const newer = new Date('2024-06-01T00:00:00Z');
+        await cli.seed(
+          { id: 'old', state: 'idle', last_active_at: older, resources: { tmux_pane: '%5' } },
+          { id: 'new', state: 'busy', last_active_at: newer, resources: { tmux_pane: '%5' } },
+        );
+
+        assert.strictEqual(getSessionByPane('%5')?.id, 'new');
+      });
+
+      it('returns undefined for a pane no active session occupies', async () => {
+        await cli.seed({ id: 's1', state: 'idle', resources: { tmux_pane: '%5' } });
+
+        assert.strictEqual(getSessionByPane('%99'), undefined);
       });
     });
   });

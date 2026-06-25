@@ -39,6 +39,7 @@ import { tmuxStatusCommand } from './commands/tmux/status.ts';
 import { tmuxPickCommand } from './commands/tmux/pick.ts';
 import { tmuxJumpCommand } from './commands/tmux/jump.ts';
 import { tmuxMenuCommand } from './commands/tmux/menu.ts';
+import { tmuxShellCommand } from './commands/tmux/shell.ts';
 import { handleHook } from './hooks/index.ts';
 import { realpathSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -511,6 +512,13 @@ export function createProgram(): Command {
     .description('Native menu of blocked sessions (pick by reason)')
     .action(async () => {
       await tmuxMenuCommand();
+    });
+
+  program
+    .command('tmux-shell')
+    .description("Split the current pane and open a shell in its session's directory")
+    .action(() => {
+      tmuxShellCommand();
     });
 
   // Hook handler

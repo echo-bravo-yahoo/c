@@ -372,6 +372,16 @@ export function getCurrentSession(directory: string = process.cwd()): Session | 
 }
 
 /**
+ * Find the active session occupying a tmux pane id (e.g. "%5"). Pane ids are
+ * reused across closed sessions, so restrict to active sessions and let the
+ * most-recently-active win (getSessions already sorts by last_active desc).
+ */
+export function getSessionByPane(paneId: string): Session | undefined {
+  return getSessions({ state: ['busy', 'idle', 'waiting'] })
+    .find((s) => s.resources.tmux_pane === paneId);
+}
+
+/**
  * Reconcile stale sessions by closing active sessions that no longer exist in Claude's storage.
  * This handles cases where SessionEnd hook didn't fire (Ctrl-C, crash, etc).
  * Also cleans up orphaned per-session state directories for sessions no longer in the index.
