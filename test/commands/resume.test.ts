@@ -35,6 +35,7 @@ mock.module(resolve(__dirname, '../../src/claude/sessions.ts'), {
     getPlanContinuationInfo: () => null,
     PLANS_DIR: join(tmpdir(), 'c-resume-test-plans'),
     extractPlanTitle: () => null,
+    listClaudeSessionSizes: () => new Map(),
   },
 });
 

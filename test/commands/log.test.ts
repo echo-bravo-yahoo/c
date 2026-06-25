@@ -29,6 +29,7 @@ mock.module(resolve('src/claude/sessions.ts'), {
     PROJECTS_DIR: '/tmp/mock-claude/projects',
     PLANS_DIR: '/tmp/mock-claude/plans',
     extractPlanTitle: () => null,
+    listClaudeSessionSizes: () => new Map(),
   },
 });
 

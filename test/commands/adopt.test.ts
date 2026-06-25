@@ -58,6 +58,7 @@ mock.module(resolve('src/claude/sessions.ts'), {
     CLAUDE_DIR: '/tmp/mock-claude',
     PROJECTS_DIR: '/tmp/mock-claude/projects',
     PLANS_DIR: '/tmp/mock-claude/plans',
+    listClaudeSessionSizes: () => new Map(),
   },
 });
 
