@@ -392,6 +392,7 @@ export function createProgram(): Command {
     .description('Delete sessions from index')
     .option('--orphans', 'Delete sessions with no Claude data')
     .option('--closed', 'Delete all closed sessions')
+    .option('--remove-transcript', 'Also delete the on-disk Claude transcript and history')
     .action(async (ids, options) => {
       const { deleteCommand } = await import('./commands/delete.ts');
       await deleteCommand(ids.length ? ids : undefined, options);
