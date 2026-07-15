@@ -2,11 +2,11 @@
  * SessionStart hook - register new session
  */
 
-import { updateIndex, getSession, getSessions, getCurrentSession } from '../store/index.ts';
+import { updateIndex, getSession, getSessions, getCurrentSession, findPlanExecutionParent } from '../store/index.ts';
 import { createSession } from '../store/schema.ts';
 import { getCurrentBranch, getWorktreeInfo, getRepoSlug, listWorktrees } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
-import { encodeProjectKey, getPlanExecutionInfo, getPlanContinuationInfo, extractPlanTitle, findTranscriptPath, getCustomTitleFromTranscriptTail, readClaudeSessionIndex } from '../claude/sessions.ts';
+import { encodeProjectKey, getPlanContinuationInfo, extractPlanTitle, findTranscriptPath, getCustomTitleFromTranscriptTail, readClaudeSessionIndex } from '../claude/sessions.ts';
 import { capturePreloadedContext } from '../claude/preloaded-context.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
 import { writeStatusCache } from '../store/status-cache.ts';
@@ -83,18 +83,16 @@ export async function handleSessionStart(
   const continuationInfo = sessionId ? getPlanContinuationInfo(sessionId) : null;
   if (continuationInfo) {
     planSlug = continuationInfo.slug;
-    // Find the specific parent by slug match (30 s window as a performance prefilter).
-    const recentThreshold = 30 * 1000;
-    const recentSessions = getSessions({ state: ['closed'], directory: cwd }).filter(
-      (s) => s.id !== sessionId && Date.now() - new Date(s.last_active_at).getTime() < recentThreshold
-    );
-    for (const s of recentSessions) {
-      const planInfo = getPlanExecutionInfo(s.id);
-      if (planInfo && planInfo.slug === continuationInfo.slug) {
-        parentSessionId = s.id;
-        planTitle = planInfo.title ?? undefined;
-        break;
-      }
+    // Search all closed sessions for the one whose ExitPlanMode call produced this slug.
+    // Not directory-scoped: a plan can be authored from a broader directory than the one
+    // its continuation executes in.
+    const candidates = getSessions({ state: ['closed'] })
+      .filter((s) => s.id !== sessionId)
+      .map((s) => ({ id: s.id, lastActive: s.last_active_at }));
+    const match = findPlanExecutionParent(candidates, continuationInfo.slug, new Date());
+    if (match) {
+      parentSessionId = match.sessionId;
+      planTitle = match.title ?? undefined;
     }
     if (!planTitle) {
       planTitle = extractPlanTitle(continuationInfo.slug) ?? undefined;

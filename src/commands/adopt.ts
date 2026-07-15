@@ -3,7 +3,7 @@
  */
 
 import chalk from 'chalk';
-import { getSession, readIndex, updateIndex, mapLiveStatusToState } from '../store/index.ts';
+import { getSession, readIndex, updateIndex, mapLiveStatusToState, findPlanExecutionParent } from '../store/index.ts';
 import { createSession } from '../store/schema.ts';
 import { getClaudeSession, getClaudeSessionTitles, getClaudeSessionsForDirectory, getPlanExecutionInfo, getPlanContinuationInfo, extractPlanTitle } from '../claude/sessions.ts';
 import { getCurrentBranch, getWorktreeInfo, getRepoSlug } from '../detection/git.ts';
@@ -79,23 +79,18 @@ async function adoptOne(claudeSession: ClaudeSession, options: AdoptOptions): Pr
   const continuationInfo = getPlanContinuationInfo(id);
   if (continuationInfo) {
     const indexedCandidates = Object.entries(readIndex().sessions)
-      .filter(([sid, s]) => sid !== id && s.directory === cwd)
+      .filter(([sid]) => sid !== id)
       .map(([sid, s]) => ({ id: sid, lastActive: new Date(s.last_active_at) }));
     const untrackedCandidates = getClaudeSessionsForDirectory(cwd)
       .filter((cs) => cs.id !== id && !getSession(cs.id))
       .map((cs) => ({ id: cs.id, lastActive: cs.modifiedAt }));
-    const candidates = [...indexedCandidates, ...untrackedCandidates]
-      .filter((c) => c.lastActive <= claudeSession.modifiedAt)
-      .sort((a, b) => b.lastActive.getTime() - a.lastActive.getTime());
+    const candidates = [...indexedCandidates, ...untrackedCandidates];
 
-    for (const candidate of candidates) {
-      const planInfo = getPlanExecutionInfo(candidate.id);
-      if (planInfo && planInfo.slug === continuationInfo.slug) {
-        session.parent_session_id = candidate.id;
-        session.resources.plan = planInfo.slug;
-        if (!session.name) session.name = planInfo.title ?? planInfo.slug;
-        break;
-      }
+    const match = findPlanExecutionParent(candidates, continuationInfo.slug, claudeSession.modifiedAt);
+    if (match) {
+      session.parent_session_id = match.sessionId;
+      session.resources.plan = continuationInfo.slug;
+      if (!session.name) session.name = match.title ?? continuationInfo.slug;
     }
     // Even if no parent was found, record the plan slug from the child transcript.
     if (!session.resources.plan) {

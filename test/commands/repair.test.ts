@@ -487,7 +487,7 @@ describe('c repair', () => {
       assert.ok(cli.console.logs.some((l) => l.includes('plan-a') && l.includes('parent not indexed')));
     });
 
-    it('does not link sessions from different directories', async () => {
+    it('links sessions across different directories when the plan slug matches', async () => {
       await cli.seed({
         id: 'dir-a-parent',
         state: 'closed',
@@ -509,7 +509,8 @@ describe('c repair', () => {
       await cli.run('repair', '--thorough');
 
       const child = cli.session('dir-b-child');
-      assert.strictEqual(child?.parent_session_id, undefined);
+      assert.strictEqual(child?.parent_session_id, 'dir-a-parent');
+      assert.strictEqual(child?.resources.plan, 'impl');
     });
   });
 

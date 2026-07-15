@@ -4,7 +4,7 @@
 
 import chalk from 'chalk';
 import { existsSync } from 'node:fs';
-import { readIndex, resolveSession, updateIndex } from '../store/index.ts';
+import { readIndex, resolveSession, updateIndex, findPlanExecutionParent } from '../store/index.ts';
 import { listSessionStateIds, deleteSessionStateDir } from '../store/session-state.ts';
 import { getCurrentBranch, getRepoSlug } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
@@ -241,21 +241,15 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
         // Wrong link — fall through to find the correct parent.
       }
 
-      const potentialParents = Object.entries(sessions)
-        .filter(([pid, ps]) => pid !== id && ps?.directory === session.directory)
-        .filter(([, ps]) => new Date(ps!.last_active_at) <= new Date(session.created_at))
-        .sort(([, a], [, b]) => new Date(b!.last_active_at).getTime() - new Date(a!.last_active_at).getTime());
+      const candidates = Object.entries(sessions)
+        .filter(([pid, ps]) => !!ps && pid !== id)
+        .map(([pid, ps]) => ({ id: pid, lastActive: ps!.last_active_at }));
 
-      let found = false;
-      for (const [parentId] of potentialParents) {
-        const planInfo = getPlanExecutionInfo(parentId);
-        if (planInfo && planInfo.slug === targetSlug) {
-          parentLinkFixes.push({ id, parentId, slug: targetSlug });
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
+      const match = findPlanExecutionParent(candidates, targetSlug, session.created_at);
+
+      if (match) {
+        parentLinkFixes.push({ id, parentId: match.sessionId, slug: targetSlug });
+      } else {
         if (session.parent_session_id) {
           // Had a wrong link and no correct replacement in the index — clear it.
           parentClearFixes.push(id);

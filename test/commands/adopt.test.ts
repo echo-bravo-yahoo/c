@@ -377,6 +377,29 @@ describe('c', () => {
         assert.strictEqual(s.name, 'Fix auth flow');
       });
 
+      it('links child to parent in a different directory when the plan slug matches', async () => {
+        await cli.seed({
+          id: 'other-dir-parent',
+          state: 'closed',
+          directory: '/home/user/dir-a',
+          last_active_at: new Date('2025-06-01T11:00:00Z'),
+        });
+        mockClaudeSession = {
+          ...makeClaudeSession('cross-dir-child', '/home/user/dir-b'),
+          modifiedAt: new Date('2025-06-01T12:00:00Z'),
+        };
+        mockPlanContinuationInfo = { slug: 'fix-auth' };
+        mockPlanExecutionInfoById = new Map([
+          ['other-dir-parent', { slug: 'fix-auth', title: 'Fix auth flow' }],
+        ]);
+
+        await cli.run('adopt', 'cross-dir-child');
+
+        const s = cli.session('cross-dir-child');
+        assert.ok(s);
+        assert.strictEqual(s.parent_session_id, 'other-dir-parent');
+      });
+
       it('sets resources.plan on self when own plan info exists', async () => {
         mockClaudeSession = makeClaudeSession('parent-adopting');
         mockPlanExecutionInfoById = new Map([

@@ -384,47 +384,43 @@ export function getPlanExecutionInfo(sessionId: string): { slug: string; title: 
   const session = getClaudeSession(sessionId);
   if (!session) return null;
 
-  // Read only the last TAIL_SIZE bytes rather than the whole file.
-  // ExitPlanMode entries are short; 16 KB comfortably covers the last 10 lines
-  // even when preceding entries are large.
-  const TAIL_SIZE = 16384;
-
-  let fd: number;
+  let buf: Buffer;
   try {
-    fd = fs.openSync(session.transcriptPath, 'r');
+    buf = fs.readFileSync(session.transcriptPath);
   } catch {
     return null;
   }
+  if (buf.length === 0) return null;
 
-  try {
-    const size = fs.fstatSync(fd).size;
-    if (size === 0) return null;
+  // Search backward on raw bytes for the ExitPlanMode tool_use marker, then parse only
+  // the one line it's on. A fixed-size tail read isn't safe here: the ExitPlanMode entry
+  // embeds the full plan text, which can push a single JSON line past any reasonable byte
+  // window and truncate it mid-line before the marker (which sits near the start of the
+  // entry, ahead of the plan text) is ever reached.
+  const marker = Buffer.from('"name":"ExitPlanMode"');
+  let searchFrom = buf.length;
 
-    const readSize = Math.min(TAIL_SIZE, size);
-    const buf = Buffer.alloc(readSize);
-    fs.readSync(fd, buf, 0, readSize, size - readSize);
+  while (searchFrom > 0) {
+    const idx = buf.lastIndexOf(marker, searchFrom - 1);
+    if (idx === -1) break;
 
-    const lines = buf.toString('utf-8').split('\n');
-    // First element may be a partial line (cut at the read boundary) — JSON.parse
-    // on it will throw and the catch block skips it, so no special handling needed.
-    const tailLines = lines.slice(-10);
+    const lineStart = buf.lastIndexOf(0x0a, idx) + 1;
+    let lineEnd = buf.indexOf(0x0a, idx);
+    if (lineEnd === -1) lineEnd = buf.length;
 
-    for (const line of tailLines.reverse()) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.includes('ExitPlanMode')) continue;
+    const line = buf.toString('utf-8', lineStart, lineEnd).trim();
+    if (line) {
       try {
-        const entry = JSON.parse(trimmed);
+        const entry = JSON.parse(line);
         if (
           entry.type === 'assistant' &&
           entry.message?.content &&
           Array.isArray(entry.message.content)
         ) {
           for (const block of entry.message.content) {
-            if (block.type === 'tool_use' && block.name === 'ExitPlanMode') {
-              if (entry.slug) {
-                const title = extractPlanTitle(entry.slug);
-                return { slug: entry.slug, title };
-              }
+            if (block.type === 'tool_use' && block.name === 'ExitPlanMode' && entry.slug) {
+              const title = extractPlanTitle(entry.slug);
+              return { slug: entry.slug, title };
             }
           }
         }
@@ -432,10 +428,8 @@ export function getPlanExecutionInfo(sessionId: string): { slug: string; title: 
         // Skip malformed lines
       }
     }
-  } catch {
-    // Read error
-  } finally {
-    fs.closeSync(fd);
+
+    searchFrom = lineStart;
   }
 
   return null;

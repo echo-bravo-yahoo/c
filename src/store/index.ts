@@ -9,6 +9,7 @@ import TOML from '@iarna/toml';
 import { createDefaultIndex } from './schema.ts';
 import type { IndexFile, Session, SessionState } from './schema.ts';
 import { collectLiveSessions } from '../util/process.ts';
+import { getPlanExecutionInfo } from '../claude/sessions.ts';
 
 // --- Process-level cache for readIndex ---
 
@@ -357,6 +358,32 @@ export function getSessions(filter?: {
 
   // Sort by last_active_at descending
   return sessions.sort((a, b) => b.last_active_at.getTime() - a.last_active_at.getTime());
+}
+
+/**
+ * Find the candidate whose ExitPlanMode call produced `targetSlug`. Shared by the live
+ * session-start hook, repair's retroactive backfill, and adopt — a plan can be authored
+ * from a broader directory than the one its "Clear context and execute plan" continuation
+ * launches in, so directory is never a filter here, only causal order (`before` cutoff)
+ * and recency (most-recently-active candidate wins when more than one matches).
+ */
+export function findPlanExecutionParent(
+  candidates: Array<{ id: string; lastActive: Date }>,
+  targetSlug: string,
+  before: Date
+): { sessionId: string; title: string | null } | null {
+  const beforeTime = before.getTime();
+  const sorted = candidates
+    .filter((c) => c.lastActive.getTime() <= beforeTime)
+    .sort((a, b) => b.lastActive.getTime() - a.lastActive.getTime());
+
+  for (const c of sorted) {
+    const planInfo = getPlanExecutionInfo(c.id);
+    if (planInfo && planInfo.slug === targetSlug) {
+      return { sessionId: c.id, title: planInfo.title };
+    }
+  }
+  return null;
 }
 
 /**
