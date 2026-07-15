@@ -14,7 +14,7 @@ let mockTranscriptCwd: string | null = null;
 let mockCustomTitle: string | null = null;
 let mockTranscriptUsage: { cost_usd: number } | null = null;
 let mockLiveSessionIds: Set<string> = new Set();
-let mockPlanExecutionInfoById: Map<string, { slug: string; title: string | null }> = new Map();
+let mockPlanExecutionInfoById: Map<string, { slug: string; title: string | null; timestamp?: Date }> = new Map();
 let mockPlanContinuationInfoById: Map<string, { slug: string }> = new Map();
 let mockInventoryDelta: { reads: Array<{ path: string; turn: number; via: 'Read' | 'Bash' }>; skills: Array<{ name: string; turn: number }>; new_offset: number; new_turn: number } | null = null;
 
@@ -43,6 +43,13 @@ mock.module(resolve('src/claude/sessions.ts'), {
     getClaudeSessionTitles: () => ({}),
     findClaudeSessionIdsByTitle: () => [],
     getPlanExecutionInfo: (id: string) => mockPlanExecutionInfoById.get(id) ?? null,
+    getPlanExecutionInfoBefore: (id: string, slug: string, before: Date) => {
+      const info = mockPlanExecutionInfoById.get(id);
+      if (!info || info.slug !== slug) return null;
+      const ts = info.timestamp ?? new Date(0);
+      if (ts.getTime() > before.getTime()) return null;
+      return { title: info.title, timestamp: ts };
+    },
     getPlanContinuationInfo: (id: string) => mockPlanContinuationInfoById.get(id) ?? null,
     getCustomTitleFromTranscriptTail: () => mockCustomTitle,
     getCwdFromTranscriptHead: () => mockTranscriptCwd,
@@ -511,6 +518,81 @@ describe('c repair', () => {
       const child = cli.session('dir-b-child');
       assert.strictEqual(child?.parent_session_id, 'dir-a-parent');
       assert.strictEqual(child?.resources.plan, 'impl');
+    });
+
+    it('re-links to a more immediate predecessor when the existing link points too far back', async () => {
+      const dir = '/home/user/proj';
+      await cli.seed({
+        id: 'grandparent',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T09:00:00Z'),
+        last_active_at: new Date('2025-06-01T09:30:00Z'),
+      });
+      await cli.seed({
+        id: 'middle-child',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T10:00:00Z'),
+        last_active_at: new Date('2025-06-01T10:30:00Z'),
+      });
+      await cli.seed({
+        id: 'grandchild',
+        state: 'closed',
+        directory: dir,
+        parent_session_id: 'grandparent', // stale: should become 'middle-child'
+        created_at: new Date('2025-06-01T11:00:00Z'),
+        last_active_at: new Date('2025-06-01T11:30:00Z'),
+      });
+      mockClaudeSessions = [{ id: 'grandparent' }, { id: 'middle-child' }, { id: 'grandchild' }];
+      mockPlanContinuationInfoById.set('middle-child', { slug: 'impl' });
+      mockPlanContinuationInfoById.set('grandchild', { slug: 'impl' });
+      mockPlanExecutionInfoById.set('grandparent', {
+        slug: 'impl',
+        title: null,
+        timestamp: new Date('2025-06-01T09:15:00Z'),
+      });
+      // middle-child continued off grandparent, then itself rewrote the plan — grandchild
+      // should attach to this later revision, not skip past it to grandparent.
+      mockPlanExecutionInfoById.set('middle-child', {
+        slug: 'impl',
+        title: null,
+        timestamp: new Date('2025-06-01T10:15:00Z'),
+      });
+
+      await cli.run('repair', '--thorough');
+
+      assert.strictEqual(cli.session('middle-child')?.parent_session_id, 'grandparent');
+      assert.strictEqual(cli.session('grandchild')?.parent_session_id, 'middle-child');
+    });
+
+    it('does not re-log a fix on a second run once the link is already correct', async () => {
+      const dir = '/home/user/proj';
+      await cli.seed({
+        id: 'parent2',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T10:00:00Z'),
+        last_active_at: new Date('2025-06-01T11:00:00Z'),
+      });
+      await cli.seed({
+        id: 'child2',
+        state: 'closed',
+        directory: dir,
+        created_at: new Date('2025-06-01T11:30:00Z'),
+        last_active_at: new Date('2025-06-01T12:00:00Z'),
+      });
+      mockClaudeSessions = [{ id: 'parent2' }, { id: 'child2' }];
+      mockPlanContinuationInfoById.set('child2', { slug: 'impl' });
+      mockPlanExecutionInfoById.set('parent2', { slug: 'impl', title: null });
+
+      await cli.run('repair', '--thorough');
+      const linkedCountAfterFirst = cli.console.logs.filter((l) => l.includes('Linked')).length;
+
+      await cli.run('repair', '--thorough');
+      const linkedCountAfterSecond = cli.console.logs.filter((l) => l.includes('Linked')).length;
+
+      assert.strictEqual(linkedCountAfterSecond, linkedCountAfterFirst);
     });
   });
 

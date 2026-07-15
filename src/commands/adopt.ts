@@ -78,12 +78,10 @@ async function adoptOne(claudeSession: ClaudeSession, options: AdoptOptions): Pr
   // so match by slug rather than a bare temporal scan.
   const continuationInfo = getPlanContinuationInfo(id);
   if (continuationInfo) {
-    const indexedCandidates = Object.entries(readIndex().sessions)
-      .filter(([sid]) => sid !== id)
-      .map(([sid, s]) => ({ id: sid, lastActive: new Date(s.last_active_at) }));
+    const indexedCandidates = Object.keys(readIndex().sessions).filter((sid) => sid !== id);
     const untrackedCandidates = getClaudeSessionsForDirectory(cwd)
       .filter((cs) => cs.id !== id && !getSession(cs.id))
-      .map((cs) => ({ id: cs.id, lastActive: cs.modifiedAt }));
+      .map((cs) => cs.id);
     const candidates = [...indexedCandidates, ...untrackedCandidates];
 
     const match = findPlanExecutionParent(candidates, continuationInfo.slug, claudeSession.modifiedAt);

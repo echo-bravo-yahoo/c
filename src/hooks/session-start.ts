@@ -88,7 +88,7 @@ export async function handleSessionStart(
     // its continuation executes in.
     const candidates = getSessions({ state: ['closed'] })
       .filter((s) => s.id !== sessionId)
-      .map((s) => ({ id: s.id, lastActive: s.last_active_at }));
+      .map((s) => s.id);
     const match = findPlanExecutionParent(candidates, continuationInfo.slug, new Date());
     if (match) {
       parentSessionId = match.sessionId;

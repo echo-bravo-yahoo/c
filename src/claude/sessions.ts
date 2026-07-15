@@ -16,6 +16,7 @@ let _sessionSizeCache: Map<string, number> | null = null;
 const _sessionIndexCache = new Map<string, ClaudeSessionIndex | null>();
 let _titleLookup: Map<string, { customTitle: string | null; summary: string | null }> | null = null;
 const _titleCache = new Map<string, { customTitle: string | null; summary: string | null }>();
+const _planEventsCache = new Map<string, Array<{ slug: string; title: string | null; timestamp: Date }>>();
 
 /**
  * Reset all caches (for testing)
@@ -26,6 +27,7 @@ export function resetSessionCaches(): void {
   _sessionIndexCache.clear();
   _titleLookup = null;
   _titleCache.clear();
+  _planEventsCache.clear();
 }
 
 export interface ClaudeSession {
@@ -377,27 +379,25 @@ export function extractPlanTitle(slug: string): string | null {
 }
 
 /**
- * Check if a session ended with ExitPlanMode (plan execution)
- * Returns the plan title (extracted from file) and slug if found
+ * Parse every ExitPlanMode tool call out of a transcript file, most-recent-first.
+ * Scans backward on raw bytes rather than reading the whole file into one JS string —
+ * the ExitPlanMode entry embeds the full plan text, which can push a single JSON line
+ * well past any fixed byte window, so line boundaries are found with lastIndexOf/indexOf
+ * on the Buffer and only the matched line is ever decoded to a string.
  */
-export function getPlanExecutionInfo(sessionId: string): { slug: string; title: string | null } | null {
-  const session = getClaudeSession(sessionId);
-  if (!session) return null;
-
+export function readPlanEventsFromTranscript(
+  transcriptPath: string
+): Array<{ slug: string; title: string | null; timestamp: Date }> {
   let buf: Buffer;
   try {
-    buf = fs.readFileSync(session.transcriptPath);
+    buf = fs.readFileSync(transcriptPath);
   } catch {
-    return null;
+    return [];
   }
-  if (buf.length === 0) return null;
+  if (buf.length === 0) return [];
 
-  // Search backward on raw bytes for the ExitPlanMode tool_use marker, then parse only
-  // the one line it's on. A fixed-size tail read isn't safe here: the ExitPlanMode entry
-  // embeds the full plan text, which can push a single JSON line past any reasonable byte
-  // window and truncate it mid-line before the marker (which sits near the start of the
-  // entry, ahead of the plan text) is ever reached.
   const marker = Buffer.from('"name":"ExitPlanMode"');
+  const events: Array<{ slug: string; title: string | null; timestamp: Date }> = [];
   let searchFrom = buf.length;
 
   while (searchFrom > 0) {
@@ -415,12 +415,18 @@ export function getPlanExecutionInfo(sessionId: string): { slug: string; title: 
         if (
           entry.type === 'assistant' &&
           entry.message?.content &&
-          Array.isArray(entry.message.content)
+          Array.isArray(entry.message.content) &&
+          entry.slug &&
+          entry.timestamp
         ) {
           for (const block of entry.message.content) {
-            if (block.type === 'tool_use' && block.name === 'ExitPlanMode' && entry.slug) {
-              const title = extractPlanTitle(entry.slug);
-              return { slug: entry.slug, title };
+            if (block.type === 'tool_use' && block.name === 'ExitPlanMode') {
+              events.push({
+                slug: entry.slug,
+                title: extractPlanTitle(entry.slug),
+                timestamp: new Date(entry.timestamp),
+              });
+              break;
             }
           }
         }
@@ -432,6 +438,50 @@ export function getPlanExecutionInfo(sessionId: string): { slug: string; title: 
     searchFrom = lineStart;
   }
 
+  return events;
+}
+
+function getAllPlanEvents(sessionId: string): Array<{ slug: string; title: string | null; timestamp: Date }> {
+  const cached = _planEventsCache.get(sessionId);
+  if (cached) return cached;
+
+  const session = getClaudeSession(sessionId);
+  const events = session ? readPlanEventsFromTranscript(session.transcriptPath) : [];
+  _planEventsCache.set(sessionId, events);
+  return events;
+}
+
+/**
+ * Check if a session ended with ExitPlanMode (plan execution).
+ * Returns the plan title (extracted from file) and slug if found.
+ */
+export function getPlanExecutionInfo(sessionId: string): { slug: string; title: string | null } | null {
+  const events = getAllPlanEvents(sessionId);
+  if (events.length === 0) return null;
+  const { slug, title } = events[0];
+  return { slug, title };
+}
+
+/**
+ * Like getPlanExecutionInfo, but scoped to a specific plan slug and a cutoff time: returns
+ * the most recent ExitPlanMode call for `slug` whose own transcript timestamp is `<= before`.
+ * This is what findPlanExecutionParent needs and getPlanExecutionInfo does not provide — a
+ * session's own `last_active_at` reflects whenever it was last touched for any reason
+ * (including an unrelated later resume), not when it wrote this specific plan revision, so
+ * it cannot be used as the causal-order signal. The event's own timestamp can.
+ */
+export function getPlanExecutionInfoBefore(
+  sessionId: string,
+  slug: string,
+  before: Date
+): { title: string | null; timestamp: Date } | null {
+  const events = getAllPlanEvents(sessionId); // most-recent-first
+  const beforeTime = before.getTime();
+  for (const e of events) {
+    if (e.slug === slug && e.timestamp.getTime() <= beforeTime) {
+      return { title: e.title, timestamp: e.timestamp };
+    }
+  }
   return null;
 }
 

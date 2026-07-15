@@ -50,6 +50,13 @@ mock.module(resolve('src/claude/sessions.ts'), {
     findClaudeSessionIdsByTitle: () => [],
     getPlanExecutionInfo: (id: string) =>
       mockPlanExecutionInfoById ? (mockPlanExecutionInfoById.get(id) ?? null) : mockPlanExecutionInfo,
+    getPlanExecutionInfoBefore: (id: string, slug: string, before: Date) => {
+      const info = mockPlanExecutionInfoById ? (mockPlanExecutionInfoById.get(id) ?? null) : mockPlanExecutionInfo;
+      if (!info || info.slug !== slug) return null;
+      const ts = (info as { timestamp?: Date }).timestamp ?? new Date(0);
+      if (ts.getTime() > before.getTime()) return null;
+      return { title: info.title, timestamp: ts };
+    },
     getPlanContinuationInfo: () => mockPlanContinuationInfo,
     extractPlanTitle: () => null,
     resetSessionCaches: () => {},

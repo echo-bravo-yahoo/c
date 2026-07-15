@@ -220,8 +220,11 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
 
     // 10. Backfill parent_session_id for plan-execution children.
     // A session is a child iff its own transcript says origin.kind === "auto-continuation".
-    // Match parent by slug (same slug the parent's ExitPlanMode call recorded).
-    // Re-verifies existing links so wrong links are replaced or cleared.
+    // Match parent by slug (same slug the parent's ExitPlanMode call recorded). Always
+    // recomputes a fresh match rather than trusting an existing link — the underlying
+    // signal (each candidate's own ExitPlanMode timestamp) is now trustworthy, so a
+    // wrong or suboptimal link self-heals on every run instead of being frozen in place
+    // by a "slug still matches, skip" short-circuit.
     const parentLinkFixes: Array<{ id: string; parentId: string; slug: string }> = [];
     const parentClearFixes: string[] = [];
     const slugOnlyFixes: Array<{ id: string; slug: string }> = [];
@@ -234,24 +237,18 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
 
       const targetSlug = session.resources.plan ?? continuationInfo.slug;
 
-      // Verify any existing link before re-searching.
-      if (session.parent_session_id) {
-        const existingExec = getPlanExecutionInfo(session.parent_session_id);
-        if (existingExec?.slug === targetSlug) continue;  // correct link, nothing to do
-        // Wrong link — fall through to find the correct parent.
-      }
-
-      const candidates = Object.entries(sessions)
-        .filter(([pid, ps]) => !!ps && pid !== id)
-        .map(([pid, ps]) => ({ id: pid, lastActive: ps!.last_active_at }));
-
+      const candidates = Object.keys(sessions).filter((pid) => pid !== id);
       const match = findPlanExecutionParent(candidates, targetSlug, session.created_at);
 
       if (match) {
-        parentLinkFixes.push({ id, parentId: match.sessionId, slug: targetSlug });
+        // Only enqueue a fix when it actually changes something, so an already-correct
+        // index produces no "Linked" noise on repeat runs.
+        if (session.parent_session_id !== match.sessionId) {
+          parentLinkFixes.push({ id, parentId: match.sessionId, slug: targetSlug });
+        }
       } else {
         if (session.parent_session_id) {
-          // Had a wrong link and no correct replacement in the index — clear it.
+          // Had a link that no longer resolves to a valid parent — clear it.
           parentClearFixes.push(id);
         }
         if (!session.resources.plan) {

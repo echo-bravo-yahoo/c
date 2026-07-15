@@ -7,7 +7,7 @@ import assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { encodeProjectKey, decodeProjectKey, getCwdFromTranscriptHead } from '../../src/claude/sessions.ts';
+import { encodeProjectKey, decodeProjectKey, getCwdFromTranscriptHead, readPlanEventsFromTranscript } from '../../src/claude/sessions.ts';
 
 // Test with real temp directory for integration tests
 let testDir: string;
@@ -218,69 +218,45 @@ describe('c', () => {
         });
       });
 
-      describe('ExitPlanMode detection', () => {
-        it('identifies plan execution from ExitPlanMode', () => {
-          const content = [
+      describe('readPlanEventsFromTranscript', () => {
+        function writeTranscript(name: string, lines: string[]): string {
+          const file = path.join(projectsDir, name);
+          fs.writeFileSync(file, lines.join('\n') + '\n');
+          return file;
+        }
+
+        it('extracts slug, title, and timestamp from a single ExitPlanMode call', () => {
+          const file = writeTranscript('a.jsonl', [
             '{"type":"user","message":"plan the task"}',
-            '{"type":"assistant","slug":"impl-plan","message":{"content":[{"type":"tool_use","name":"ExitPlanMode","input":{}}]}}',
-          ].join('\n');
+            '{"type":"assistant","slug":"impl-plan","timestamp":"2025-06-01T10:00:00Z","message":{"content":[{"type":"tool_use","name":"ExitPlanMode","input":{}}]}}',
+          ]);
 
-          const lines = content.trim().split('\n');
-          let planInfo: { slug: string } | null = null;
-
-          const tailLines = lines.slice(-10);
-          for (const line of tailLines.reverse()) {
-            const entry = JSON.parse(line);
-            if (
-              entry.type === 'assistant' &&
-              entry.message?.content &&
-              Array.isArray(entry.message.content)
-            ) {
-              for (const block of entry.message.content) {
-                if (block.type === 'tool_use' && block.name === 'ExitPlanMode') {
-                  if (entry.slug) {
-                    planInfo = { slug: entry.slug };
-                  }
-                  break;
-                }
-              }
-            }
-            if (planInfo) break;
-          }
-
-          assert.deepStrictEqual(planInfo, { slug: 'impl-plan' });
+          const events = readPlanEventsFromTranscript(file);
+          assert.strictEqual(events.length, 1);
+          assert.strictEqual(events[0].slug, 'impl-plan');
+          assert.strictEqual(events[0].timestamp.toISOString(), '2025-06-01T10:00:00.000Z');
         });
 
-        it('returns null when no ExitPlanMode', () => {
-          const content = [
+        it('returns an empty array when there is no ExitPlanMode call', () => {
+          const file = writeTranscript('b.jsonl', [
             '{"type":"user","message":"just chat"}',
             '{"type":"assistant","message":{"content":[{"type":"text","text":"hello"}]}}',
-          ].join('\n');
+          ]);
 
-          const lines = content.trim().split('\n');
-          let planInfo: { slug: string } | null = null;
+          assert.deepStrictEqual(readPlanEventsFromTranscript(file), []);
+        });
 
-          const tailLines = lines.slice(-10);
-          for (const line of tailLines.reverse()) {
-            const entry = JSON.parse(line);
-            if (
-              entry.type === 'assistant' &&
-              entry.message?.content &&
-              Array.isArray(entry.message.content)
-            ) {
-              for (const block of entry.message.content) {
-                if (block.type === 'tool_use' && block.name === 'ExitPlanMode') {
-                  if (entry.slug) {
-                    planInfo = { slug: entry.slug };
-                  }
-                  break;
-                }
-              }
-            }
-            if (planInfo) break;
-          }
+        it('returns every ExitPlanMode call, most recent first, for a session that rewrote its plan', () => {
+          const file = writeTranscript('c.jsonl', [
+            '{"type":"assistant","slug":"impl-plan","timestamp":"2025-06-01T10:00:00Z","message":{"content":[{"type":"tool_use","name":"ExitPlanMode","input":{}}]}}',
+            '{"type":"user","message":"actually, one more thing"}',
+            '{"type":"assistant","slug":"impl-plan","timestamp":"2025-06-01T11:00:00Z","message":{"content":[{"type":"tool_use","name":"ExitPlanMode","input":{}}]}}',
+          ]);
 
-          assert.strictEqual(planInfo, null);
+          const events = readPlanEventsFromTranscript(file);
+          assert.strictEqual(events.length, 2);
+          assert.strictEqual(events[0].timestamp.toISOString(), '2025-06-01T11:00:00.000Z');
+          assert.strictEqual(events[1].timestamp.toISOString(), '2025-06-01T10:00:00.000Z');
         });
       });
 

@@ -9,7 +9,7 @@ import TOML from '@iarna/toml';
 import { createDefaultIndex } from './schema.ts';
 import type { IndexFile, Session, SessionState } from './schema.ts';
 import { collectLiveSessions } from '../util/process.ts';
-import { getPlanExecutionInfo } from '../claude/sessions.ts';
+import { getPlanExecutionInfoBefore } from '../claude/sessions.ts';
 
 // --- Process-level cache for readIndex ---
 
@@ -361,29 +361,30 @@ export function getSessions(filter?: {
 }
 
 /**
- * Find the candidate whose ExitPlanMode call produced `targetSlug`. Shared by the live
- * session-start hook, repair's retroactive backfill, and adopt — a plan can be authored
- * from a broader directory than the one its "Clear context and execute plan" continuation
- * launches in, so directory is never a filter here, only causal order (`before` cutoff)
- * and recency (most-recently-active candidate wins when more than one matches).
+ * Find the candidate whose ExitPlanMode call produced `targetSlug`, preferring whichever
+ * candidate wrote it most recently (still at or before `before`). Not directory-scoped —
+ * a plan can be authored from a broader directory than its continuation executes in.
+ * Recency is judged by each ExitPlanMode call's own transcript timestamp, not by the
+ * candidate session's last_active_at — a session can legitimately be resumed again later
+ * for something unrelated, which would otherwise make a genuinely-valid parent look too
+ * recent (or, if compared the other way, too stale) relative to a child that started
+ * before that later, unrelated touch.
  */
 export function findPlanExecutionParent(
-  candidates: Array<{ id: string; lastActive: Date }>,
+  candidates: string[],
   targetSlug: string,
   before: Date
 ): { sessionId: string; title: string | null } | null {
-  const beforeTime = before.getTime();
-  const sorted = candidates
-    .filter((c) => c.lastActive.getTime() <= beforeTime)
-    .sort((a, b) => b.lastActive.getTime() - a.lastActive.getTime());
+  let best: { sessionId: string; title: string | null; timestamp: number } | null = null;
 
-  for (const c of sorted) {
-    const planInfo = getPlanExecutionInfo(c.id);
-    if (planInfo && planInfo.slug === targetSlug) {
-      return { sessionId: c.id, title: planInfo.title };
+  for (const id of candidates) {
+    const info = getPlanExecutionInfoBefore(id, targetSlug, before);
+    if (info && (!best || info.timestamp.getTime() > best.timestamp)) {
+      best = { sessionId: id, title: info.title, timestamp: info.timestamp.getTime() };
     }
   }
-  return null;
+
+  return best ? { sessionId: best.sessionId, title: best.title } : null;
 }
 
 /**
