@@ -156,11 +156,12 @@ function parseSession(raw: Record<string, unknown>): Session {
 }
 
 /**
- * Read the index file
+ * Read the index straight from disk, ignoring the process cache. updateIndex()
+ * needs this: the cache can predate another process's write that landed while
+ * this process was waiting on the lock, and reusing it here would silently
+ * clobber that write once writeIndex() serializes this process's stale copy.
  */
-export function readIndex(): IndexFile {
-  if (_indexCache) return _indexCache;
-
+function readIndexFromDisk(): IndexFile {
   ensureDir();
 
   if (!fs.existsSync(getIndexPath())) {
@@ -189,6 +190,14 @@ export function readIndex(): IndexFile {
     console.error('Error reading index:', err);
     return createDefaultIndex(getMachineId());
   }
+}
+
+/**
+ * Read the index file
+ */
+export function readIndex(): IndexFile {
+  if (_indexCache) return _indexCache;
+  return readIndexFromDisk();
 }
 
 /**
@@ -228,7 +237,7 @@ export async function updateIndex(fn: (index: IndexFile) => IndexFile | void): P
   const release = await acquireLock();
 
   try {
-    const index = readIndex();
+    const index = readIndexFromDisk();
     const result = fn(index);
     const newIndex = result ?? index;
     writeIndex(newIndex);

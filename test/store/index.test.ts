@@ -15,6 +15,8 @@ import TOML from '@iarna/toml';
 import { createTestSession, resetSessionCounter } from '../fixtures/sessions.ts';
 import { createIndexWithSessions } from '../fixtures/index.ts';
 import type { IndexFile } from '../../src/store/schema.ts';
+import { readIndex, updateIndex, resetIndexCache } from '../../src/store/index.ts';
+import { setupTempStore } from '../helpers/store.ts';
 
 // Test with real temp directory
 let testDir: string;
@@ -258,6 +260,44 @@ describe('c', () => {
           const matches = sessions.filter(s => s.id.startsWith(prefix));
           assert.strictEqual(matches.length, 2);
           // getSession would return undefined for ambiguous
+        });
+      });
+
+      describe('updateIndex cache staleness', () => {
+        let store: ReturnType<typeof setupTempStore>;
+        beforeEach(() => {
+          store = setupTempStore();
+        });
+        afterEach(() => {
+          store.cleanup();
+        });
+
+        it('re-reads from disk under the lock, so a concurrent external write is not lost', async () => {
+          // Seed the index and warm this process's cache — mirrors resolveSession()
+          // being called before updateIndex(), as nameCommand() does.
+          await updateIndex((idx) => {
+            idx.sessions['sess-1'] = createTestSession({ id: 'sess-1', name: '' });
+          });
+          readIndex();
+
+          // A concurrent `c` process writes directly to disk, bypassing this
+          // process's cache entirely — exactly what a second OS process would do.
+          const onDiskPath = path.join(store.tmpDir, 'index.toml');
+          const onDisk = TOML.parse(fs.readFileSync(onDiskPath, 'utf-8')) as Record<string, unknown>;
+          const onDiskSessions = onDisk.sessions as Record<string, Record<string, unknown>>;
+          onDiskSessions['sess-1'].name = 'set-by-other-process';
+          fs.writeFileSync(onDiskPath, TOML.stringify(onDisk as TOML.JsonMap));
+
+          // This process runs its own unrelated update, using whatever it already
+          // had cached from the readIndex() call above.
+          await updateIndex((idx) => {
+            idx.sessions['sess-1'].state = 'archived';
+          });
+
+          resetIndexCache();
+          const final = readIndex();
+          assert.strictEqual(final.sessions['sess-1'].name, 'set-by-other-process');
+          assert.strictEqual(final.sessions['sess-1'].state, 'archived');
         });
       });
 
