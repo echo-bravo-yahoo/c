@@ -43,6 +43,14 @@ import { realpathSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Read once at module load — same relative depth from src/index.ts and its
+// built dist/index.js counterpart, so this resolves correctly either way.
+let pkg: { name: string; version: string; [key: string]: unknown } = { name: '@ashton/c', version: '0.0.0' };
+try {
+  const pkgPath = join(fileURLToPath(import.meta.url), '..', '..', 'package.json');
+  pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+} catch {}
+
 /**
  * Extract passthrough args (everything after '--' in raw argv).
  * Commander's command.args includes parsed positionals and unknown options,
@@ -77,7 +85,7 @@ export function createProgram(): Command {
   program
     .name('c')
     .description('Claude Code session manager')
-    .version('0.1.0')
+    .version(pkg.version)
     .showSuggestionAfterError(true);
 
   // List sessions
@@ -566,11 +574,8 @@ try {
 
 if (isDirectRun) {
   // Non-blocking update check
-  const selfPath = fileURLToPath(import.meta.url);
-  const pkgPath = join(selfPath, '..', '..', 'package.json');
   import('update-notifier').then(({ default: updateNotifier }) => {
     try {
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
       updateNotifier({ pkg }).notify();
     } catch {}
   }).catch(() => {});
