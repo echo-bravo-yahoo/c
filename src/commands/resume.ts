@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, renameSync, cpSync } from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
-import { resolveSession, getSession, updateIndex } from '../store/index.ts';
+import { resolveSession, getSession, updateIndex, applyPlanContinuationLink } from '../store/index.ts';
 import { getClaudeSession, findClaudeSessionIdsByTitle, encodeProjectKey, PROJECTS_DIR } from '../claude/sessions.ts';
 import { extractRepoRoot } from '../detection/git.ts';
 import { createSession } from '../store/schema.ts';
@@ -23,7 +23,7 @@ export interface ResumeOptions {
 }
 
 /**
- * Multi-fallback session lookup: getSession (id/prefix/name/title) → Claude title → Claude storage adoption.
+ * Multi-fallback session lookup: getSession (id/prefix/name/title) -> Claude title -> Claude storage adoption.
  * Returns the resolved session or undefined. Calls process.exit(1) on ambiguous matches.
  */
 export async function resolveSessionForResume(idOrPrefix: string): Promise<Session | undefined> {
@@ -63,8 +63,22 @@ export async function resolveSessionForResume(idOrPrefix: string): Promise<Sessi
         claudeFallback.modifiedAt
       );
       newSession.state = 'idle';
+
+      // Same plan-continuation detection as registerNewSession
+      // (src/hooks/session-start.ts) - this session may be a plan-execution
+      // child c has never seen before. `before` uses the session's own
+      // last-modified time, not wall-clock now, so a session resumed or
+      // forked long after the fact still resolves against its real history.
+      const parentSessionId = applyPlanContinuationLink(newSession, claudeFallback.modifiedAt);
+
       await updateIndex((index) => {
         index.sessions[newSession.id] = newSession;
+        if (parentSessionId && newSession.resources.plan) {
+          const parent = index.sessions[parentSessionId];
+          if (parent && !parent.resources.plan) {
+            parent.resources.plan = newSession.resources.plan;
+          }
+        }
       });
       session = newSession;
       console.error(chalk.dim(`Adopted session from Claude's storage.`));
@@ -123,7 +137,7 @@ export function relocateTranscript(
       cpSync(sourceCompanionDir, targetCompanionDir, { recursive: true });
     }
   } catch {
-    // Non-fatal — resume will still attempt to launch
+    // Non-fatal - resume will still attempt to launch
   }
 }
 
@@ -145,7 +159,7 @@ export function recreateWorktree(repoRoot: string, worktreePath: string, branch:
  * authoritative directory (derived from the transcript's recorded cwd).
  *
  * Older index entries can carry a directory that an earlier, lossy project-key
- * decode reconstructed incorrectly — e.g. ".../2023/2024/archive/q1/notes" for a
+ * decode reconstructed incorrectly - e.g. ".../2023/2024/archive/q1/notes" for a
  * real ".../2023-2024 archive/q1 notes". Returns the directory to heal to, or
  * null when nothing should change: the stored path is still valid, there's no
  * better candidate, or the candidate is also missing (e.g. a deleted worktree,
@@ -181,7 +195,7 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
 
   // Self-heal a stale/mis-decoded directory from Claude's authoritative record
   // (getClaudeSession derives its directory from the transcript's cwd). Must run
-  // before the existsSync validation below — otherwise a directory that an old,
+  // before the existsSync validation below - otherwise a directory that an old,
   // lossy project-key decode got wrong would archive the session as gone.
   const healedDir = reconcileDirectory(session.directory, claudeSession.directory);
   if (healedDir) {
@@ -205,7 +219,7 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
       if (branch && recreateWorktree(repoRoot, session.directory, branch)) {
         console.error(chalk.yellow(`Worktree was deleted. Recreated from branch ${chalk.cyan(branch)}.`));
       } else {
-        // Branch gone or worktree add failed — fall back to repo root
+        // Branch gone or worktree add failed - fall back to repo root
         console.error(chalk.yellow(`Worktree directory no longer exists: ${session.directory}.`));
         console.error(chalk.dim(`Resuming from ${repoRoot} instead.`));
         relocateTranscript(claudeSession, repoRoot);
@@ -255,7 +269,7 @@ export async function resumeCommand(idOrPrefix: string, options: ResumeOptions =
       });
       session.directory = worktreePath;
     } else if (existsSync(worktreePath)) {
-      // Worktree exists but directory wasn't updated — fix it
+      // Worktree exists but directory wasn't updated - fix it
       await updateIndex((index) => {
         const s = index.sessions[session!.id];
         if (s) {

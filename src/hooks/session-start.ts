@@ -2,11 +2,11 @@
  * SessionStart hook - register new session
  */
 
-import { updateIndex, getSession, getSessions, getCurrentSession, findPlanExecutionParent } from '../store/index.ts';
+import { updateIndex, getSession, getCurrentSession, applyPlanContinuationLink } from '../store/index.ts';
 import { createSession } from '../store/schema.ts';
 import { getCurrentBranch, getWorktreeInfo, getRepoSlug, listWorktrees } from '../detection/git.ts';
 import { extractJiraFromBranch } from '../detection/jira.ts';
-import { encodeProjectKey, getPlanContinuationInfo, extractPlanTitle, findTranscriptPath, getCustomTitleFromTranscriptTail, readClaudeSessionIndex } from '../claude/sessions.ts';
+import { encodeProjectKey, findTranscriptPath, getCustomTitleFromTranscriptTail, readClaudeSessionIndex } from '../claude/sessions.ts';
 import { capturePreloadedContext } from '../claude/preloaded-context.ts';
 import { setTmuxPaneTitle } from '../util/exec.ts';
 import { writeStatusCache } from '../store/status-cache.ts';
@@ -35,7 +35,7 @@ export async function handleSessionStart(
   if (!sessionId) {
     // Claude 2.1.83+ may not send stdin for SessionStart.
     // Fall back to getCurrentSession to process existing sessions.
-    debugLog(`[title] session-start: no sessionId — trying getCurrentSession fallback`);
+    debugLog(`[title] session-start: no sessionId - trying getCurrentSession fallback`);
     const fallback = getCurrentSession(cwd);
     if (fallback) {
       await processExistingSession(fallback.id, cwd);
@@ -63,8 +63,13 @@ export async function handleSessionStart(
           }
         }
         await updateIndex((index) => { index.sessions[sessionId] = session; });
-        if (session.name || session.meta._custom_title) {
-          setTmuxPaneTitle(session.meta._custom_title || session.name!, session.resources.tmux_pane);
+        // Fork's own pane title ("<name> (fork)", set synchronously by `c fork`
+        // before spawn) is authoritative here - only override it from a real
+        // /rename (_custom_title). registerNewSession can now derive session.name
+        // from a plan-continuation match; forking a plan-continuation session must
+        // not let that clobber the fork's title.
+        if (session.meta._custom_title) {
+          setTmuxPaneTitle(session.meta._custom_title, session.resources.tmux_pane);
         }
       }
       return;
@@ -72,34 +77,6 @@ export async function handleSessionStart(
     debugLog(`[title] session-start: skipping unknown session ${sessionId} during resume`);
     return;
   }
-
-  let parentSessionId: string | undefined;
-  let planSlug: string | undefined;
-  let planTitle: string | undefined;
-
-  // Check if this session was spawned via "Clear context and execute plan".
-  // The child's own transcript carries origin.kind === "auto-continuation" and
-  // the exact plan slug — use that for an exact join instead of a bare temporal scan.
-  const continuationInfo = sessionId ? getPlanContinuationInfo(sessionId) : null;
-  if (continuationInfo) {
-    planSlug = continuationInfo.slug;
-    // Search all closed sessions for the one whose ExitPlanMode call produced this slug.
-    // Not directory-scoped: a plan can be authored from a broader directory than the one
-    // its continuation executes in.
-    const candidates = getSessions({ state: ['closed'] })
-      .filter((s) => s.id !== sessionId)
-      .map((s) => s.id);
-    const match = findPlanExecutionParent(candidates, continuationInfo.slug, new Date());
-    if (match) {
-      parentSessionId = match.sessionId;
-      planTitle = match.title ?? undefined;
-    }
-    if (!planTitle) {
-      planTitle = extractPlanTitle(continuationInfo.slug) ?? undefined;
-    }
-  }
-
-  debugLog(`[title] session-start: sessionId=${sessionId} planTitle=${JSON.stringify(planTitle)} planSlug=${JSON.stringify(planSlug)} parentSessionId=${parentSessionId}`);
 
   // Check if session already exists (e.g., created by `c new`)
   const existing = getSession(sessionId);
@@ -118,45 +95,11 @@ export async function handleSessionStart(
   const session = await registerNewSession(sessionId, cwd);
   if (!session) return;
 
-  // Link to parent session if this is a plan execution
-  if (parentSessionId) {
-    session.parent_session_id = parentSessionId;
-  }
-
-  // Store plan slug as resource on the execution session
-  if (planSlug) {
-    session.resources.plan = planSlug;
-  }
-
-  // Use plan title as session name if available, fall back to slug
-  if (planTitle) {
-    session.name = planTitle;
-  } else if (planSlug) {
-    session.name = planSlug;
-  }
-
-  // Set tmux pane title for plan child sessions
+  // Set tmux pane title for plan-continuation children (registerNewSession set
+  // session.name from the plan title/slug when a continuation match was found;
+  // ordinary new sessions have no name yet here, so this is a no-op for them).
   if (session.name) {
     setTmuxPaneTitle(session.name, session.resources.tmux_pane);
-  }
-
-  // Save plan-specific fields and backfill parent
-  if (parentSessionId || planSlug || planTitle) {
-    await updateIndex((index) => {
-      const s = index.sessions[sessionId];
-      if (!s) return;
-      if (parentSessionId) s.parent_session_id = parentSessionId;
-      if (planSlug) s.resources.plan = planSlug;
-      if (planTitle) s.name = planTitle;
-      else if (planSlug) s.name = planSlug;
-
-      if (parentSessionId && planSlug) {
-        const parent = index.sessions[parentSessionId];
-        if (parent && !parent.resources.plan) {
-          parent.resources.plan = planSlug;
-        }
-      }
-    });
   }
 
   writeCacheFromSession(sessionId, session, cwd);
@@ -196,15 +139,15 @@ async function processExistingSession(sessionId: string, cwd: string): Promise<v
     }
 
     // Self-heal a mis-decoded directory using the hook's authoritative cwd.
-    // Claude's project-key encoding is lossy — `/`, `.`, space and hyphen all
-    // collapse to `-` — so a session adopted from Claude's storage (where the
+    // Claude's project-key encoding is lossy - `/`, `.`, space and hyphen all
+    // collapse to `-` - so a session adopted from Claude's storage (where the
     // only signal is the project key) can carry a wrong `directory` that
     // decodeProjectKey reconstructed incorrectly. The session-start hook knows
     // the real cwd, so trust it. Guard on the encoded cwd matching the stored
     // project_key: that confirms it's the same session location (just a bad
     // directory string), and excludes a legitimate resume from a different
     // directory. Worktree sessions are handled above and skipped here.
-    // e.g. stored "/…/2023/2024/archive/q1/notes" → real "/…/2023-2024 archive/q1 notes".
+    // e.g. stored "/.../2023/2024/archive/q1/notes" -> real "/.../2023-2024 archive/q1 notes".
     if (!s.resources.worktree && s.directory !== cwd && encodeProjectKey(cwd) === s.project_key) {
       s.directory = cwd;
     }
@@ -256,6 +199,14 @@ async function processExistingSession(sessionId: string, cwd: string): Promise<v
  * Register a new session in the index with git detection.
  * Extracted so user-prompt can call it as a deferred fallback
  * when SessionStart has no stdin payload.
+ *
+ * Also detects plan-continuation children here (via applyPlanContinuationLink,
+ * shared with resolveSessionForResume in commands/resume.ts) rather than in
+ * handleSessionStart, so the parent link, plan slug, and derived name persist
+ * atomically with the rest of session creation in ONE updateIndex transaction,
+ * regardless of which of this function's three callers - handleSessionStart's
+ * fresh-registration branch, its fork-detection branch, or user-prompt's
+ * deferred-registration fallback - ends up actually creating this session row.
  */
 export async function registerNewSession(
   sessionId: string,
@@ -266,7 +217,7 @@ export async function registerNewSession(
     return undefined;
   }
 
-  debugLog(`[hook] registerNewSession: creating session ${sessionId} — TMUX_PANE=${process.env.TMUX_PANE ?? 'unset'}`);
+  debugLog(`[hook] registerNewSession: creating session ${sessionId} - TMUX_PANE=${process.env.TMUX_PANE ?? 'unset'}`);
   const now = new Date();
   const projectKey = encodeProjectKey(cwd);
 
@@ -299,9 +250,19 @@ export async function registerNewSession(
   const preloaded = capturePreloadedContext(cwd, projectKey);
   session.context = { reads: {}, ...preloaded };
 
-  // Save to index
+  const parentSessionId = applyPlanContinuationLink(session, now);
+
+  debugLog(`[title] registerNewSession: sessionId=${sessionId} name=${JSON.stringify(session.name)} plan=${JSON.stringify(session.resources.plan)} parentSessionId=${parentSessionId}`);
+
+  // Save to index - session creation, parent link, and parent backfill all in one transaction.
   await updateIndex((index) => {
     index.sessions[sessionId] = session;
+    if (parentSessionId && session.resources.plan) {
+      const parent = index.sessions[parentSessionId];
+      if (parent && !parent.resources.plan) {
+        parent.resources.plan = session.resources.plan;
+      }
+    }
   });
 
   return session;

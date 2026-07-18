@@ -15,10 +15,15 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Mutable mock state for the Claude-storage-fallback / plan-continuation tests
+let mockClaudeFallback: { id: string; directory: string; projectKey: string; modifiedAt: Date } | undefined;
+let mockPlanContinuationInfoById: Map<string, { slug: string }> = new Map();
+let mockPlanExecutionInfoById: Map<string, { slug: string; title: string | null; timestamp?: Date }> = new Map();
+
 // Mock claude/sessions before any imports that pull it in
 mock.module(resolve(__dirname, '../../src/claude/sessions.ts'), {
   namedExports: {
-    getClaudeSession: () => undefined,
+    getClaudeSession: (id: string) => (mockClaudeFallback && id === mockClaudeFallback.id ? mockClaudeFallback : undefined),
     getClaudeSessionsForDirectory: () => [],
     getClaudeSessionTitles: () => ({}),
     findClaudeSessionIdsByTitle: () => [],
@@ -32,8 +37,14 @@ mock.module(resolve(__dirname, '../../src/claude/sessions.ts'), {
     getCustomTitleFromTranscriptTail: () => null,
     getCwdFromTranscriptHead: () => null,
     getPlanExecutionInfo: () => null,
-    getPlanExecutionInfoBefore: () => null,
-    getPlanContinuationInfo: () => null,
+    getPlanExecutionInfoBefore: (id: string, slug: string, before: Date) => {
+      const info = mockPlanExecutionInfoById.get(id);
+      if (!info || info.slug !== slug) return null;
+      const ts = info.timestamp ?? new Date(0);
+      if (ts.getTime() > before.getTime()) return null;
+      return { title: info.title, timestamp: ts };
+    },
+    getPlanContinuationInfo: (id: string) => mockPlanContinuationInfoById.get(id) ?? null,
     PLANS_DIR: join(tmpdir(), 'c-resume-test-plans'),
     extractPlanTitle: () => null,
     listClaudeSessionSizes: () => new Map(),
@@ -69,6 +80,9 @@ describe('c', () => {
     describe('resume', () => {
       beforeEach(() => {
         resetSessionCounter();
+        mockClaudeFallback = undefined;
+        mockPlanContinuationInfoById = new Map();
+        mockPlanExecutionInfoById = new Map();
       });
 
       describe('buildResumeArgs', () => {
@@ -396,6 +410,40 @@ describe('c', () => {
           assert.ok(session);
           assert.strictEqual(session.id, 's1');
         });
+
+        it('links parent_session_id when adopting an untracked plan-continuation child from Claude storage', async () => {
+          const parentId = 'plan-parent';
+          const childId = 'untracked-child';
+          const slug = 'resume-fallback-slug';
+          const modifiedAt = new Date('2025-06-01T12:00:00Z');
+
+          await updateIndex((idx) => {
+            idx.sessions[parentId] = createTestSession({ id: parentId, state: 'closed' });
+          });
+
+          mockClaudeFallback = {
+            id: childId,
+            directory: '/some/project',
+            projectKey: '-some-project',
+            modifiedAt,
+          };
+          mockPlanContinuationInfoById.set(childId, { slug });
+          mockPlanExecutionInfoById.set(parentId, {
+            slug,
+            title: 'Resume Fallback Plan',
+            timestamp: new Date('2025-06-01T10:00:00Z'),
+          });
+
+          const session = await resolveSessionForResume(childId);
+
+          assert.ok(session);
+          assert.strictEqual(session.parent_session_id, parentId);
+          assert.strictEqual(session.resources.plan, slug);
+          assert.strictEqual(session.name, 'Resume Fallback Plan');
+
+          const persistedParent = getSession(parentId);
+          assert.strictEqual(persistedParent?.resources.plan, slug);
+        });
       });
 
       describe('variadic id parsing', () => {
@@ -405,7 +453,7 @@ describe('c', () => {
 
         // resume exits with "no longer exists in Claude's storage" because
         // getClaudeSession is mocked to return undefined. That error proves the
-        // session WAS found by name — if the id were wrong, the error would be
+        // session WAS found by name - if the id were wrong, the error would be
         // "Session not found" instead.
 
         it('joins multi-word id and parses --model flag', async () => {

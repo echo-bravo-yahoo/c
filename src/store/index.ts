@@ -9,7 +9,7 @@ import TOML from '@iarna/toml';
 import { createDefaultIndex } from './schema.ts';
 import type { IndexFile, Session, SessionState } from './schema.ts';
 import { collectLiveSessions } from '../util/process.ts';
-import { getPlanExecutionInfoBefore } from '../claude/sessions.ts';
+import { getPlanExecutionInfoBefore, getPlanContinuationInfo, extractPlanTitle } from '../claude/sessions.ts';
 
 // --- Process-level cache for readIndex ---
 
@@ -371,10 +371,10 @@ export function getSessions(filter?: {
 
 /**
  * Find the candidate whose ExitPlanMode call produced `targetSlug`, preferring whichever
- * candidate wrote it most recently (still at or before `before`). Not directory-scoped —
+ * candidate wrote it most recently (still at or before `before`). Not directory-scoped -
  * a plan can be authored from a broader directory than its continuation executes in.
  * Recency is judged by each ExitPlanMode call's own transcript timestamp, not by the
- * candidate session's last_active_at — a session can legitimately be resumed again later
+ * candidate session's last_active_at - a session can legitimately be resumed again later
  * for something unrelated, which would otherwise make a genuinely-valid parent look too
  * recent (or, if compared the other way, too stale) relative to a child that started
  * before that later, unrelated touch.
@@ -394,6 +394,52 @@ export function findPlanExecutionParent(
   }
 
   return best ? { sessionId: best.sessionId, title: best.title } : null;
+}
+
+/**
+ * Detect whether `session` is a plan-execution child - its own transcript's first
+ * message carries origin.kind === "auto-continuation" - and, if so, resolve and
+ * apply the link to its parent: sets session.parent_session_id, session.resources.plan,
+ * and (when not already named) session.name. Returns the parent's session id so the
+ * caller can backfill the parent's own resources.plan in the same updateIndex
+ * transaction, or undefined if this session isn't a continuation child or no parent
+ * candidate matched.
+ *
+ * Shared by registerNewSession (src/hooks/session-start.ts) and
+ * resolveSessionForResume (src/commands/resume.ts) - both create a session row for
+ * an id `c` has never indexed before and need the same detection.
+ *
+ * `before` bounds candidate matching to each candidate's own ExitPlanMode call at or
+ * before this timestamp - pass the child's own creation/modification time, not an
+ * unrelated "now", so a session resumed or adopted long after the fact still resolves
+ * against its actual history.
+ */
+export function applyPlanContinuationLink(
+  session: Session,
+  before: Date
+): string | undefined {
+  const continuationInfo = getPlanContinuationInfo(session.id);
+  if (!continuationInfo) return undefined;
+
+  const { slug } = continuationInfo;
+  session.resources.plan = slug;
+
+  // All sessions are eligible candidates, not just closed ones: the parent may
+  // still be 'idle' (Stop hook fired, ExitPlanMode handed off) rather than
+  // 'closed' (session actually exited) at the moment this child registers.
+  const candidates = getSessions()
+    .map((s) => s.id)
+    .filter((id) => id !== session.id);
+  const match = findPlanExecutionParent(candidates, slug, before);
+
+  const title = match?.title ?? extractPlanTitle(slug) ?? slug;
+  if (!session.name) session.name = title;
+
+  if (match) {
+    session.parent_session_id = match.sessionId;
+    return match.sessionId;
+  }
+  return undefined;
 }
 
 /**
@@ -448,7 +494,7 @@ export async function reconcileStaleSessions(): Promise<number> {
 
   if (activeSessions.length === 0) return 0;
 
-  // Single scan → Set lookup instead of N individual scans
+  // Single scan -> Set lookup instead of N individual scans
   const claudeIds = new Set(listClaudeSessionSizes().keys());
   const staleIds = activeSessions
     .filter(s => !claudeIds.has(s.id))
@@ -470,14 +516,14 @@ export async function reconcileStaleSessions(): Promise<number> {
 /**
  * Project Claude Code's live session status onto a `c` SessionState.
  *
- * Returns null when the live file carries no usable signal — `status` is null
- * or an unrecognized value — so callers can leave the existing state unchanged
+ * Returns null when the live file carries no usable signal - `status` is null
+ * or an unrecognized value - so callers can leave the existing state unchanged
  * rather than downgrade a state they already know. The file format is an
  * undocumented Claude Code internal, so unknown values must never corrupt state.
  *
  * `waitingFor` is authoritative for the blocked case: when Claude records a
  * reason, the session is waiting on the user regardless of the coarse status.
- * `shell` (a foreground shell command) is occupied, not blocked — treated as busy.
+ * `shell` (a foreground shell command) is occupied, not blocked - treated as busy.
  */
 export function mapLiveStatusToState(
   live: { status: string | null; waitingFor?: string | null }
@@ -491,7 +537,7 @@ export function mapLiveStatusToState(
 
 /**
  * Reconcile index state against Claude Code's live session files
- * (~/.claude/sessions/<pid>.json) — the single source of truth.
+ * (~/.claude/sessions/<pid>.json) - the single source of truth.
  *
  * For each tracked session that could be active, project its state from the
  * live file (liveness- and PID-reuse-gated by collectLiveSessions), and advance
@@ -540,7 +586,7 @@ export async function reconcileLiveState(): Promise<void> {
           delete s.meta._waiting_for;
         }
       } else if (isActive(s.state)) {
-        // No live file or dead/recycled pid → the session is gone.
+        // No live file or dead/recycled pid -> the session is gone.
         s.state = 'closed';
         delete s.meta._waiting_for;
       }

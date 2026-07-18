@@ -6,18 +6,63 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { handleUserPrompt } from '../../src/hooks/user-prompt.ts';
-import { updateIndex, getSession } from '../../src/store/index.ts';
-import { encodeProjectKey } from '../../src/claude/sessions.ts';
+import { mock } from 'node:test';
+import { resolve } from 'node:path';
 import { createTestSession } from '../fixtures/sessions.ts';
-import { setupTempStore, type TempStore } from '../helpers/store.ts';
+
+let mockPlanContinuationInfoById: Map<string, { slug: string }> = new Map();
+let mockPlanExecutionInfoById: Map<string, { slug: string; title: string | null; timestamp?: Date }> = new Map();
+
+// Mock claude/sessions before any imports that pull it in. handleUserPrompt imports
+// it directly, and transitively via registerNewSession (./session-start.ts) and
+// store/index.ts's applyPlanContinuationLink/findPlanExecutionParent.
+mock.module(resolve('src/claude/sessions.ts'), {
+  namedExports: {
+    resetSessionCaches: () => {},
+    listClaudeSessions: () => [],
+    listClaudeSessionSizes: () => new Map(),
+    getClaudeSession: () => null,
+    getClaudeSessionsForDirectory: () => [],
+    findTranscriptPath: () => null,
+    encodeProjectKey: (dir: string) => dir.replace(/[/. ]/g, '-'),
+    decodeProjectKey: (key: string) => key.replace(/-/g, '/'),
+    readClaudeSessionIndex: () => null,
+    getClaudeSessionTitles: () => ({}),
+    findClaudeSessionIdsByTitle: () => [],
+    getPlanExecutionInfo: () => null,
+    getPlanExecutionInfoBefore: (id: string, slug: string, before: Date) => {
+      const info = mockPlanExecutionInfoById.get(id);
+      if (!info || info.slug !== slug) return null;
+      const ts = info.timestamp ?? new Date(0);
+      if (ts.getTime() > before.getTime()) return null;
+      return { title: info.title, timestamp: ts };
+    },
+    getPlanContinuationInfo: (id: string) => mockPlanContinuationInfoById.get(id) ?? null,
+    getCustomTitleFromTranscriptTail: () => null,
+    getCwdFromTranscriptHead: () => null,
+    CLAUDE_DIR: '/tmp/mock-claude',
+    PROJECTS_DIR: '/tmp/mock-claude/projects',
+    PLANS_DIR: '/tmp/mock-claude/plans',
+    extractPlanTitle: () => null,
+  },
+});
+
+const { handleUserPrompt } = await import('../../src/hooks/user-prompt.ts');
+const { updateIndex, getSession } = await import('../../src/store/index.ts');
+const { encodeProjectKey } = await import('../../src/claude/sessions.ts');
+const { setupTempStore } = await import('../helpers/store.ts');
+import type { TempStore } from '../helpers/store.ts';
 
 describe('c', () => {
   describe('hooks', () => {
     describe('user-prompt', () => {
       let store: TempStore;
 
-      beforeEach(() => { store = setupTempStore(); });
+      beforeEach(() => {
+        store = setupTempStore();
+        mockPlanContinuationInfoById = new Map();
+        mockPlanExecutionInfoById = new Map();
+      });
       afterEach(() => { store.cleanup(); });
 
       it('transitions idle to busy', async () => {
@@ -130,6 +175,40 @@ describe('c', () => {
           assert.ok(s, 'session should exist in index');
           assert.strictEqual(s.directory, cwd);
           assert.strictEqual(s.project_key, encodeProjectKey(cwd));
+        });
+
+        it('links parent_session_id via deferred registration (regression test for the caf9bffa bug: this is the exact path that silently dropped the link)', async () => {
+          const parentId = 'plan-parent';
+          const childId = 'never-seen-child';
+          const slug = 'regression-slug';
+
+          await updateIndex((idx) => {
+            idx.sessions[parentId] = createTestSession({ id: parentId, state: 'closed' });
+          });
+
+          mockPlanContinuationInfoById.set(childId, { slug });
+          mockPlanExecutionInfoById.set(parentId, {
+            slug,
+            title: 'Regression Plan',
+            timestamp: new Date('2024-01-01'),
+          });
+
+          // SessionStart never fired for this id (the "no stdin" case) - UserPromptSubmit
+          // is the FIRST hook to see it, and must not lose the parent link that only
+          // handleSessionStart used to compute.
+          await handleUserPrompt(childId, '/some/project', {
+            session_id: childId,
+            cwd: '/some/project',
+          });
+
+          const s = getSession(childId);
+          assert.ok(s, 'session should be registered via deferred registration');
+          assert.strictEqual(s.parent_session_id, parentId);
+          assert.strictEqual(s.resources.plan, slug);
+          assert.strictEqual(s.state, 'busy');
+
+          // Parent backfill happened too, in the same registerNewSession transaction.
+          assert.strictEqual(getSession(parentId)?.resources.plan, slug);
         });
       });
     });

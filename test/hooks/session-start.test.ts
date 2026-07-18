@@ -7,11 +7,55 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { handleSessionStart, findWorktreeMatch, registerNewSession } from '../../src/hooks/session-start.ts';
-import { updateIndex, getSession } from '../../src/store/index.ts';
-import { encodeProjectKey } from '../../src/claude/sessions.ts';
+import { mock } from 'node:test';
+import { resolve } from 'node:path';
 import { createTestSession } from '../fixtures/sessions.ts';
-import { setupTempStore, type TempStore } from '../helpers/store.ts';
+import type { TempStore } from '../helpers/store.ts';
+
+// Mutable mock state for plan-continuation / plan-execution detection
+let mockPlanContinuationInfoById: Map<string, { slug: string }> = new Map();
+let mockPlanExecutionInfoById: Map<string, { slug: string; title: string | null; timestamp?: Date }> = new Map();
+
+// Mock claude/sessions before any imports that pull it in. handleSessionStart and
+// registerNewSession (src/hooks/session-start.ts) import it directly; store/index.ts
+// (via applyPlanContinuationLink and findPlanExecutionParent) imports it transitively -
+// so every import below that touches either module must be dynamic, positioned after
+// this mock.module call.
+mock.module(resolve('src/claude/sessions.ts'), {
+  namedExports: {
+    resetSessionCaches: () => {},
+    listClaudeSessions: () => [],
+    listClaudeSessionSizes: () => new Map(),
+    getClaudeSession: () => null,
+    getClaudeSessionsForDirectory: () => [],
+    findTranscriptPath: () => null,
+    encodeProjectKey: (dir: string) => dir.replace(/[/. ]/g, '-'),
+    decodeProjectKey: (key: string) => key.replace(/-/g, '/'),
+    readClaudeSessionIndex: () => null,
+    getClaudeSessionTitles: () => ({}),
+    findClaudeSessionIdsByTitle: () => [],
+    getPlanExecutionInfo: () => null,
+    getPlanExecutionInfoBefore: (id: string, slug: string, before: Date) => {
+      const info = mockPlanExecutionInfoById.get(id);
+      if (!info || info.slug !== slug) return null;
+      const ts = info.timestamp ?? new Date(0);
+      if (ts.getTime() > before.getTime()) return null;
+      return { title: info.title, timestamp: ts };
+    },
+    getPlanContinuationInfo: (id: string) => mockPlanContinuationInfoById.get(id) ?? null,
+    getCustomTitleFromTranscriptTail: () => null,
+    getCwdFromTranscriptHead: () => null,
+    CLAUDE_DIR: '/tmp/mock-claude',
+    PROJECTS_DIR: '/tmp/mock-claude/projects',
+    PLANS_DIR: '/tmp/mock-claude/plans',
+    extractPlanTitle: () => null,
+  },
+});
+
+const { handleSessionStart, findWorktreeMatch, registerNewSession } = await import('../../src/hooks/session-start.ts');
+const { updateIndex, getSession } = await import('../../src/store/index.ts');
+const { encodeProjectKey } = await import('../../src/claude/sessions.ts');
+const { setupTempStore } = await import('../helpers/store.ts');
 
 describe('c', () => {
   describe('hooks', () => {
@@ -23,6 +67,8 @@ describe('c', () => {
         store = setupTempStore();
         savedCSessionId = process.env.C_SESSION_ID;
         delete process.env.C_SESSION_ID;
+        mockPlanContinuationInfoById = new Map();
+        mockPlanExecutionInfoById = new Map();
       });
 
       afterEach(() => {
@@ -124,7 +170,7 @@ describe('c', () => {
       });
 
       describe('directory self-heal', () => {
-        // Claude's project-key encoding is lossy (/, ., space, hyphen all → -),
+        // Claude's project-key encoding is lossy (/, ., space, hyphen all -> -),
         // so an adopted session can carry a directory that decodeProjectKey
         // reconstructed wrong. The session-start hook's cwd is authoritative
         // and is trusted when it encodes to the already-stored project_key.
@@ -154,7 +200,7 @@ describe('c', () => {
             });
           });
 
-          // cwd /repo/b encodes to a different project_key — not a re-decode.
+          // cwd /repo/b encodes to a different project_key - not a re-decode.
           await handleSessionStart('moved', '/repo/b', null);
 
           assert.strictEqual(getSession('moved')?.directory, '/repo/a');
@@ -441,6 +487,78 @@ describe('c', () => {
           delete process.env.C_EPHEMERAL;
 
           assert.strictEqual(getSession('eph-session'), undefined);
+        });
+      });
+
+      describe('plan-continuation parent linking', () => {
+        it('registerNewSession links parent_session_id and resources.plan on a continuation match', async () => {
+          const parentId = 'plan-parent';
+          const childId = 'plan-child';
+          const slug = 'fix-the-thing';
+
+          await updateIndex((idx) => {
+            idx.sessions[parentId] = createTestSession({ id: parentId, state: 'closed' });
+          });
+
+          mockPlanContinuationInfoById.set(childId, { slug });
+          mockPlanExecutionInfoById.set(parentId, {
+            slug,
+            title: 'Fix the thing',
+            timestamp: new Date('2024-01-01'),
+          });
+
+          const session = await registerNewSession(childId, '/some/project');
+
+          assert.ok(session);
+          assert.strictEqual(session.parent_session_id, parentId);
+          assert.strictEqual(session.resources.plan, slug);
+          assert.strictEqual(session.name, 'Fix the thing');
+
+          const persistedChild = getSession(childId);
+          assert.strictEqual(persistedChild?.parent_session_id, parentId);
+
+          // Parent backfill happened in the SAME transaction
+          assert.strictEqual(getSession(parentId)?.resources.plan, slug);
+        });
+
+        it('matches a parent that is idle, not closed (Stop fires well before the process actually exits)', async () => {
+          const parentId = 'idle-parent';
+          const childId = 'idle-child';
+          const slug = 'idle-parent-slug';
+
+          await updateIndex((idx) => {
+            idx.sessions[parentId] = createTestSession({ id: parentId, state: 'idle' });
+          });
+
+          mockPlanContinuationInfoById.set(childId, { slug });
+          mockPlanExecutionInfoById.set(parentId, {
+            slug,
+            title: null,
+            timestamp: new Date('2024-01-01'),
+          });
+
+          await handleSessionStart(childId, '/some/project', null);
+
+          const s = getSession(childId);
+          assert.ok(s);
+          assert.strictEqual(s.parent_session_id, parentId);
+          assert.strictEqual(s.resources.plan, slug);
+          // No title on the match and no plan file on disk (extractPlanTitle mocked
+          // to null) - falls back to the slug as the session name.
+          assert.strictEqual(s.name, slug);
+        });
+
+        it('does not link when no candidate session produced the slug', async () => {
+          const childId = 'unmatched-child';
+          mockPlanContinuationInfoById.set(childId, { slug: 'no-such-plan' });
+
+          await handleSessionStart(childId, '/some/project', null);
+
+          const s = getSession(childId);
+          assert.ok(s);
+          assert.strictEqual(s.parent_session_id, undefined);
+          assert.strictEqual(s.resources.plan, 'no-such-plan');
+          assert.strictEqual(s.name, 'no-such-plan');
         });
       });
 
