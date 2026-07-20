@@ -235,6 +235,78 @@ describe('c', () => {
           assert.strictEqual(afterStop.cost_usd, finalCost, 'cost should not increase after session-end + stop');
         });
       });
+
+      describe('title sync', () => {
+        function customTitleEntry(title: string): string {
+          return JSON.stringify({ type: 'custom-title', customTitle: title });
+        }
+
+        it('syncs a /rename title from the transcript into meta._custom_title', async () => {
+          const txPath = join(store.tmpDir, 'transcript.jsonl');
+          writeFileSync(txPath, customTitleEntry('New Title') + '\n');
+
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({ id: 's1', state: 'busy' });
+          });
+
+          await handleSessionEnd('s1', '/tmp', { session_id: 's1', cwd: '/tmp', transcript_path: txPath } as any);
+
+          const s = getSession('s1');
+          assert.ok(s);
+          assert.strictEqual(s.meta._custom_title, 'New Title');
+        });
+
+        it('syncs the title even when /rename was the very last action (regression)', async () => {
+          // /rename appends the marker and no further Stop/UserPromptSubmit ever
+          // fires afterward — session-end is the only remaining sync point.
+          const txPath = join(store.tmpDir, 'transcript.jsonl');
+          writeFileSync(txPath, customTitleEntry('Last Action Rename') + '\n');
+
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({ id: 's1', state: 'busy' });
+          });
+
+          await handleSessionEnd('s1', '/tmp', { session_id: 's1', cwd: '/tmp', transcript_path: txPath } as any);
+
+          const s = getSession('s1');
+          assert.ok(s);
+          assert.strictEqual(s.state, 'closed');
+          assert.strictEqual(s.meta._custom_title, 'Last Action Rename');
+        });
+
+        it('does not overwrite an existing custom title when the transcript has none', async () => {
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', state: 'busy',
+              meta: { _custom_title: 'Existing Title' },
+            });
+          });
+
+          await handleSessionEnd('s1', '/tmp', null);
+
+          const s = getSession('s1');
+          assert.ok(s);
+          assert.strictEqual(s.meta._custom_title, 'Existing Title');
+        });
+
+        it('is a no-op when the title is unchanged', async () => {
+          const txPath = join(store.tmpDir, 'transcript.jsonl');
+          writeFileSync(txPath, customTitleEntry('Same Title') + '\n');
+
+          await updateIndex((idx) => {
+            idx.sessions['s1'] = createTestSession({
+              id: 's1', state: 'busy',
+              meta: { _custom_title: 'Same Title' },
+            });
+          });
+
+          await handleSessionEnd('s1', '/tmp', { session_id: 's1', cwd: '/tmp', transcript_path: txPath } as any);
+
+          const s = getSession('s1');
+          assert.ok(s);
+          assert.strictEqual(s.meta._custom_title, 'Same Title');
+        });
+      });
     });
   });
 });
