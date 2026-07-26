@@ -11,6 +11,8 @@ import { resolve } from 'node:path';
 // marking active test sessions as stale/closed.
 let readIndexFn: (() => { sessions: Record<string, unknown> }) | null = null;
 
+let capturedSkipTranscript: Array<boolean | undefined> = [];
+
 mock.module(resolve('src/claude/sessions.ts'), {
   namedExports: {
     getClaudeSession: () => ({ id: 'stub' }),
@@ -21,7 +23,10 @@ mock.module(resolve('src/claude/sessions.ts'), {
         id, projectKey: '', directory: '', transcriptPath: '', historyPath: '', modifiedAt: new Date(),
       }));
     },
-    getClaudeSessionTitles: () => ({ customTitle: null, summary: null }),
+    getClaudeSessionTitles: (_id: string, _pk: string, skipTranscript?: boolean) => {
+      capturedSkipTranscript.push(skipTranscript);
+      return { customTitle: null, summary: null };
+    },
     getClaudeSessionsForDirectory: () => [],
     readClaudeSessionIndex: () => null,
     getPlanExecutionInfo: () => null,
@@ -67,7 +72,10 @@ describe('c', () => {
   describe('commands', () => {
     describe('list', () => {
       let cli: CLIHarness;
-      beforeEach(() => { cli = setupCLI(); });
+      beforeEach(() => {
+        cli = setupCLI();
+        capturedSkipTranscript = [];
+      });
       afterEach(() => { cli.cleanup(); });
 
       describe('state filtering', () => {
@@ -473,6 +481,17 @@ describe('c', () => {
           assert.ok(output.includes('s1'));
           assert.ok(!output.includes('s2'));
         });
+
+        it('always passes skipTranscript=true to the title lookup', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', name: 'Auth Bug' },
+            { id: 's2', state: 'busy', name: 'Dashboard Feature' },
+          );
+          await cli.run('list', '--name', 'auth');
+
+          assert.ok(capturedSkipTranscript.length > 0);
+          assert.ok(capturedSkipTranscript.every((v) => v === true));
+        });
       });
 
       describe('--worktree filter', () => {
@@ -526,6 +545,17 @@ describe('c', () => {
           assert.ok(output.includes('s1'));
           assert.ok(!output.includes('s2'));
           assert.ok(!output.includes('s3'));
+        });
+
+        it('always passes skipTranscript=true to the title lookup', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy' },
+            { id: 's2', state: 'busy', name: 'Auth Bug' },
+          );
+          await cli.run('list', '--untitled');
+
+          assert.ok(capturedSkipTranscript.length > 0);
+          assert.ok(capturedSkipTranscript.every((v) => v === true));
         });
       });
 
@@ -631,6 +661,17 @@ describe('c', () => {
           assert.ok(zebraIdx >= 0, 'Zebra should be in output');
           assert.ok(alphaIdx < middleIdx, 'Alpha should appear before Middle');
           assert.ok(middleIdx < zebraIdx, 'Middle should appear before Zebra');
+        });
+
+        it('--sort name always passes skipTranscript=true to the title lookup', async () => {
+          await cli.seed(
+            { id: 'szebra', state: 'busy', name: 'Zebra' },
+            { id: 'salpha', state: 'busy', name: 'Alpha' },
+          );
+          await cli.run('list', '--sort', 'name');
+
+          assert.ok(capturedSkipTranscript.length > 0);
+          assert.ok(capturedSkipTranscript.every((v) => v === true));
         });
 
         it('--sort -name orders reverse alphabetically', async () => {
@@ -954,6 +995,19 @@ describe('c', () => {
           const output = cli.console.logs.join('\n');
           assert.ok(output.includes('…'), 'long name should be truncated with …');
           assert.ok(!output.includes(longName), 'full name should not appear');
+        });
+      });
+
+      describe('performance', () => {
+        it('base view always passes skipTranscript=true to the title lookup', async () => {
+          await cli.seed(
+            { id: 's1', state: 'busy', name: 'Auth Bug' },
+            { id: 's2', state: 'idle' },
+          );
+          await cli.run('list');
+
+          assert.ok(capturedSkipTranscript.length > 0);
+          assert.ok(capturedSkipTranscript.every((v) => v === true));
         });
       });
 

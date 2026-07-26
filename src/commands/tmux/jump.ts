@@ -53,7 +53,7 @@ export async function tmuxJumpCommand(): Promise<void> {
   if (jumpPanes.length === 0) {
     // Pending, but no live pane — offer resume instead of a dead jump.
     const s = [...waiting, ...idle][0];
-    notify(`${getDisplayName(s) || shortId(s.id)} has no live pane — c resume ${shortId(s.id)}`);
+    notify(`${getDisplayName(s, true) || shortId(s.id)} has no live pane — c resume ${shortId(s.id)}`);
     return;
   }
 

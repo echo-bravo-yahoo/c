@@ -11,7 +11,7 @@ import { extractJiraFromBranch } from '../detection/jira.ts';
 import { listPRs } from '../detection/pr.ts';
 import { ambiguityError, getDisplayName, shortId } from '../util/format.ts';
 import { collectLiveSessionIds, isProcessAlive } from '../util/process.ts';
-import { findTranscriptPath, getCwdFromTranscriptHead, getCustomTitleFromTranscriptTail, getPlanExecutionInfo, getPlanContinuationInfo, encodeProjectKey } from '../claude/sessions.ts';
+import { findTranscriptPath, getCwdFromTranscriptHead, getCustomTitleFromTranscriptTail, getPlanExecutionInfo, getPlanContinuationInfo, encodeProjectKey, listClaudeSessionSizes } from '../claude/sessions.ts';
 import { readTranscriptUsage } from '../claude/usage.ts';
 import { readTranscriptInventory, applyInventoryDelta } from '../claude/context-inventory.ts';
 import { reconcileDirectory } from './resume.ts';
@@ -114,14 +114,26 @@ export async function repairCommand(idOrPrefix?: string, options: RepairOptions 
       // --- Thorough-only steps (4-6) ---
       if (!thorough) continue;
 
-      // 4. Backfill _custom_title from transcript when missing
+      // 4. Backfill _custom_title from transcript when missing. Transcripts are
+      // append-only, so file size only grows - if the current size matches what
+      // was recorded the last time this session was scanned and found titleless,
+      // nothing new could have been appended since, and re-scanning would just
+      // re-read bytes already read for nothing.
       if (!session.meta._custom_title) {
         const transcriptPath = findTranscriptPath(id);
         if (transcriptPath) {
-          const title = getCustomTitleFromTranscriptTail(transcriptPath);
-          if (title) {
-            session.meta._custom_title = title;
-            fixes.push(`Backfilled title "${title}" for ${label}`);
+          const currentSize = listClaudeSessionSizes().get(id);
+          const sizeUnchanged =
+            currentSize != null &&
+            String(currentSize) === session.meta._title_checked_size;
+          if (!sizeUnchanged) {
+            const title = getCustomTitleFromTranscriptTail(transcriptPath);
+            if (title) {
+              session.meta._custom_title = title;
+              fixes.push(`Backfilled title "${title}" for ${label}`);
+            } else if (currentSize != null) {
+              session.meta._title_checked_size = String(currentSize);
+            }
           }
         }
       }

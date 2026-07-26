@@ -13,6 +13,12 @@ let mockTitles: { customTitle: string | null; summary: string | null } = {
   customTitle: null,
   summary: null,
 };
+let mockUnskippedTitles: { customTitle: string | null; summary: string | null } = {
+  customTitle: null,
+  summary: null,
+};
+let mockSizes = new Map<string, number>();
+let lastSkipTranscript: boolean | undefined;
 
 mock.module(resolve('src/claude/sessions.ts'), {
   namedExports: {
@@ -24,7 +30,10 @@ mock.module(resolve('src/claude/sessions.ts'), {
     encodeProjectKey: (dir: string) => dir.replace(/\//g, '-'),
     decodeProjectKey: (key: string) => key.replace(/-/g, '/'),
     readClaudeSessionIndex: () => null,
-    getClaudeSessionTitles: () => mockTitles,
+    getClaudeSessionTitles: (_id: string, _pk: string, skipTranscript?: boolean) => {
+      lastSkipTranscript = skipTranscript;
+      return skipTranscript ? mockTitles : mockUnskippedTitles;
+    },
     findClaudeSessionIdsByTitle: () => [],
     getPlanExecutionInfo: () => null,
     getPlanExecutionInfoBefore: () => null,
@@ -35,7 +44,7 @@ mock.module(resolve('src/claude/sessions.ts'), {
     PROJECTS_DIR: '/tmp/mock-claude/projects',
     PLANS_DIR: '/tmp/mock-claude/plans',
     extractPlanTitle: () => null,
-    listClaudeSessionSizes: () => new Map(),
+    listClaudeSessionSizes: () => mockSizes,
   },
 });
 
@@ -44,11 +53,14 @@ const { createTestSession } = await import('../fixtures/sessions.ts');
 
 beforeEach(() => {
   mockTitles = { customTitle: null, summary: null };
+  mockUnskippedTitles = { customTitle: null, summary: null };
+  mockSizes = new Map();
+  lastSkipTranscript = undefined;
 });
 
 describe('getDisplayName priority', () => {
   it('returns customTitle from Claude index (highest priority)', () => {
-    mockTitles = { customTitle: 'Index Title', summary: 'Summary' };
+    mockUnskippedTitles = { customTitle: 'Index Title', summary: 'Summary' };
     const session = createTestSession({
       name: 'c-name',
       meta: { _custom_title: 'Cached Title' },
@@ -57,7 +69,7 @@ describe('getDisplayName priority', () => {
   });
 
   it('returns _custom_title when index has no customTitle', () => {
-    mockTitles = { customTitle: null, summary: 'Summary' };
+    mockUnskippedTitles = { customTitle: null, summary: 'Summary' };
     const session = createTestSession({
       name: 'c-name',
       meta: { _custom_title: 'Cached Title' },
@@ -66,19 +78,19 @@ describe('getDisplayName priority', () => {
   });
 
   it('returns session.name when no custom titles exist', () => {
-    mockTitles = { customTitle: null, summary: 'Summary' };
+    mockUnskippedTitles = { customTitle: null, summary: 'Summary' };
     const session = createTestSession({ name: 'c-name' });
     assert.strictEqual(getDisplayName(session), 'c-name');
   });
 
   it('returns summary as last resort', () => {
-    mockTitles = { customTitle: null, summary: 'Summary' };
+    mockUnskippedTitles = { customTitle: null, summary: 'Summary' };
     const session = createTestSession();
     assert.strictEqual(getDisplayName(session), 'Summary');
   });
 
   it('returns empty string when nothing is available', () => {
-    mockTitles = { customTitle: null, summary: null };
+    mockUnskippedTitles = { customTitle: null, summary: null };
     const session = createTestSession();
     assert.strictEqual(getDisplayName(session), '');
   });
@@ -91,5 +103,29 @@ describe('getDisplayName priority', () => {
       meta: { _custom_title: 'Cached Title' },
     });
     assert.strictEqual(getDisplayName(session, true), 'Cached Title');
+  });
+
+  it('a matching _title_checked_size forces the skip regardless of the caller\'s own flag', () => {
+    mockTitles = { customTitle: null, summary: null };
+    mockUnskippedTitles = { customTitle: 'Found By Scanning', summary: null };
+    mockSizes = new Map([['sess1', 500]]);
+    const session = createTestSession({
+      id: 'sess1',
+      meta: { _title_checked_size: '500' },
+    });
+    assert.strictEqual(getDisplayName(session), '');
+    assert.strictEqual(lastSkipTranscript, true);
+  });
+
+  it('a grown transcript invalidates the negative-cache sentinel', () => {
+    mockTitles = { customTitle: null, summary: null };
+    mockUnskippedTitles = { customTitle: 'Found By Scanning', summary: null };
+    mockSizes = new Map([['sess1', 800]]);
+    const session = createTestSession({
+      id: 'sess1',
+      meta: { _title_checked_size: '500' },
+    });
+    assert.strictEqual(getDisplayName(session), 'Found By Scanning');
+    assert.strictEqual(lastSkipTranscript, false);
   });
 });

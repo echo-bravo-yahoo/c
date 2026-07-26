@@ -17,7 +17,7 @@ export function tmuxPickCommand(): void {
 
   // Format sessions for fzf
   const lines = sessions.map((s) => {
-    const name = getDisplayName(s);
+    const name = getDisplayName(s, true);
     const status = s.state;
     const branch = s.resources.branch ?? '';
     return `${shortId(s.id)}\t${name}\t${status}\t${branch}\t${s.id}`;

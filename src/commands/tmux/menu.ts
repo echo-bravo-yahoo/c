@@ -25,7 +25,7 @@ export async function tmuxMenuCommand(): Promise<void> {
 
   if (!process.env.TMUX) {
     for (const s of pending) {
-      console.log(`${getDisplayName(s) || shortId(s.id)} — ${reasonFor(s)}`);
+      console.log(`${getDisplayName(s, true) || shortId(s.id)} — ${reasonFor(s)}`);
     }
     return;
   }
@@ -50,7 +50,7 @@ export async function tmuxMenuCommand(): Promise<void> {
   for (const s of pending) {
     const pane = s.resources.tmux_pane;
     if (!pane || !paneLabel.has(pane)) continue; // stale pane: not jumpable
-    const name = getDisplayName(s) || shortId(s.id);
+    const name = getDisplayName(s, true) || shortId(s.id);
     const label = `${paneLabel.get(pane)}/${name} — ${reasonFor(s)}`;
     const key = n < 9 ? String(n + 1) : '';
     args.push(label, key, `select-window -t ${pane} ; select-pane -t ${pane}`);

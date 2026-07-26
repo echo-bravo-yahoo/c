@@ -5,6 +5,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { debugLog } from '../util/debug.ts';
 
 const CLAUDE_DIR = path.join(os.homedir(), '.claude');
 const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');
@@ -326,7 +327,15 @@ export function getClaudeSessionTitles(
   // Not in any index — check transcript directly (expensive)
   const cs = getClaudeSession(sessionId);
   if (cs) {
-    const result = { customTitle: getCustomTitleFromTranscriptTail(cs.transcriptPath), summary: null };
+    const start = Date.now();
+    const customTitle = getCustomTitleFromTranscriptTail(cs.transcriptPath);
+    const elapsed = Date.now() - start;
+    if (elapsed > 5) {
+      debugLog(
+        `[perf] getCustomTitleFromTranscriptTail took ${elapsed}ms for session ${sessionId} (${cs.fileSize} bytes)`,
+      );
+    }
+    const result = { customTitle, summary: null };
     _titleCache.set(sessionId, result);
     return result;
   }

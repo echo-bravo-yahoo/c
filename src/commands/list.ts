@@ -104,14 +104,14 @@ export async function listCommand(rawOptions: ListOptions): Promise<void> {
   }
   if (options.name) {
     const q = options.name.toLowerCase();
-    sessions = sessions.filter(s => getDisplayName(s).toLowerCase().includes(q));
+    sessions = sessions.filter(s => getDisplayName(s, true).toLowerCase().includes(q));
   }
   if (options.worktree) {
     const q = options.worktree.toLowerCase();
     sessions = sessions.filter(s => s.resources.worktree?.toLowerCase().includes(q));
   }
   if (options.untitled) {
-    sessions = sessions.filter(s => !getDisplayName(s));
+    sessions = sessions.filter(s => !getDisplayName(s, true));
   }
 
   // Parse sort specs
@@ -122,7 +122,7 @@ export async function listCommand(rawOptions: ListOptions): Promise<void> {
     // Apply sorting for JSON output too
     let sorted = sessions;
     if (sortSpecs) {
-      sorted = sortSessions(sessions, sortSpecs);
+      sorted = sortSessions(sessions, sortSpecs, undefined, true);
     }
     const output = sorted.map(s => {
       const obj: Record<string, unknown> = {
@@ -172,7 +172,7 @@ function listPRs(): void {
   console.log(chalk.dim('─'.repeat(70)));
 
   for (const session of withPRs) {
-    const name = getDisplayName(session);
+    const name = getDisplayName(session, true);
     const prNum = session.resources.pr!.match(/\/pull\/(\d+)/)?.[1];
     const prDisplay = prNum
       ? chalk.green(hyperlink(session.resources.pr!, `#${prNum}`))
@@ -209,7 +209,7 @@ function listJira(): void {
   console.log(chalk.dim('─'.repeat(60)));
 
   for (const session of withJira) {
-    const name = getDisplayName(session);
+    const name = getDisplayName(session, true);
     const id = shortId(session.id);
 
     console.log(

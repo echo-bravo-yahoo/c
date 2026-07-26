@@ -43,7 +43,8 @@ const STATE_PRIORITY: Record<SessionState, number> = {
 export function sortSessions(
   sessions: Session[],
   specs: SortSpec[],
-  sizeMap?: Map<string, number>
+  sizeMap?: Map<string, number>,
+  skipTranscript?: boolean
 ): Session[] {
   return [...sessions].sort((a, b) => {
     for (const { field, desc } of specs) {
@@ -51,7 +52,7 @@ export function sortSessions(
       switch (field) {
         case 'active':  cmp = a.last_active_at.getTime() - b.last_active_at.getTime(); break;
         case 'created': cmp = a.created_at.getTime() - b.created_at.getTime(); break;
-        case 'name':    cmp = getDisplayName(a).localeCompare(getDisplayName(b)); break;
+        case 'name':    cmp = getDisplayName(a, skipTranscript).localeCompare(getDisplayName(b, skipTranscript)); break;
         case 'size':    cmp = (sizeMap?.get(a.id) ?? 0) - (sizeMap?.get(b.id) ?? 0); break;
         case 'status':  cmp = STATE_PRIORITY[a.state] - STATE_PRIORITY[b.state]; break;
         case 'repo':    cmp = getRepoName(a.directory).localeCompare(getRepoName(b.directory)); break;
@@ -126,8 +127,17 @@ export function formatDuration(ms: number): string {
  * Priority: Claude's customTitle > cached _custom_title > c's name > Claude's summary
  */
 export function getDisplayName(session: Session, skipTranscript = false): string {
+  // Transcripts are append-only. If the size on disk still matches what was
+  // recorded the last time `repair --thorough` scanned this session and found
+  // no title, nothing has been appended since, and a fresh scan would just
+  // re-read the same bytes for the same (already known) answer.
+  const checkedSize = session.meta._title_checked_size;
+  const sizeUnchanged =
+    checkedSize !== undefined && String(listClaudeSessionSizes().get(session.id)) === checkedSize;
+  const effectiveSkip = skipTranscript || sizeUnchanged;
+
   // Check Claude's session index for titles
-  const { customTitle, summary } = getClaudeSessionTitles(session.id, session.project_key, skipTranscript);
+  const { customTitle, summary } = getClaudeSessionTitles(session.id, session.project_key, effectiveSkip);
 
   // customTitle = user explicitly renamed via /rename (highest priority)
   if (customTitle) return customTitle;
@@ -464,7 +474,16 @@ function orderSessionsWithChildren(visibleSessions: Session[], options?: TableOp
   // Sort each group: use provided sort specs or default to last_active_at desc
   if (options?.sortSpecs) {
     for (const children of byParent.values()) {
-      children.splice(0, children.length, ...sortSessions(children, options.sortSpecs, options.sizeMap));
+      children.splice(
+        0,
+        children.length,
+        ...sortSessions(
+          children,
+          options.sortSpecs,
+          options.sizeMap,
+          options.skipTranscript,
+        ),
+      );
     }
   } else {
     for (const children of byParent.values()) {
@@ -558,7 +577,12 @@ export function printSessionTable(sessions: Session[], terminalWidth?: number, a
   // Apply sorting before ordering
   let sortedSessions = sessions;
   if (options?.sortSpecs) {
-    sortedSessions = sortSessions(sessions, options.sortSpecs, sizeMap);
+    sortedSessions = sortSessions(
+      sessions,
+      options.sortSpecs,
+      sizeMap,
+      options.skipTranscript,
+    );
   }
 
   // Reorder so children appear under their parents, with gap markers

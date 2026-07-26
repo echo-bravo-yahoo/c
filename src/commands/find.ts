@@ -26,7 +26,9 @@ export function findCommand(query: string, options?: FindOptions): void {
     return;
   }
 
-  printSessionTable(matches, undefined, getAllSessions());
+  printSessionTable(matches, undefined, getAllSessions(), {
+    skipTranscript: true,
+  });
 }
 
 function matchSession(session: Session, query: string): boolean {
@@ -34,7 +36,7 @@ function matchSession(session: Session, query: string): boolean {
   const fields = [
     session.id,
     session.name,
-    getDisplayName(session),
+    getDisplayName(session, true), // skip the transcript fallback during the bulk substring match - see list.ts's base view for precedent
     session.directory,
     session.state,
     session.resources.branch,

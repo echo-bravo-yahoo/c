@@ -1,16 +1,55 @@
 /**
  * Tests for find command
+ *
+ * Requires --experimental-test-module-mocks because we mock src/claude/sessions.ts.
  */
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { setupCLI, stripAnsi, type CLIHarness } from '../helpers/cli.ts';
+import { mock } from 'node:test';
+import { resolve } from 'node:path';
+
+let capturedSkipTranscript: Array<boolean | undefined> = [];
+
+mock.module(resolve('src/claude/sessions.ts'), {
+  namedExports: {
+    resetSessionCaches: () => {},
+    listClaudeSessions: () => [],
+    listClaudeSessionSizes: () => new Map(),
+    getClaudeSession: () => null,
+    getClaudeSessionsForDirectory: () => [],
+    findTranscriptPath: () => null,
+    encodeProjectKey: (dir: string) => dir.replace(/\//g, '-'),
+    decodeProjectKey: (key: string) => key.replace(/-/g, '/'),
+    readClaudeSessionIndex: () => null,
+    getClaudeSessionTitles: (_id: string, _pk: string, skipTranscript?: boolean) => {
+      capturedSkipTranscript.push(skipTranscript);
+      return { customTitle: null, summary: null };
+    },
+    findClaudeSessionIdsByTitle: () => [],
+    getPlanExecutionInfo: () => null,
+    getPlanExecutionInfoBefore: () => null,
+    getPlanContinuationInfo: () => null,
+    getCustomTitleFromTranscriptTail: () => null,
+    getCwdFromTranscriptHead: () => null,
+    CLAUDE_DIR: '/tmp/mock-claude',
+    PROJECTS_DIR: '/tmp/mock-claude/projects',
+    PLANS_DIR: '/tmp/mock-claude/plans',
+    extractPlanTitle: () => null,
+  },
+});
+
+const { setupCLI, stripAnsi } = await import('../helpers/cli.ts');
+import type { CLIHarness } from '../helpers/cli.ts';
 
 describe('c', () => {
   describe('commands', () => {
     describe('find', () => {
       let cli: CLIHarness;
-      beforeEach(() => { cli = setupCLI(); });
+      beforeEach(() => {
+        cli = setupCLI();
+        capturedSkipTranscript = [];
+      });
       afterEach(() => { cli.cleanup(); });
 
       describe('search fields', () => {
@@ -197,6 +236,18 @@ describe('c', () => {
           await cli.run('find', 'tag');
 
           assert.strictEqual(cli.exit.exitCode, null);
+        });
+      });
+
+      describe('performance', () => {
+        it('always passes skipTranscript=true to the title lookup (match + render)', async () => {
+          await cli.seed(
+            { id: 'sess1', name: 'Auth Feature' },
+            { id: 'sess2', name: 'Other Thing' },
+          );
+          await cli.run('find', 'auth');
+          assert.ok(capturedSkipTranscript.length > 0);
+          assert.ok(capturedSkipTranscript.every((v) => v === true));
         });
       });
     });

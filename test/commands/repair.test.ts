@@ -12,6 +12,8 @@ let mockClaudeSessions: Array<{ id: string }> = [];
 let mockTranscriptPath: string | null = null;
 let mockTranscriptCwd: string | null = null;
 let mockCustomTitle: string | null = null;
+let mockCustomTitleCallCount = 0;
+let mockSizes = new Map<string, number>();
 let mockTranscriptUsage: { cost_usd: number } | null = null;
 let mockLiveSessionIds: Set<string> = new Set();
 let mockPlanExecutionInfoById: Map<string, { slug: string; title: string | null; timestamp?: Date }> = new Map();
@@ -33,7 +35,7 @@ mock.module(resolve('src/claude/sessions.ts'), {
   namedExports: {
     resetSessionCaches: () => {},
     listClaudeSessions: () => mockClaudeSessions,
-    listClaudeSessionSizes: () => new Map(),
+    listClaudeSessionSizes: () => mockSizes,
     getClaudeSession: () => null,
     getClaudeSessionsForDirectory: () => [],
     findTranscriptPath: () => mockTranscriptPath,
@@ -51,7 +53,10 @@ mock.module(resolve('src/claude/sessions.ts'), {
       return { title: info.title, timestamp: ts };
     },
     getPlanContinuationInfo: (id: string) => mockPlanContinuationInfoById.get(id) ?? null,
-    getCustomTitleFromTranscriptTail: () => mockCustomTitle,
+    getCustomTitleFromTranscriptTail: () => {
+      mockCustomTitleCallCount++;
+      return mockCustomTitle;
+    },
     getCwdFromTranscriptHead: () => mockTranscriptCwd,
     CLAUDE_DIR: '/tmp/mock-claude',
     PROJECTS_DIR: '/tmp/mock-claude/projects',
@@ -91,6 +96,8 @@ beforeEach(() => {
   mockTranscriptPath = null;
   mockTranscriptCwd = null;
   mockCustomTitle = null;
+  mockCustomTitleCallCount = 0;
+  mockSizes = new Map();
   mockTranscriptUsage = null;
   mockLiveSessionIds = new Set();
   mockPlanExecutionInfoById = new Map();
@@ -235,6 +242,47 @@ describe('c repair', () => {
     const s = cli.session('s1');
     assert.strictEqual(s?.meta._custom_title, 'Existing');
     assert.ok(!cli.console.logs.some((l) => l.includes('Backfilled')));
+  });
+
+  it('records _title_checked_size when no title is found (thorough)', async () => {
+    await cli.seed({ id: 's1', state: 'closed' });
+    mockClaudeSessions = [{ id: 's1' }];
+    mockTranscriptPath = '/tmp/fake/s1.jsonl';
+    mockSizes = new Map([['s1', 500]]);
+    mockCustomTitle = null;
+
+    await cli.run('repair', '--thorough');
+
+    const s = cli.session('s1');
+    assert.strictEqual(s?.meta._custom_title, undefined);
+    assert.strictEqual(s?.meta._title_checked_size, '500');
+  });
+
+  it('does not re-invoke the transcript scan on a second --thorough run when the size is unchanged', async () => {
+    await cli.seed({ id: 's1', state: 'closed' });
+    mockClaudeSessions = [{ id: 's1' }];
+    mockTranscriptPath = '/tmp/fake/s1.jsonl';
+    mockSizes = new Map([['s1', 500]]);
+    mockCustomTitle = null;
+
+    await cli.run('repair', '--thorough');
+    assert.strictEqual(mockCustomTitleCallCount, 1);
+
+    await cli.run('repair', '--thorough');
+    assert.strictEqual(mockCustomTitleCallCount, 1);
+  });
+
+  it('re-scans when the transcript has grown since the last check', async () => {
+    await cli.seed({ id: 's1', state: 'closed', meta: { _title_checked_size: '500' } });
+    mockClaudeSessions = [{ id: 's1' }];
+    mockTranscriptPath = '/tmp/fake/s1.jsonl';
+    mockSizes = new Map([['s1', 800]]);
+    mockCustomTitle = null;
+
+    await cli.run('repair', '--thorough');
+
+    assert.strictEqual(mockCustomTitleCallCount, 1);
+    assert.strictEqual(cli.session('s1')?.meta._title_checked_size, '800');
   });
 
   it('backfills JIRA from branch name (thorough)', async () => {
